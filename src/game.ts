@@ -54,6 +54,10 @@ export class CloudHarvestGame {
   private impactFreeze = 0;
   private comboPunch = 0;
   private rankReveal = 0;
+  private frontTimer = 14;
+  private frontActive = 0;
+  private frontBanner = 0;
+  private frontDirection: 1 | -1 = 1;
   private droneAngle = 0;
   private runEmitTimer = 0;
   private audioContext?: AudioContext;
@@ -240,6 +244,13 @@ export class CloudHarvestGame {
     this.impactFlash = Math.max(0, this.impactFlash - dt * 4.6);
     this.comboPunch = Math.max(0, this.comboPunch - dt * 3.8);
     this.rankReveal = Math.max(0, this.rankReveal - dt);
+    this.frontTimer -= dt;
+    this.frontActive = Math.max(0, this.frontActive - dt);
+    this.frontBanner = Math.max(0, this.frontBanner - dt);
+    if (this.frontTimer <= 0) {
+      if (!this.clouds.some((cloud) => cloud.front)) this.startCloudFront();
+      else this.frontTimer = 5;
+    }
     this.droneAngle += dt * 2.2;
 
     if (this.run.feverActive) {
@@ -250,7 +261,6 @@ export class CloudHarvestGame {
         this.onToast("피버 종료 — 다시 게이지를 채우세요!");
       }
     }
-
     const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34;
     const basePower = 36 + this.state.levels.power * 15;
     const skillPower = 1 + this.run.skills.overclock * 0.45;
@@ -285,8 +295,11 @@ export class CloudHarvestGame {
         }
       }
 
-      cloud.vx *= Math.pow(0.955, dt * 60);
-      cloud.vy *= Math.pow(0.955, dt * 60);
+      if (cloud.front && this.frontActive > 0) cloud.vx += this.frontDirection * 45 * dt;
+      if (cloud.front && cloud.x > this.width - 410 && cloud.y < 350) cloud.vy += 90 * dt;
+      const drag = cloud.front && this.frontActive > 0 ? .993 : .955;
+      cloud.vx *= Math.pow(drag, dt * 60);
+      cloud.vy *= Math.pow(drag, dt * 60);
       cloud.x += cloud.vx * dt;
       cloud.y += cloud.vy * dt;
       const margin = cloud.radius + 4;
@@ -390,6 +403,7 @@ export class CloudHarvestGame {
     this.playTone(290 + Math.min(590, this.combo * 31) + definition.value * 2, .055);
 
     if (this.combo % 5 === 0) this.triggerPressureSurge(cloud.x, cloud.y);
+    if (cloud.front && !this.clouds.some((item) => item.front)) this.completeCloudFront(cloud.x, cloud.y);
 
     const chainStacks = this.run.skills.chainBurst;
     if (chainStacks > 0) {
@@ -453,6 +467,27 @@ export class CloudHarvestGame {
     this.playChord();
   }
 
+  private completeCloudFront(x: number, y: number): void {
+    const bonus = 45 + this.state.rank * 35;
+    this.state.money += bonus;
+    this.state.totalEarned += bonus;
+    if (!this.run.feverActive) {
+      this.run.fever = Math.min(100, this.run.fever + 28);
+      if (this.run.fever >= 100) this.startFever();
+    }
+    this.frontActive = 0;
+    this.frontBanner = 2.4;
+    this.texts.push({ x, y: y - 42, text: `FRONT CLEARED  +${bonus}`, color: "#8fffe4", life: 1.8 });
+    this.shockwaves.push({ x, y, radius: 40, life: 1, maxLife: 1, color: "#71ffe0" });
+    this.shockwaves.push({ x, y, radius: 16, life: .72, maxLife: .72, color: "#fff36f" });
+    this.burst(x, y, "#71ffe0", 65, 430);
+    this.burst(x, y, "#fff36f", 35, 360);
+    this.shake = 22;
+    this.impactFlash = 1;
+    this.impactFreeze = .1;
+    this.playChord();
+  }
+
   private startFever(): void {
     this.run.feverActive = true;
     this.run.feverSeconds = 7 + this.run.skills.feverDrive * 2.5;
@@ -487,7 +522,29 @@ export class CloudHarvestGame {
       if (side === 2) y = 180 + radius;
     }
     const health = definition.health * scale * (dense ? 1.65 : 1);
-    this.clouds.push({ id: ++this.cloudId, kind, x, y, vx: (Math.random() - .5) * 8, vy: (Math.random() - .5) * 6, radius, phase: Math.random() * Math.PI * 2, charged: false, age: Math.random() * 5, health, maxHealth: health, hurtFlash: 0, dense });
+    this.clouds.push({ id: ++this.cloudId, kind, x, y, vx: (Math.random() - .5) * 8, vy: (Math.random() - .5) * 6, radius, phase: Math.random() * Math.PI * 2, charged: false, age: Math.random() * 5, health, maxHealth: health, hurtFlash: 0, dense, front: false });
+  }
+
+  private startCloudFront(): void {
+    this.frontTimer = Math.max(24, 36 - this.state.rank * 4);
+    this.frontActive = 11;
+    this.frontBanner = 3.2;
+    this.frontDirection = Math.random() < .5 ? 1 : -1;
+    const count = 7 + this.state.rank * 2;
+    for (let index = 0; index < count; index += 1) {
+      this.spawnCloud(false);
+      const cloud = this.clouds[this.clouds.length - 1];
+      cloud.front = true;
+      cloud.x = this.frontDirection === 1 ? -cloud.radius : this.width + cloud.radius;
+      const rows = Math.min(5, count);
+      const routeTop = this.frontDirection === -1 ? 350 : 215;
+      const routeBottom = Math.max(routeTop + 80, this.height - 165);
+      cloud.y = routeTop + (index % rows) * ((routeBottom - routeTop) / Math.max(1, rows - 1)) + Math.floor(index / rows) * 18;
+      cloud.vx = this.frontDirection * (62 + Math.random() * 32);
+      cloud.vy = (Math.random() - .5) * 9;
+    }
+    this.shake = 10;
+    this.playTone(145, .28);
   }
 
   private suctionParticle(cloud: Cloud): void {
@@ -591,6 +648,17 @@ export class CloudHarvestGame {
         ctx.lineTo(this.player.x + Math.cos(angle) * outer, this.player.y + Math.sin(angle) * outer); ctx.stroke();
       }
     }
+    if (this.frontActive > 0) {
+      ctx.strokeStyle = "rgba(222,255,250,.58)"; ctx.lineWidth = 2.5;
+      const direction = this.frontDirection;
+      for (let index = 0; index < 28; index += 1) {
+        const travel = (time * (210 + index % 4 * 35) * direction + index * 137) % (this.width + 260);
+        const x = direction === 1 ? travel - 130 : this.width - travel + 130;
+        const y = 175 + (index * 47) % Math.max(120, this.height - 330);
+        const length = 34 + index % 5 * 13;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - direction * length, y); ctx.stroke();
+      }
+    }
   }
 
   private drawIsland(ctx: CanvasRenderingContext2D): void {
@@ -641,6 +709,16 @@ export class CloudHarvestGame {
       }
       ctx.closePath(); ctx.fill();
       ctx.fillStyle = "#fff36f"; ctx.beginPath(); ctx.arc(0, 0, cloud.radius * .09, 0, Math.PI * 2); ctx.fill();
+    }
+    if (cloud.front) {
+      ctx.strokeStyle = "#6ff6e2"; ctx.lineWidth = 2.5;
+      ctx.setLineDash([7, 5]); ctx.lineDashOffset = time * 28;
+      ctx.beginPath(); ctx.ellipse(0, 0, cloud.radius * 1.06, cloud.radius * .82, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = "#163f55";
+      for (let marker = -1; marker <= 1; marker += 1) {
+        const mx = marker * 12;
+        ctx.beginPath(); ctx.moveTo(mx - 5, -cloud.radius * .9); ctx.lineTo(mx, -cloud.radius * 1.04); ctx.lineTo(mx + 5, -cloud.radius * .9); ctx.closePath(); ctx.fill();
+      }
     }
     if (cloud.kind === "rain") { ctx.fillStyle = "#3d8cca"; for (let i = -1; i <= 1; i += 1) { ctx.beginPath(); ctx.ellipse(i * 13, cloud.radius * .65, 3, 7, .4, 0, Math.PI * 2); ctx.fill(); } }
     if (cloud.kind === "electric") { ctx.strokeStyle = "#ffe45e"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(2, cloud.radius * .2); ctx.lineTo(-8, cloud.radius * .56); ctx.lineTo(3, cloud.radius * .5); ctx.lineTo(-2, cloud.radius * .9); ctx.lineTo(14, cloud.radius * .4); ctx.stroke(); }
@@ -760,6 +838,29 @@ export class CloudHarvestGame {
       ctx.fillStyle = this.run.feverActive ? "#fff36f" : "#ffffff"; ctx.fillText(`${this.combo} COMBO`, 0, 0);
       ctx.font = "900 13px Outfit, sans-serif"; ctx.letterSpacing = "4px";
       ctx.fillStyle = "#ffdc66"; ctx.fillText(this.run.feverActive ? "FEVER HARVEST" : "PRESSURE CHAIN", 0, 24);
+      ctx.restore();
+    }
+    const frontRemaining = this.clouds.filter((cloud) => cloud.front).length;
+    if (frontRemaining > 0) {
+      const badgeWidth = 280;
+      ctx.fillStyle = "rgba(18,57,75,.82)";
+      ctx.beginPath(); ctx.roundRect(this.width / 2 - badgeWidth / 2, this.height - 140, badgeWidth, 55, 16); ctx.fill();
+      ctx.strokeStyle = "rgba(111,246,226,.8)"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.textAlign = "center"; ctx.fillStyle = "#9effea"; ctx.font = "900 13px Outfit, sans-serif";
+      ctx.fillText("CLOUD FRONT TARGETS", this.width / 2, this.height - 117);
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 19px Outfit, sans-serif";
+      ctx.fillText(`${frontRemaining} REMAINING`, this.width / 2, this.height - 96);
+    }
+    if (this.frontBanner > 0) {
+      const entering = frontRemaining > 0;
+      const alpha = Math.min(1, this.frontBanner * 1.5);
+      ctx.save(); ctx.globalAlpha = alpha; ctx.translate(this.width / 2, this.height * .34);
+      ctx.fillStyle = "rgba(16,48,66,.76)"; ctx.beginPath(); ctx.roundRect(-260, -49, 520, 98, 20); ctx.fill();
+      ctx.strokeStyle = entering ? "#70f4df" : "#fff36f"; ctx.lineWidth = 3; ctx.stroke();
+      ctx.textAlign = "center"; ctx.fillStyle = entering ? "#8fffe9" : "#fff36f";
+      ctx.font = "900 13px Outfit, sans-serif"; ctx.fillText(entering ? "WEATHER ALERT" : "SECTOR SECURED", 0, -18);
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 36px Outfit, sans-serif";
+      ctx.fillText(entering ? "CLOUD FRONT" : "FRONT CLEARED", 0, 20);
       ctx.restore();
     }
     if (this.rankReveal > 0) {

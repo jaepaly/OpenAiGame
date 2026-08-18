@@ -28,6 +28,7 @@ export interface Cloud {
   maxHealth: number;
   hurtFlash: number;
   dense: boolean;
+  front: boolean;
 }
 
 export interface Particle {
