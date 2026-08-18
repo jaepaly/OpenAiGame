@@ -251,6 +251,7 @@ body { min-width: 320px; background: #92ddf7; }
 }
 .skill-card:hover { transform: translateY(-8px) scale(1.025); box-shadow: 0 15px 0 color-mix(in srgb,var(--skill-color),#31566a 35%),0 22px 32px rgba(28,78,98,.18); }
 .skill-card:active { transform: translateY(4px); box-shadow: 0 3px 0 color-mix(in srgb,var(--skill-color),#31566a 35%); }
+.skill-card:disabled { opacity: .55; pointer-events: none; transform: translateY(3px); }
 .skill-icon { width: 76px; height: 76px; display: grid; place-items: center; margin-bottom: 10px; background: color-mix(in srgb,var(--skill-color),white 72%); border-radius: 24px; font: 900 17px "Outfit",sans-serif; letter-spacing: .06em; }
 .skill-card small { color: color-mix(in srgb,var(--skill-color),#24475a 35%); font-size: 9px; font-weight: 900; letter-spacing: .08em; }
 .skill-card strong { margin-top: 4px; font-size: 17px; }

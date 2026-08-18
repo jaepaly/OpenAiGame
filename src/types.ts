@@ -91,6 +91,7 @@ export interface RunState {
   feverSeconds: number;
   combo: number;
   comboTime: number;
+  pendingPicks: number;
   skills: Record<RunSkillId, number>;
 }
 

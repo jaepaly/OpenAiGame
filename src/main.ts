@@ -68,8 +68,8 @@ app.innerHTML = `
       <section class="levelup-overlay" id="levelUpOverlay" aria-label="레벨업 스킬 선택">
         <div class="levelup-panel">
           <span class="levelup-kicker">FLIGHT LEVEL UP!</span>
-          <h2>새 장비를 하나 선택하세요</h2>
-          <p>게임은 선택하는 동안 잠시 멈춥니다.</p>
+          <h2 id="levelUpTitle">새 장비를 하나 선택하세요</h2>
+          <p id="levelUpDescription">게임은 선택하는 동안 잠시 멈춥니다.</p>
           <div class="skill-choices" id="skillChoices"></div>
         </div>
       </section>
@@ -106,6 +106,8 @@ const feverFill = required<HTMLElement>("#feverFill");
 const feverText = required<HTMLElement>("#feverText");
 const levelUpOverlay = required<HTMLElement>("#levelUpOverlay");
 const skillChoices = required<HTMLElement>("#skillChoices");
+const levelUpTitle = required<HTMLElement>("#levelUpTitle");
+const levelUpDescription = required<HTMLElement>("#levelUpDescription");
 const garageButton = required<HTMLButtonElement>("#garageButton");
 const garageOverlay = required<HTMLElement>("#garageOverlay");
 const garageCloseButton = required<HTMLButtonElement>("#garageCloseButton");
@@ -131,7 +133,11 @@ function renderRunState(state: RunState): void {
   document.body.classList.toggle("fever-active", state.feverActive);
 }
 
-function showLevelUp(choices: RunSkillId[]): void {
+function showLevelUp(choices: RunSkillId[], pendingPicks: number): void {
+  levelUpTitle.textContent = pendingPicks > 1 ? `장비 ${pendingPicks}개를 연속 선택하세요` : "새 장비를 하나 선택하세요";
+  levelUpDescription.textContent = pendingPicks > 1
+    ? "피버 중 획득한 레벨을 한 번에 정산합니다."
+    : "선택을 마치면 즉시 비행을 재개합니다.";
   skillChoices.innerHTML = choices.map((id) => {
     const skill = RUN_SKILLS[id];
     const stack = game.getRunState().skills[id];
@@ -232,8 +238,9 @@ garageOverlay.addEventListener("click", (event) => {
 skillChoices.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-skill]");
   if (!button) return;
-  game.chooseSkill(button.dataset.skill as RunSkillId);
-  levelUpOverlay.classList.remove("show");
+  skillChoices.querySelectorAll<HTMLButtonElement>("button").forEach((choice) => { choice.disabled = true; });
+  const finished = game.chooseSkill(button.dataset.skill as RunSkillId);
+  if (finished) levelUpOverlay.classList.remove("show");
 });
 resetButton.addEventListener("click", () => {
   if (window.confirm("현재 회사의 진행 상황을 지우고 처음부터 시작할까요?")) game.reset();

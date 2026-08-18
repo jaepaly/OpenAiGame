@@ -3,7 +3,7 @@ import type { Cloud, CloudKind, FloatingText, GameState, Particle, RunSkillId, R
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
-type LevelListener = (choices: RunSkillId[]) => void;
+type LevelListener = (choices: RunSkillId[], pendingPicks: number) => void;
 type ToastListener = (message: string, tone?: "normal" | "success" | "warning") => void;
 type Shockwave = { x: number; y: number; radius: number; life: number; maxLife: number; color: string };
 
@@ -19,6 +19,7 @@ const freshRunState = (): RunState => ({
   feverSeconds: 0,
   combo: 0,
   comboTime: 0,
+  pendingPicks: 0,
   skills: { overclock: 0, wideIntake: 0, chainBurst: 0, profitRain: 0, feverDrive: 0, twinDrone: 0 },
 });
 
@@ -116,15 +117,20 @@ export class CloudHarvestGame {
     this.commit();
   }
 
-  chooseSkill(id: RunSkillId): void {
-    if (!this.pausedForLevel || this.run.skills[id] >= RUN_SKILLS[id].maxStacks) return;
+  chooseSkill(id: RunSkillId): boolean {
+    if (!this.pausedForLevel || this.run.skills[id] >= RUN_SKILLS[id].maxStacks) return false;
     this.run.skills[id] += 1;
-    this.pausedForLevel = false;
-    this.onToast(`${RUN_SKILLS[id].name} 획득!`, "success");
+    this.run.pendingPicks = Math.max(0, this.run.pendingPicks - 1);
     this.burst(this.player.x, this.player.y, RUN_SKILLS[id].color, 36, 210);
     this.playChord();
     this.onRunChange(this.getRunState());
-    window.setTimeout(() => this.checkLevelUp(), 120);
+    if (this.run.pendingPicks > 0) {
+      window.setTimeout(() => this.presentLevelUp(), 140);
+      return false;
+    }
+    this.pausedForLevel = false;
+    this.onToast(`${RUN_SKILLS[id].name} 장착 — 비행 재개!`, "success");
+    return true;
   }
 
   canPromote(): boolean {
@@ -258,7 +264,11 @@ export class CloudHarvestGame {
       if (this.run.feverSeconds <= 0) {
         this.run.feverActive = false;
         this.run.fever = 0;
-        this.onToast("피버 종료 — 다시 게이지를 채우세요!");
+        if (this.run.pendingPicks > 0) {
+          this.pausedForLevel = true;
+          this.onToast(`피버 정산 — 장비 ${this.run.pendingPicks}개 선택`, "success");
+          window.setTimeout(() => this.presentLevelUp(), 240);
+        } else this.onToast("피버 종료 — 다시 게이지를 채우세요!");
       }
     }
     const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34;
@@ -423,21 +433,33 @@ export class CloudHarvestGame {
     }
     this.commit();
     this.onRunChange(this.getRunState());
-    this.checkLevelUp();
+    this.bankLevelUps();
   }
 
-  private checkLevelUp(): void {
-    if (this.pausedForLevel || this.run.xp < this.run.xpNext) return;
-    this.run.xp -= this.run.xpNext;
-    this.run.level += 1;
-    this.run.xpNext = Math.round(6 + (this.run.level - 1) * 4.5);
+  private bankLevelUps(): void {
+    while (this.run.xp >= this.run.xpNext) {
+      this.run.xp -= this.run.xpNext;
+      this.run.level += 1;
+      this.run.xpNext = Math.round(6 + (this.run.level - 1) * 4.5);
+      this.run.pendingPicks += 1;
+    }
+    this.onRunChange(this.getRunState());
+    if (!this.run.feverActive) this.presentLevelUp();
+  }
+
+  private presentLevelUp(): void {
+    if (this.run.pendingPicks <= 0) return;
     const available = RUN_SKILL_IDS.filter((id) => this.run.skills[id] < RUN_SKILLS[id].maxStacks);
     const shuffled = [...available].sort(() => Math.random() - .5);
     const choices = shuffled.slice(0, Math.min(3, shuffled.length));
-    if (choices.length === 0) return;
+    if (choices.length === 0) {
+      this.run.pendingPicks = 0;
+      this.pausedForLevel = false;
+      return;
+    }
     this.pausedForLevel = true;
     this.onRunChange(this.getRunState());
-    this.onLevelUp(choices);
+    this.onLevelUp(choices, this.run.pendingPicks);
   }
 
   private triggerPressureSurge(x: number, y: number): void {
