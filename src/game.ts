@@ -512,17 +512,23 @@ export class CloudHarvestGame {
     const dense = Math.random() < .085 + this.state.rank * .018;
     const radius = (definition.radius[0] + Math.random() * (definition.radius[1] - definition.radius[0])) * (dense ? 1.16 : 1);
     const scale = radius / ((definition.radius[0] + definition.radius[1]) * .5);
-    let x = 50 + Math.random() * Math.max(100, this.width - 100);
-    let y = 190 + Math.random() * Math.max(90, this.height - 380);
-    if (x > this.width - 405 && y < 345) y = 350 + Math.random() * Math.max(60, this.height - 500);
-    if (!initial) {
+    let x = 90 + Math.random() * Math.max(100, this.width - 180);
+    let y = 205 + Math.random() * Math.max(90, this.height - 390);
+    const interiorSpawn = initial || Math.random() < .78;
+    if (interiorSpawn) {
+      for (let attempt = 0; attempt < 6 && Math.hypot(x - this.player.x, y - this.player.y) < 175; attempt += 1) {
+        x = 90 + Math.random() * Math.max(100, this.width - 180);
+        y = 205 + Math.random() * Math.max(90, this.height - 390);
+      }
+      if (x > this.width - 405 && y < 345) y = 350 + Math.random() * Math.max(60, this.height - 500);
+    } else {
       const side = Math.floor(Math.random() * 3);
-      if (side === 0) x = radius + 4;
-      if (side === 1) x = this.width - radius - 4;
-      if (side === 2) y = 180 + radius;
+      if (side === 0) { x = radius + 4; y = 220 + Math.random() * Math.max(80, this.height - 410); }
+      if (side === 1) { x = this.width - radius - 4; y = 350 + Math.random() * Math.max(55, this.height - 520); }
+      if (side === 2) { y = 180 + radius; x = 85 + Math.random() * Math.max(100, this.width - 540); }
     }
     const health = definition.health * scale * (dense ? 1.65 : 1);
-    this.clouds.push({ id: ++this.cloudId, kind, x, y, vx: (Math.random() - .5) * 8, vy: (Math.random() - .5) * 6, radius, phase: Math.random() * Math.PI * 2, charged: false, age: Math.random() * 5, health, maxHealth: health, hurtFlash: 0, dense, front: false });
+    this.clouds.push({ id: ++this.cloudId, kind, x, y, vx: (Math.random() - .5) * 8, vy: (Math.random() - .5) * 6, radius, phase: Math.random() * Math.PI * 2, charged: false, age: initial ? .6 + Math.random() * 4.4 : 0, health, maxHealth: health, hurtFlash: 0, dense, front: false });
   }
 
   private startCloudFront(): void {
@@ -688,10 +694,13 @@ export class CloudHarvestGame {
     const stretch = beingSucked ? 1 + proximity * .55 + (1 - healthRatio) * .75 : 1;
     const squeeze = beingSucked ? Math.max(.42, 1 - proximity * .24 - (1 - healthRatio) * .34) : 1;
     const angle = Math.atan2(toPlayerY, toPlayerX);
+    const spawnProgress = Math.min(1, cloud.age / .5);
+    const arrivalScale = .68 + spawnProgress * .32;
     ctx.save();
+    ctx.globalAlpha = spawnProgress;
     ctx.translate(cloud.x, cloud.y + Math.sin(time * 1.5 + cloud.phase) * 2);
     if (beingSucked) ctx.rotate(angle);
-    ctx.scale(pulse * damageRatio * stretch, pulse * damageRatio * squeeze);
+    ctx.scale(pulse * damageRatio * stretch * arrivalScale, pulse * damageRatio * squeeze * arrivalScale);
     ctx.shadowColor = cloud.hurtFlash > 0 ? "rgba(255,255,255,.85)" : "rgba(31,82,118,.2)"; ctx.shadowBlur = cloud.hurtFlash > 0 ? 25 : 14; ctx.shadowOffsetY = 7;
     ctx.fillStyle = definition.shadow; this.cloudPath(ctx, cloud.radius, 4); ctx.fill();
     ctx.shadowColor = "transparent"; ctx.translate(0, -4); ctx.fillStyle = definition.color; this.cloudPath(ctx, cloud.radius, 0); ctx.fill();
@@ -728,6 +737,14 @@ export class CloudHarvestGame {
       ctx.beginPath(); ctx.arc(-cloud.radius * .15, 0, cloud.radius * (.55 + Math.sin(time * 20) * .05), 0, Math.PI * 2); ctx.stroke();
     }
     ctx.restore();
+    if (cloud.age < .55) {
+      const arrival = cloud.age / .55;
+      ctx.globalAlpha = 1 - arrival;
+      ctx.strokeStyle = cloud.dense ? "#ffe76b" : "#bff8ff";
+      ctx.lineWidth = 4 * (1 - arrival) + 1;
+      ctx.beginPath(); ctx.arc(cloud.x, cloud.y, cloud.radius * (.55 + arrival * 1.1), 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     if (cloud.health < cloud.maxHealth) {
       const width = cloud.radius * 1.35;
       ctx.fillStyle = "rgba(25,54,74,.32)"; ctx.fillRect(cloud.x - width / 2, cloud.y + cloud.radius + 12, width, 5);
