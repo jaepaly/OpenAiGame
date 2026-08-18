@@ -1,0 +1,432 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Outfit:wght@700;800&display=swap');
+
+:root {
+  font-family: "Nunito", "Noto Sans KR", system-ui, sans-serif;
+  color: #18384e;
+  background: #9ce7ff;
+  font-synthesis: none;
+  --ink: #18384e;
+  --yellow: #ffd15e;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+button { font: inherit; }
+body { min-width: 320px; background: #92ddf7; }
+.game-shell, .game-stage { width: 100%; height: 100%; }
+.game-stage { position: relative; overflow: hidden; isolation: isolate; }
+#gameCanvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+#gameCanvas:active { cursor: grabbing; }
+
+.game-hud-top {
+  position: absolute; z-index: 5; top: 16px; left: 18px; right: 18px;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; pointer-events: none;
+}
+.brand, .rank-chip, .resource-hud, .promotion-card, .upgrade-dock { pointer-events: auto; }
+.brand { display: flex; align-items: center; gap: 10px; filter: drop-shadow(0 5px 8px rgba(38,92,117,.12)); }
+.brand-mark {
+  width: 46px; height: 46px; display: grid; place-items: center; color: white;
+  background: linear-gradient(145deg,#38b8d5,#2588b4); border: 3px solid rgba(255,255,255,.75);
+  border-radius: 50%; font-size: 26px; box-shadow: 0 6px 0 rgba(29,111,145,.28);
+}
+.brand span, .eyebrow { display: block; color: #267b98; font: 900 9px/1 "Outfit",sans-serif; letter-spacing: .16em; text-transform: uppercase; }
+.brand h1 { margin: 1px 0 0; color: white; font: 900 24px/1 "Nunito",sans-serif; letter-spacing: -.04em; text-shadow: 0 2px 0 rgba(25,77,101,.35),0 4px 12px rgba(24,84,107,.18); }
+.brand small { display: inline-block; margin-top: 5px; padding: 2px 8px; color: #225d72; background: rgba(255,255,255,.72); border-radius: 7px; font-size: 9px; font-weight: 900; }
+
+.rank-chip {
+  justify-self: center; min-width: 224px; padding: 11px 26px 12px; text-align: center; color: white;
+  background: linear-gradient(135deg,rgba(29,118,158,.93),rgba(47,178,178,.93));
+  border: 2px solid rgba(255,255,255,.7); border-radius: 15px 15px 22px 22px;
+  box-shadow: 0 6px 0 rgba(24,91,117,.23),0 10px 24px rgba(24,91,117,.16); backdrop-filter: blur(8px);
+}
+.rank-chip small { display: block; opacity: .8; font-size: 11px; font-weight: 800; }
+.rank-chip strong { display: block; margin-top: 2px; font-size: 17px; }
+.resource-hud { justify-self: end; display: flex; align-items: stretch; gap: 7px; }
+.mini-stat {
+  min-width: 88px; height: 56px; padding: 6px 14px; display: flex; align-items: center; justify-content: center; gap: 7px;
+  color: var(--ink); background: rgba(255,255,255,.9); border: 2px solid rgba(255,255,255,.8); border-radius: 14px;
+  box-shadow: 0 5px 0 rgba(40,110,134,.16),0 8px 18px rgba(33,91,113,.12); backdrop-filter: blur(9px);
+}
+.mini-stat span { color: #3da3bc; font-size: 16px; font-weight: 900; }
+.mini-stat strong { font: 900 20px "Outfit",sans-serif; white-space: nowrap; }
+.coin-stat span { color: #e3a322; font-size: 23px; }
+.combo-stat { min-width: 94px; flex-direction: column; gap: 0; }
+.combo-stat span { color: #e89730; font-size: 9px; letter-spacing: .1em; }
+.combo-stat strong { line-height: 1; }
+.combo-stat.active { color: #fff; background: linear-gradient(145deg,#f49a43,#e86352); border-color: #ffd76f; animation: combo-throb .42s ease-in-out infinite alternate; }
+.combo-stat.active span { color: #fff6b2; }
+@keyframes combo-throb { to { transform: translateY(-2px) scale(1.045); box-shadow: 0 8px 0 rgba(154,67,43,.22),0 0 24px rgba(255,211,91,.38); } }
+.icon-button {
+  width: 54px; height: 54px; display: grid; place-items: center; color: var(--ink); background: rgba(255,255,255,.88);
+  border: 2px solid rgba(255,255,255,.78); border-radius: 50%; box-shadow: 0 5px 0 rgba(40,110,134,.16);
+  cursor: pointer; font-size: 20px;
+}
+.icon-button:hover { transform: translateY(-2px); box-shadow: 0 7px 0 rgba(40,110,134,.16); }
+.icon-button:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(40,110,134,.16); }
+
+.run-meter {
+  position: absolute; z-index: 5; top: 82px; left: 50%; transform: translateX(-50%);
+  width: 430px; height: 54px; padding: 7px 12px; display: grid; grid-template-columns: 58px 1fr 1fr;
+  align-items: center; gap: 10px; color: white; background: rgba(25,69,91,.74);
+  border: 2px solid rgba(255,255,255,.48); border-radius: 18px; box-shadow: 0 6px 0 rgba(20,58,77,.2);
+  backdrop-filter: blur(9px); pointer-events: none;
+}
+.level-badge { display: grid; place-items: center; height: 36px; color: #23495c; background: #fff16e; border-radius: 11px; font: 900 14px "Outfit",sans-serif; }
+.meter-group { min-width: 0; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 6px; }
+.meter-group small { font: 900 7px "Outfit",sans-serif; letter-spacing: .12em; opacity: .78; }
+.meter-group b { font-size: 8px; }
+.meter-track { grid-column: 1/3; height: 10px; overflow: hidden; background: rgba(10,39,54,.42); border: 2px solid rgba(255,255,255,.18); border-radius: 99px; }
+.meter-track i { display: block; width: 0; height: 100%; background: linear-gradient(90deg,#48d7ee,#c6fbff); border-radius: inherit; transition: width .2s ease; }
+.fever-group .meter-track i { background: linear-gradient(90deg,#ff9a55,#fff36f); }
+.fever-active .run-meter { border-color: #fff36f; box-shadow: 0 0 30px rgba(255,243,111,.5),0 6px 0 rgba(20,58,77,.2); }
+
+.tutorial {
+  position: absolute; z-index: 4; left: 50%; top: 150px; transform: translateX(-50%); display: flex; flex-direction: column;
+  align-items: center; padding: 10px 18px; color: white; background: rgba(25,65,89,.75);
+  border: 2px solid rgba(255,255,255,.34); border-radius: 15px; pointer-events: none; transition: .4s ease;
+  backdrop-filter: blur(9px); box-shadow: 0 7px 20px rgba(20,66,89,.14);
+}
+.tutorial b { font-size: 14px; }
+.tutorial span { opacity: .8; font-size: 10px; }
+.tutorial.hidden { opacity: 0; transform: translate(-50%,-14px); }
+.cloud-legend { position: absolute; z-index: 4; top: 82px; left: 22px; display: flex; flex-direction: column; gap: 5px; pointer-events: none; }
+.legend-item { width: max-content; padding: 5px 9px; color: #34566a; background: rgba(255,255,255,.66); border: 1px solid rgba(255,255,255,.72); border-radius: 9px; font-size: 10px; font-weight: 900; backdrop-filter: blur(5px); }
+.legend-item b { margin-left: 5px; color: #258ba9; }
+.legend-item.electric { color: #4b3b90; }
+.toast {
+  position: absolute; z-index: 9; left: 50%; top: 155px; max-width: calc(100% - 40px); padding: 11px 18px;
+  color: white; background: rgba(24,53,77,.91); border: 2px solid rgba(255,255,255,.3); border-radius: 14px;
+  font-weight: 900; opacity: 0; pointer-events: none; transform: translate(-50%,-10px) scale(.94); transition: .2s ease;
+  box-shadow: 0 8px 24px rgba(22,62,81,.2);
+}
+.toast.show { opacity: 1; transform: translate(-50%,0) scale(1); }
+.toast.success { background: rgba(16,139,109,.94); }
+.toast.warning { background: rgba(211,106,48,.94); }
+
+.promotion-card {
+  position: absolute; z-index: 5; right: 22px; top: 90px; width: 292px; min-height: 88px; padding: 9px 10px;
+  display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 8px; background: rgba(33,83,105,.78);
+  border: 2px solid rgba(255,255,255,.62); border-radius: 18px;
+  box-shadow: 0 6px 0 rgba(20,59,78,.2),0 12px 26px rgba(35,94,116,.14); backdrop-filter: blur(9px);
+}
+.promotion-icon { width: 44px; height: 44px; display: grid; place-items: center; background: #e6f8fb; border-radius: 50%; font-size: 25px; }
+.promotion-copy { min-width: 0; }
+.promotion-copy .eyebrow { color: #82e7f4; }
+.promotion-copy strong { display: block; margin-top: 3px; overflow: hidden; color: white; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.promotion-copy p { margin: 1px 0 0; overflow: hidden; color: rgba(255,255,255,.62); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.promotion-requirements { grid-column: 1/3; display: flex; gap: 5px; padding-left: 3px; }
+.promotion-requirements span { padding: 3px 7px; color: rgba(255,255,255,.76); background: rgba(9,40,55,.28); border-radius: 7px; font-size: 9px; font-weight: 900; }
+.promotion-requirements .done { color: #11856d; background: #dcf5eb; }
+.promote-button {
+  grid-row: 1/3; grid-column: 3; width: 78px; align-self: stretch; padding: 5px 7px; color: #294b5b;
+  background: var(--yellow); border: 0; border-radius: 12px; font-size: 9px; font-weight: 900;
+  box-shadow: 0 4px 0 #e3a93e; cursor: pointer;
+}
+.promote-button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 0 #e3a93e; }
+.promote-button:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 #e3a93e; }
+.promote-button:disabled { color: #86979d; background: #dce6e7; box-shadow: 0 4px 0 #c5d1d3; cursor: not-allowed; }
+
+.upgrade-dock {
+  position: absolute; z-index: 6; left: 50%; bottom: 16px; transform: translateX(-50%);
+  min-width: min(930px,calc(100% - 32px)); height: 116px; padding: 11px 16px; display: flex; align-items: center;
+  justify-content: center; gap: 13px; background: rgba(27,72,94,.82); border: 3px solid rgba(255,255,255,.66);
+  border-radius: 30px; box-shadow: 0 8px 0 rgba(20,59,78,.28),0 18px 40px rgba(20,59,78,.2); backdrop-filter: blur(12px);
+}
+.dock-title { width: 58px; display: flex; flex-direction: column; align-items: center; color: white; }
+.dock-title span { font-size: 27px; }
+.dock-title b { font-size: 11px; }
+.upgrade-list { display: flex; align-items: stretch; gap: 10px; }
+.upgrade-card {
+  position: relative; width: 130px; height: 90px; padding: 7px 8px; display: grid; grid-template-columns: 44px 1fr;
+  grid-template-rows: 1fr auto; align-items: center; gap: 0 5px; color: var(--ink);
+  background: linear-gradient(160deg,#fff,#e8f5f5); border: 2px solid white; border-radius: 16px;
+  box-shadow: 0 5px 0 rgba(11,47,64,.24); cursor: pointer; transition: .13s ease;
+}
+.upgrade-card:hover:not(:disabled) { transform: translateY(-5px) scale(1.03); box-shadow: 0 10px 0 rgba(11,47,64,.2); }
+.upgrade-card:hover::after {
+  content: attr(data-tip); position: absolute; left: 50%; bottom: 82px; width: 180px; padding: 8px 10px;
+  color: white; background: rgba(22,54,71,.94); border-radius: 10px; font-size: 9px; font-weight: 800;
+  line-height: 1.35; transform: translateX(-50%); pointer-events: none;
+}
+.upgrade-card:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 2px 0 rgba(11,47,64,.24); }
+.upgrade-card:disabled { opacity: .56; cursor: not-allowed; filter: saturate(.55); }
+.upgrade-card.locked .upgrade-icon::after { content: "🔒"; position: absolute; right: -4px; bottom: -3px; font-size: 12px; }
+.upgrade-icon { position: relative; grid-row: 1; width: 44px; height: 44px; display: grid; place-items: center; background: #dff4f6; border-radius: 13px; font-size: 25px; }
+.upgrade-copy { grid-row: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.05; }
+.upgrade-copy b { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.upgrade-copy em { margin-top: 4px; color: #288ca6; font-size: 10px; font-style: normal; font-weight: 900; }
+.upgrade-price { grid-row: 2; grid-column: 1/3; padding: 5px 5px; color: #8c6113; background: #fff1bd; border-radius: 8px; text-align: center; font-size: 11px; font-weight: 900; white-space: nowrap; }
+.dock-tip { width: 90px; color: rgba(255,255,255,.72); font-size: 10px; font-weight: 800; line-height: 1.3; }
+
+.garage-button {
+  position: absolute; z-index: 7; left: 24px; bottom: 24px; width: 92px; height: 92px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; color: white;
+  background: linear-gradient(155deg,#2e8fab,#245972); border: 4px solid rgba(255,255,255,.76); border-radius: 28px;
+  box-shadow: 0 8px 0 rgba(17,58,77,.28),0 16px 30px rgba(26,76,98,.2); cursor: pointer; transition: .14s ease;
+}
+.garage-button:hover { transform: translateY(-5px) rotate(-2deg); box-shadow: 0 13px 0 rgba(17,58,77,.25),0 22px 38px rgba(26,76,98,.22); }
+.garage-button:active { transform: translateY(5px); box-shadow: 0 3px 0 rgba(17,58,77,.28); }
+.garage-button span { font: 900 20px/1 "Outfit",sans-serif; letter-spacing: .08em; }
+.garage-button b { margin-top: 4px; font-size: 13px; }
+.garage-button small { color: #9be9f1; font-size: 8px; font-weight: 900; }
+
+.garage-overlay {
+  position: absolute; z-index: 25; inset: 0; display: grid; place-items: center; padding: 24px;
+  background: rgba(16,47,65,.45); opacity: 0; pointer-events: none; backdrop-filter: blur(0); transition: .2s ease;
+}
+.garage-overlay.show { opacity: 1; pointer-events: auto; backdrop-filter: blur(8px); }
+.garage-panel {
+  width: min(880px,100%); padding: 24px 26px 28px; color: var(--ink); background: linear-gradient(165deg,#f9ffff,#dff3f4);
+  border: 4px solid white; border-radius: 30px; box-shadow: 0 12px 0 rgba(23,75,98,.27),0 30px 70px rgba(14,49,67,.3);
+  transform: translateY(18px) scale(.95); transition: .22s cubic-bezier(.2,.9,.3,1.15);
+}
+.garage-overlay.show .garage-panel { transform: translateY(0) scale(1); }
+.garage-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; text-align: left; }
+.garage-heading span { color: #318ca4; font: 900 10px "Outfit",sans-serif; letter-spacing: .16em; }
+.garage-heading h2 { margin: 3px 0 2px; font-size: 27px; }
+.garage-heading p { margin: 0; color: #6b8593; font-size: 11px; }
+.garage-heading button { width: 45px; height: 45px; color: #31566a; background: white; border: 0; border-radius: 50%; box-shadow: 0 4px 0 #c5dfe2; font-size: 28px; font-weight: 900; cursor: pointer; }
+.garage-panel .upgrade-list { display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; }
+.equipment-slot {
+  position: relative; min-width: 0; height: 292px; padding: 12px; display: flex; flex-direction: column; align-items: stretch;
+  color: var(--ink); text-align: left; background: linear-gradient(165deg,#fff 0 58%,#e5f3f3 100%);
+  border: 3px solid white; border-radius: 23px; box-shadow: 0 7px 0 #b9d4d7,0 12px 22px rgba(29,76,96,.1);
+  cursor: pointer; overflow: hidden; transition: transform .14s ease,box-shadow .14s ease;
+}
+.equipment-slot::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 7px;
+  background: hsl(calc(186 + var(--part-index) * 21) 72% 48%);
+}
+.equipment-slot:hover:not(:disabled) { transform: translateY(-7px); box-shadow: 0 14px 0 #a9cdd1,0 24px 34px rgba(29,76,96,.16); }
+.equipment-slot:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 4px 0 #b9d4d7; }
+.equipment-slot:disabled { cursor: not-allowed; }
+.equipment-status { height: 22px; display: flex; align-items: center; justify-content: space-between; gap: 5px; }
+.equipment-status b { color: #71919e; font: 900 9px "Outfit",sans-serif; letter-spacing: .1em; }
+.equipment-status em { padding: 3px 6px; color: #167c91; background: #d8f3f3; border-radius: 6px; font: 900 8px "Outfit",sans-serif; font-style: normal; letter-spacing: .05em; }
+.equipment-visual { position: relative; height: 76px; display: grid; place-items: center; margin: 2px 0 7px; }
+.equipment-visual::before { content: ""; position: absolute; width: 70px; height: 70px; background: #dff3f4; border: 2px dashed #a8cdd2; border-radius: 50%; }
+.equipment-visual i { position: relative; font: 900 20px "Outfit",sans-serif; font-style: normal; letter-spacing: .06em; filter: drop-shadow(0 5px 3px rgba(34,80,99,.14)); }
+.equipment-visual small { position: absolute; right: 3px; bottom: 3px; padding: 4px 7px; color: white; background: #2d7188; border: 2px solid white; border-radius: 8px; font-size: 10px; font-weight: 900; }
+.equipment-info { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.equipment-info strong { font-size: 14px; }
+.equipment-info small { height: 31px; margin-top: 3px; color: #718995; font-size: 9px; line-height: 1.35; }
+.equipment-output { margin-top: 7px; padding: 7px 8px; display: grid; background: rgba(207,233,234,.65); border-radius: 10px; }
+.equipment-output > small { color: #78939d; font-size: 8px; font-weight: 900; }
+.equipment-output > b { margin-top: 1px; font-size: 11px; }
+.equipment-output > span { color: #159477; font-size: 9px; font-weight: 900; }
+.equipment-tiers { height: 12px; margin: 7px 2px; display: flex; gap: 3px; }
+.equipment-tiers i { flex: 1; background: #c7dbdc; border-radius: 99px; }
+.equipment-tiers i.filled { background: #2eb89f; }
+.equipment-tiers i.next { background: #ffd15e; animation: tier-pulse .85s ease-in-out infinite alternate; }
+@keyframes tier-pulse { to { filter: brightness(1.15); transform: scaleY(1.35); } }
+.equipment-action { min-height: 35px; margin-top: auto; padding: 6px 8px; display: flex; align-items: center; justify-content: space-between; gap: 5px; color: #294b5b; background: #ffd15e; border-radius: 10px; box-shadow: inset 0 -3px 0 #e4ac3f; }
+.equipment-action b { font-size: 10px; white-space: nowrap; }
+.equipment-action strong { font-size: 10px; text-align: right; white-space: nowrap; }
+.equipment-slot:disabled .equipment-action { color: #73878e; background: #d8e3e4; box-shadow: inset 0 -3px 0 #bdcdcf; }
+.equipment-slot:disabled:not(.locked) { filter: saturate(.72); }
+.equipment-slot.locked .equipment-visual i { filter: grayscale(1); opacity: .45; }
+.equipment-slot.locked .equipment-visual::after { content: "🔒"; position: absolute; font-size: 26px; }
+.garage-tip { margin-top: 18px; padding: 10px 14px; color: #52717f; background: rgba(255,255,255,.65); border-radius: 12px; font-size: 10px; font-weight: 800; }
+
+.levelup-overlay {
+  position: absolute; z-index: 30; inset: 0; display: grid; place-items: center; padding: 24px;
+  background: rgba(20,48,68,.38); backdrop-filter: blur(0); opacity: 0; pointer-events: none; transition: .22s ease;
+}
+.levelup-overlay.show { opacity: 1; pointer-events: auto; backdrop-filter: blur(8px); }
+.levelup-panel {
+  width: min(780px,100%); padding: 28px 30px 32px; text-align: center; color: var(--ink);
+  background: linear-gradient(165deg,rgba(255,255,255,.97),rgba(226,248,250,.97));
+  border: 4px solid white; border-radius: 30px; box-shadow: 0 12px 0 rgba(25,83,106,.24),0 30px 70px rgba(17,56,75,.3);
+  transform: translateY(18px) scale(.94); transition: .25s cubic-bezier(.2,.9,.3,1.2);
+}
+.levelup-overlay.show .levelup-panel { transform: translateY(0) scale(1); }
+.levelup-kicker { color: #2c9db6; font: 900 12px "Outfit",sans-serif; letter-spacing: .18em; }
+.levelup-panel h2 { margin: 6px 0 2px; font-size: 27px; letter-spacing: -.04em; }
+.levelup-panel > p { margin: 0 0 20px; color: #6b8593; font-size: 12px; }
+.skill-choices { display: grid; grid-template-columns: repeat(3,1fr); gap: 15px; }
+.skill-card {
+  position: relative; min-height: 245px; padding: 20px 15px 15px; display: flex; flex-direction: column; align-items: center;
+  color: var(--ink); background: white; border: 3px solid color-mix(in srgb,var(--skill-color),white 35%);
+  border-radius: 22px; box-shadow: 0 7px 0 color-mix(in srgb,var(--skill-color),#31566a 35%); cursor: pointer; transition: .15s ease;
+}
+.skill-card:hover { transform: translateY(-8px) scale(1.025); box-shadow: 0 15px 0 color-mix(in srgb,var(--skill-color),#31566a 35%),0 22px 32px rgba(28,78,98,.18); }
+.skill-card:active { transform: translateY(4px); box-shadow: 0 3px 0 color-mix(in srgb,var(--skill-color),#31566a 35%); }
+.skill-icon { width: 76px; height: 76px; display: grid; place-items: center; margin-bottom: 10px; background: color-mix(in srgb,var(--skill-color),white 72%); border-radius: 24px; font: 900 17px "Outfit",sans-serif; letter-spacing: .06em; }
+.skill-card small { color: color-mix(in srgb,var(--skill-color),#24475a 35%); font-size: 9px; font-weight: 900; letter-spacing: .08em; }
+.skill-card strong { margin-top: 4px; font-size: 17px; }
+.skill-card p { min-height: 36px; margin: 7px 0 13px; color: #687f8d; font-size: 11px; line-height: 1.45; }
+.skill-card b { width: 100%; margin-top: auto; padding: 8px; color: white; background: var(--skill-color); border-radius: 10px; font-size: 12px; }
+
+@media (max-width: 900px) {
+  .brand h1 { font-size: 17px; }
+  .brand span { display: none; }
+  .rank-chip { min-width: 145px; padding-inline: 12px; }
+  .mini-stat { min-width: 58px; padding-inline: 8px; }
+  .combo-stat { display: none; }
+  .upgrade-card { width: 108px; }
+  .dock-tip { display: none; }
+  .promotion-card { top: 84px; width: 280px; }
+  .run-meter { top: 78px; width: 360px; }
+  .tutorial { top: 140px; }
+}
+
+@media (max-width: 680px) {
+  .game-hud-top { top: 9px; left: 9px; right: 9px; grid-template-columns: auto 1fr; }
+  .brand-mark { width: 40px; height: 40px; font-size: 22px; }
+  .brand h1 { max-width: 130px; font-size: 14px; }
+  .rank-chip { position: absolute; top: 52px; left: 0; min-width: 128px; padding: 6px 10px; text-align: left; border-radius: 11px; }
+  .rank-chip strong { font-size: 11px; }
+  .resource-hud { grid-column: 2; }
+  .mini-stat { height: 42px; min-width: 56px; padding: 4px 7px; }
+  .mini-stat strong { font-size: 13px; }
+  .mini-stat:nth-child(2), .reset-button { display: none; }
+  .icon-button { width: 40px; height: 40px; }
+  .run-meter { top: 101px; width: calc(100% - 16px); height: 48px; grid-template-columns: 50px 1fr 1fr; }
+  .tutorial { top: 158px; width: max-content; max-width: 88%; }
+  .cloud-legend { top: 116px; left: 8px; }
+  .promotion-card { right: 8px; top: 100px; width: 278px; transform: scale(.86); transform-origin: top right; }
+  .upgrade-dock { bottom: 8px; width: calc(100% - 16px); min-width: 0; height: 86px; padding: 7px; gap: 5px; overflow-x: auto; justify-content: flex-start; }
+  .dock-title { display: none; }
+  .upgrade-list { gap: 5px; }
+  .upgrade-card { flex: 0 0 78px; width: 78px; height: 66px; grid-template-columns: 29px 1fr; }
+  .upgrade-icon { width: 29px; height: 29px; font-size: 17px; }
+  .upgrade-copy b { font-size: 8px; }
+  .toast { top: 168px; font-size: 12px; }
+  .garage-button { left: 10px; bottom: 10px; width: 72px; height: 72px; border-radius: 21px; }
+  .garage-button span { font-size: 24px; }
+  .garage-panel { padding: 18px 12px 22px; }
+  .garage-panel .upgrade-list { grid-template-columns: repeat(2,1fr); max-height: 58vh; overflow: auto; padding: 4px; }
+  .garage-panel .upgrade-card { height: 132px; }
+  .levelup-panel { padding: 20px 14px 24px; }
+  .levelup-panel h2 { font-size: 21px; }
+  .skill-choices { gap: 7px; }
+  .skill-card { min-height: 220px; padding: 13px 7px 10px; }
+  .skill-icon { width: 57px; height: 57px; font-size: 32px; border-radius: 17px; }
+  .skill-card strong { font-size: 13px; }
+  .skill-card p { font-size: 9px; }
+}
+
+/* Large, game-first HUD sizing: readable from a normal desktop viewing distance. */
+@media (min-width: 681px) {
+  .game-hud-top { top: 20px; left: 24px; right: 24px; }
+  .brand { gap: 14px; }
+  .brand-mark { width: 62px; height: 62px; border-width: 4px; font-size: 34px; }
+  .brand span, .eyebrow { font-size: 12px; }
+  .brand h1 { font-size: 32px; }
+  .brand small { margin-top: 7px; padding: 4px 11px; font-size: 12px; }
+
+  .rank-chip { min-width: 260px; padding: 15px 24px 16px; border-radius: 20px 20px 27px 27px; }
+  .rank-chip small { font-size: 14px; }
+  .rank-chip strong { font-size: 23px; }
+
+  .resource-hud { gap: 10px; }
+  .mini-stat { min-width: 100px; height: 70px; padding: 8px 13px; gap: 8px; border-radius: 18px; }
+  .mini-stat span { font-size: 21px; }
+  .mini-stat strong { font-size: 26px; }
+  .coin-stat span { font-size: 29px; }
+  .combo-stat { min-width: 102px; }
+  .combo-stat span { font-size: 12px; }
+  .icon-button { width: 62px; height: 62px; align-self: center; font-size: 25px; }
+
+  .run-meter {
+    top: 105px; width: 510px; height: 70px; padding: 9px 15px;
+    grid-template-columns: 76px 1fr 1fr; gap: 13px; border-radius: 22px;
+  }
+  .level-badge { height: 48px; border-radius: 14px; font-size: 19px; }
+  .meter-group { gap: 4px 8px; }
+  .meter-group small { font-size: 10px; }
+  .meter-group b { font-size: 11px; }
+  .meter-track { height: 13px; }
+
+  .tutorial { top: 190px; padding: 13px 23px; border-radius: 19px; }
+  .tutorial b { font-size: 18px; }
+  .tutorial span { font-size: 14px; }
+  .cloud-legend { top: 108px; left: 28px; gap: 7px; }
+  .legend-item { padding: 7px 12px; border-radius: 11px; font-size: 13px; }
+  .toast { top: 195px; padding: 15px 23px; border-radius: 18px; font-size: 16px; }
+
+  .promotion-card {
+    right: 24px; top: 188px; width: 360px; min-height: 126px; padding: 13px 14px;
+    grid-template-columns: 60px 1fr auto; gap: 11px; border-radius: 23px;
+  }
+  .promotion-icon { width: 58px; height: 58px; font-size: 33px; }
+  .promotion-copy strong { margin-top: 5px; font-size: 18px; }
+  .promotion-copy p { margin-top: 3px; font-size: 13px; }
+  .promotion-requirements { gap: 7px; }
+  .promotion-requirements span { padding: 5px 10px; font-size: 12px; }
+  .promote-button { width: 98px; padding: 8px 10px; border-radius: 15px; font-size: 13px; }
+
+  .garage-button { left: 28px; bottom: 28px; width: 124px; height: 124px; border-radius: 34px; }
+  .garage-button span { font-size: 27px; }
+  .garage-button b { margin-top: 6px; font-size: 18px; }
+  .garage-button small { font-size: 12px; }
+
+  .garage-panel { width: min(1080px, calc(100% - 32px)); padding: 32px 34px 36px; border-radius: 36px; }
+  .garage-heading { margin-bottom: 26px; }
+  .garage-heading span { font-size: 13px; }
+  .garage-heading h2 { margin-top: 5px; font-size: 36px; }
+  .garage-heading p { margin-top: 4px; font-size: 15px; }
+  .garage-heading button { width: 58px; height: 58px; font-size: 34px; }
+  .garage-panel .upgrade-list { gap: 16px; }
+  .equipment-slot { height: 368px; padding: 15px; border-radius: 27px; }
+  .equipment-status { height: 27px; }
+  .equipment-status b { font-size: 11px; }
+  .equipment-status em { padding: 4px 8px; font-size: 10px; }
+  .equipment-visual { height: 98px; margin-block: 3px 9px; }
+  .equipment-visual::before { width: 90px; height: 90px; }
+  .equipment-visual i { font-size: 25px; }
+  .equipment-visual small { padding: 5px 8px; font-size: 13px; }
+  .equipment-info strong { font-size: 18px; }
+  .equipment-info small { height: 42px; margin-top: 5px; font-size: 12px; }
+  .equipment-output { margin-top: 9px; padding: 10px; border-radius: 13px; }
+  .equipment-output > small { font-size: 10px; }
+  .equipment-output > b { font-size: 14px; }
+  .equipment-output > span { font-size: 12px; }
+  .equipment-tiers { height: 15px; margin-block: 10px; gap: 4px; }
+  .equipment-action { min-height: 46px; padding: 9px 10px; border-radius: 13px; }
+  .equipment-action b, .equipment-action strong { font-size: 13px; }
+  .garage-tip { margin-top: 23px; padding: 13px 18px; border-radius: 15px; font-size: 14px; }
+
+  .levelup-panel { width: min(960px, calc(100% - 32px)); padding: 36px 38px 40px; }
+  .levelup-kicker { font-size: 15px; }
+  .levelup-panel h2 { font-size: 36px; }
+  .levelup-panel > p { margin-bottom: 26px; font-size: 16px; }
+  .skill-choices { gap: 20px; }
+  .skill-card { min-height: 300px; padding: 25px 19px 19px; }
+  .skill-icon { width: 96px; height: 96px; font-size: 22px; }
+  .skill-card small { font-size: 12px; }
+  .skill-card strong { font-size: 22px; }
+  .skill-card p { min-height: 48px; font-size: 15px; }
+  .skill-card b { padding: 11px; font-size: 16px; }
+}
+
+@media (max-width: 680px) {
+  .brand h1 { font-size: 17px; }
+  .brand small { font-size: 11px; }
+  .rank-chip strong { font-size: 14px; }
+  .mini-stat { min-width: 66px; }
+  .mini-stat strong { font-size: 16px; }
+  .run-meter { height: 56px; }
+  .level-badge { font-size: 16px; }
+  .meter-group small { font-size: 9px; }
+  .meter-group b { font-size: 10px; }
+  .tutorial b { font-size: 16px; }
+  .tutorial span { font-size: 12px; }
+  .legend-item { font-size: 12px; }
+  .promotion-copy strong { font-size: 15px; }
+  .promotion-copy p, .promotion-requirements span, .promote-button { font-size: 11px; }
+  .garage-button { width: 88px; height: 88px; }
+  .garage-button b { font-size: 15px; }
+  .garage-button small { font-size: 10px; }
+  .garage-heading h2 { font-size: 26px; }
+  .garage-heading p { font-size: 13px; }
+  .equipment-slot { height: 305px; }
+  .equipment-info strong { font-size: 15px; }
+  .equipment-info small { font-size: 11px; }
+  .equipment-output > b { font-size: 13px; }
+  .equipment-output > span { font-size: 11px; }
+  .equipment-action b, .equipment-action strong { font-size: 11px; }
+  .garage-tip { font-size: 12px; }
+  .skill-card strong { font-size: 15px; }
+  .skill-card p { font-size: 12px; }
+}
