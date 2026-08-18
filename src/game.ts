@@ -66,6 +66,8 @@ export class CloudHarvestGame {
   private frontBanner = 0;
   private frontDirection: 1 | -1 = 1;
   private atFactory = false;
+  private returning = false;
+  private returnTimer = 0;
   private droneAngle = 0;
   private runEmitTimer = 0;
   private audioContext?: AudioContext;
@@ -116,15 +118,17 @@ export class CloudHarvestGame {
   }
 
   requestReturn(): boolean {
-    if (this.atFactory) return false;
+    if (this.atFactory || this.returning) return false;
     if (this.getCargoCount() <= 0) {
       this.onToast("화물칸이 비어 있습니다.", "warning");
       return false;
     }
-    this.atFactory = true;
-    this.pausedForLevel = true;
+    this.returning = true;
+    this.returnTimer = 0;
     this.pointer.active = false;
-    this.onFactoryOpen(this.getRunState());
+    this.player.targetX = this.width * .5;
+    this.player.targetY = this.height * .53;
+    this.onToast("관제탑 승인 — 기지 복귀 항로 진입", "success");
     return true;
   }
 
@@ -235,6 +239,8 @@ export class CloudHarvestGame {
     this.run = freshRunState();
     this.pausedForLevel = false;
     this.atFactory = false;
+    this.returning = false;
+    this.returnTimer = 0;
     this.clouds = [];
     this.combo = 0;
     for (let i = 0; i < 12; i += 1) this.spawnCloud(true);
@@ -297,6 +303,10 @@ export class CloudHarvestGame {
   }
 
   private update(dt: number): void {
+    if (this.returning) {
+      this.updateReturnSequence(dt);
+      return;
+    }
     this.spawnTimer -= dt;
     const maxClouds = 16 + this.state.rank * 5;
     if (this.spawnTimer <= 0 && this.clouds.length < maxClouds) {
@@ -408,6 +418,63 @@ export class CloudHarvestGame {
     });
     this.runEmitTimer -= dt;
     if (this.runEmitTimer <= 0) { this.onRunChange(this.getRunState()); this.runEmitTimer = 0.08; }
+  }
+
+  private updateReturnSequence(dt: number): void {
+    this.returnTimer += dt;
+    const centerX = this.width * .5;
+    const centerY = this.height * .53;
+    if (this.atFactory) {
+      this.particles = this.particles.filter((particle) => {
+        particle.life -= dt;
+        particle.x += particle.vx * dt;
+        particle.y += particle.vy * dt;
+        return particle.life > 0;
+      });
+      if (this.returnTimer >= 2.25) {
+        this.returning = false;
+        this.pausedForLevel = true;
+        this.onFactoryOpen(this.getRunState());
+      }
+      return;
+    }
+    if (this.returnTimer < .72) {
+      const follow = 1 - Math.exp(-dt * 8.5);
+      this.player.x += (centerX - this.player.x) * follow;
+      this.player.y += (centerY - this.player.y) * follow;
+      this.shake = Math.max(this.shake, this.returnTimer > .5 ? 2.5 : 0);
+      return;
+    }
+
+    const progress = Math.min(1, (this.returnTimer - .72) / .72);
+    const launch = progress * progress * progress;
+    this.player.x = centerX + launch * this.width * .78;
+    this.player.y = centerY - launch * this.height * .48;
+    this.shake = 3 + progress * 10;
+    if (Math.random() < dt * (25 + progress * 65)) {
+      this.particles.push({
+        x: this.player.x - 48, y: this.player.y + (Math.random() - .5) * 18,
+        vx: -220 - Math.random() * 260, vy: 35 + Math.random() * 80,
+        life: .32 + Math.random() * .28, maxLife: .6, size: 3 + Math.random() * 5,
+        color: Math.random() < .45 ? "#fff36f" : "#8ff5ff",
+      });
+    }
+    this.particles = this.particles.filter((particle) => {
+      particle.life -= dt;
+      particle.x += particle.vx * dt;
+      particle.y += particle.vy * dt;
+      return particle.life > 0;
+    });
+
+    if (this.returnTimer >= 1.55 && !this.atFactory) {
+      this.atFactory = true;
+      this.shake = 0;
+      this.player.x = centerX;
+      this.player.y = this.height * .61;
+      this.player.targetX = this.player.x;
+      this.player.targetY = this.player.y;
+      this.burst(this.player.x, this.player.y + 34, "#7ff5df", 28, 120);
+    }
   }
 
   private updateDrones(dt: number): void {
@@ -662,6 +729,12 @@ export class CloudHarvestGame {
     const sy = this.shake ? (Math.random() - .5) * this.shake : 0;
     ctx.save();
     ctx.translate(sx, sy);
+    if (this.atFactory) {
+      this.drawBase(ctx, time);
+      this.drawPlayer(ctx, time);
+      ctx.restore();
+      return;
+    }
     this.drawSky(ctx, time);
     this.drawIsland(ctx);
     if (this.pointer.active) this.drawSuctionField(ctx, time);
@@ -703,6 +776,74 @@ export class CloudHarvestGame {
     }
     ctx.globalAlpha = 1;
     this.drawImpactOverlay(ctx, time);
+    ctx.restore();
+    if (this.returning) this.drawReturnTransition(ctx);
+  }
+
+  private drawBase(ctx: CanvasRenderingContext2D, time: number): void {
+    const wall = ctx.createLinearGradient(0, 0, 0, this.height);
+    wall.addColorStop(0, "#0a2635"); wall.addColorStop(.58, "#1c4655"); wall.addColorStop(1, "#163541");
+    ctx.fillStyle = wall; ctx.fillRect(0, 0, this.width, this.height);
+
+    ctx.fillStyle = "#081e2b";
+    for (let x = -80; x < this.width + 100; x += 180) {
+      ctx.save(); ctx.translate(x, 0); ctx.transform(1, 0, -.18, 1, 0, 0); ctx.fillRect(0, 0, 28, this.height * .62); ctx.restore();
+    }
+    ctx.fillStyle = "#285d69"; ctx.fillRect(0, 72, this.width, 18); ctx.fillRect(0, this.height * .58, this.width, 14);
+    ctx.fillStyle = "#112f3d"; ctx.fillRect(this.width * .22, 98, this.width * .56, this.height * .47);
+    ctx.strokeStyle = "#3e7380"; ctx.lineWidth = 4;
+    for (let x = this.width * .22; x <= this.width * .78; x += this.width * .14) {
+      ctx.beginPath(); ctx.moveTo(x, 98); ctx.lineTo(x, this.height * .55); ctx.stroke();
+    }
+    ctx.strokeStyle = "rgba(126,217,220,.28)";
+    for (let y = 135; y < this.height * .55; y += 62) { ctx.beginPath(); ctx.moveTo(this.width * .22, y); ctx.lineTo(this.width * .78, y); ctx.stroke(); }
+
+    const floorTop = this.height * .6;
+    const floor = ctx.createLinearGradient(0, floorTop, 0, this.height);
+    floor.addColorStop(0, "#315764"); floor.addColorStop(1, "#102936"); ctx.fillStyle = floor; ctx.fillRect(0, floorTop, this.width, this.height - floorTop);
+    ctx.strokeStyle = "rgba(126,217,220,.2)"; ctx.lineWidth = 2;
+    for (let x = -this.width; x < this.width * 2; x += 90) { ctx.beginPath(); ctx.moveTo(this.width / 2, floorTop); ctx.lineTo(x, this.height); ctx.stroke(); }
+    for (let y = floorTop + 30; y < this.height; y += 42) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(this.width, y); ctx.stroke(); }
+
+    const tanks = [{ x: 72, color: "#dff8ff", code: "CUM" }, { x: 154, color: "#7695ad", code: "RAN" }, { x: this.width - 154, color: "#8275cf", code: "ELC" }];
+    for (const tank of tanks) {
+      ctx.fillStyle = "#173c4a"; ctx.beginPath(); ctx.roundRect(tank.x - 31, 178, 62, 190, 21); ctx.fill();
+      ctx.strokeStyle = tank.color; ctx.lineWidth = 3; ctx.stroke();
+      ctx.fillStyle = tank.color; ctx.globalAlpha = .72; ctx.fillRect(tank.x - 25, 283, 50, 71); ctx.globalAlpha = 1;
+      ctx.fillStyle = "#dffaff"; ctx.textAlign = "center"; ctx.font = "900 12px Outfit, sans-serif"; ctx.fillText(tank.code, tank.x, 214);
+    }
+    ctx.fillStyle = "rgba(3,18,26,.5)"; ctx.beginPath(); ctx.ellipse(this.width * .5, this.height * .68, 150, 44, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#fff36f"; ctx.lineWidth = 5; ctx.setLineDash([18, 12]); ctx.lineDashOffset = -time * 28;
+    ctx.beginPath(); ctx.ellipse(this.width * .5, this.height * .68, 130, 34, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = "#7ff5df"; ctx.textAlign = "center"; ctx.font = "900 15px Outfit, sans-serif"; ctx.fillText("CLOUD HARVEST BASE  01", this.width * .5, 125);
+    if (this.returning) {
+      ctx.fillStyle = "rgba(6,24,34,.72)"; ctx.beginPath(); ctx.roundRect(this.width * .5 - 190, this.height * .78, 380, 62, 16); ctx.fill();
+      ctx.strokeStyle = "#7ff5df"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = "#7ff5df"; ctx.font = "900 12px Outfit, sans-serif"; ctx.fillText("DOCKING COMPLETE", this.width * .5, this.height * .78 + 24);
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 18px Outfit, sans-serif"; ctx.fillText("화물 처리 베이 연결 중…", this.width * .5, this.height * .78 + 46);
+    }
+    for (let x = 42; x < this.width; x += 80) {
+      ctx.fillStyle = Math.sin(time * 3 + x) > 0 ? "#7ff5df" : "#244c58";
+      ctx.beginPath(); ctx.arc(x, 82, 5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  private drawReturnTransition(ctx: CanvasRenderingContext2D): void {
+    const launch = Math.max(0, Math.min(1, (this.returnTimer - .66) / .89));
+    if (launch <= 0) return;
+    const wipe = Math.max(0, Math.min(1, (this.returnTimer - .92) / .63));
+    ctx.save();
+    ctx.fillStyle = `rgba(6,24,34,${wipe * .96})`;
+    const edge = this.width * (1.25 - wipe * 1.45);
+    ctx.beginPath(); ctx.moveTo(edge, 0); ctx.lineTo(this.width + 200, 0); ctx.lineTo(this.width + 200, this.height); ctx.lineTo(edge - 260, this.height); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = Math.min(1, launch * 2.2) * (1 - Math.max(0, (wipe - .82) * 5));
+    ctx.strokeStyle = "rgba(255,243,111,.7)"; ctx.lineWidth = 5;
+    for (let index = 0; index < 9; index += 1) {
+      const y = this.height * .2 + index * 46;
+      ctx.beginPath(); ctx.moveTo(this.width * .06, y + 70); ctx.lineTo(this.width * (.32 + launch * .35), y); ctx.stroke();
+    }
+    ctx.textAlign = "center"; ctx.fillStyle = "#ffffff"; ctx.font = "900 42px Outfit, sans-serif"; ctx.fillText("RETURN TO BASE", this.width * .5, this.height * .44);
+    ctx.fillStyle = "#fff36f"; ctx.font = "900 15px Outfit, sans-serif"; ctx.fillText("FLIGHT COMPLETE  ·  CARGO SECURED", this.width * .5, this.height * .44 + 30);
     ctx.restore();
   }
 
@@ -870,7 +1011,7 @@ export class CloudHarvestGame {
     const insulationLevel = this.state.levels.insulation;
     const totalParts = powerLevel + radiusLevel + valueLevel + this.state.levels.drone + insulationLevel;
     const shipScale = 1 + Math.min(.25, totalParts * .018);
-    ctx.save(); ctx.translate(this.player.x, this.player.y + Math.sin(time * 4) * 3); ctx.scale(shipScale, shipScale);
+    ctx.save(); ctx.translate(this.player.x, this.player.y + Math.sin(time * 4) * (this.atFactory ? .6 : 3)); ctx.scale(shipScale, shipScale);
     if (this.run.feverActive) { ctx.shadowColor = "#fff36f"; ctx.shadowBlur = 34; }
 
     ctx.fillStyle = "rgba(24,65,86,.2)"; ctx.beginPath(); ctx.ellipse(0, 34, 57, 13, 0, 0, Math.PI * 2); ctx.fill();
@@ -881,13 +1022,14 @@ export class CloudHarvestGame {
       ctx.beginPath(); ctx.ellipse(0, 0, 66, 44, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     }
 
-    if (this.pointer.active) {
-      const exhaustColor = this.run.feverActive ? "#fff36f" : "#8ff5ff";
+    if (this.pointer.active || (this.returning && !this.atFactory)) {
+      const exhaustColor = this.run.feverActive || this.returning ? "#fff36f" : "#8ff5ff";
       ctx.fillStyle = exhaustColor;
-      for (let i = 0; i < 3 + Math.min(3, powerLevel); i += 1) {
-        const trail = 16 + ((time * 170 + i * 19) % 34);
+      const exhaustCount = this.returning ? 8 : 3 + Math.min(3, powerLevel);
+      for (let i = 0; i < exhaustCount; i += 1) {
+        const trail = 16 + ((time * (this.returning ? 330 : 170) + i * 19) % (this.returning ? 88 : 34));
         ctx.globalAlpha = .8 - i * .08;
-        ctx.beginPath(); ctx.ellipse(-54 - trail, (i - 2) * 5, 12 + powerLevel * 1.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(-54 - trail, (i - exhaustCount / 2) * 4, (this.returning ? 20 : 12) + powerLevel * 1.5, this.returning ? 4 : 3, 0, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
     }

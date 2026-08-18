@@ -176,6 +176,7 @@ function renderRunState(state: RunState): void {
 }
 
 function showFactory(state: RunState): void {
+  document.body.classList.remove("returning");
   factoryPanel.classList.remove("settled");
   factoryReceipt.classList.remove("show");
   factoryManifest.innerHTML = (Object.values(CLOUDS)).map((cloud) => `
@@ -306,7 +307,11 @@ garageCloseButton.addEventListener("click", closeGarage);
 garageOverlay.addEventListener("click", (event) => {
   if (event.target === garageOverlay) closeGarage();
 });
-returnButton.addEventListener("click", () => game.requestReturn());
+returnButton.addEventListener("click", () => {
+  if (!game.requestReturn()) return;
+  document.body.classList.add("returning");
+  returnButton.disabled = true;
+});
 contractList.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-contract]");
   if (!button) return;
@@ -327,6 +332,7 @@ launchButton.addEventListener("click", () => {
   factoryOverlay.classList.remove("show");
   factoryPanel.classList.remove("settled");
   factoryReceipt.classList.remove("show");
+  document.body.classList.remove("returning");
 });
 skillChoices.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-skill]");
