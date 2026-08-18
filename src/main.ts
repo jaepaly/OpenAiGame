@@ -1,7 +1,7 @@
 import "./styles.css";
-import { CLOUDS, RANKS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
+import { CLOUDS, PROCESSING_CONTRACTS, RANKS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
 import { CloudHarvestGame } from "./game";
-import type { GameState, RunSkillId, RunState, UpgradeId } from "./types";
+import type { ContractId, GameState, RunSkillId, RunState, UpgradeId } from "./types";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app 요소를 찾을 수 없습니다.");
@@ -24,7 +24,7 @@ app.innerHTML = `
 
         <div class="resource-hud">
           <div class="mini-stat coin-stat"><span>◈</span><strong id="money">0</strong></div>
-          <div class="mini-stat"><span>☁</span><strong id="harvested">0개</strong></div>
+          <div class="mini-stat cargo-stat"><span>▣</span><strong id="harvested">0/16</strong></div>
           <div class="mini-stat combo-stat"><span>COMBO</span><strong id="combo">0</strong></div>
           <button class="icon-button" id="soundButton" aria-label="소리 켜기 또는 끄기">🔊</button>
           <button class="icon-button reset-button" id="resetButton" aria-label="새 회사 시작">↻</button>
@@ -53,6 +53,7 @@ app.innerHTML = `
       </aside>
 
       <button class="garage-button" id="garageButton"><span>MK</span><b>정비소</b><small>영구 강화</small></button>
+      <button class="return-button" id="returnButton" disabled><span>RTB</span><b>기지 귀환</b><small id="cargoValue">예상 ◈0</small></button>
 
       <section class="garage-overlay" id="garageOverlay" aria-label="비행선 정비소">
         <div class="garage-panel">
@@ -62,6 +63,29 @@ app.innerHTML = `
           </header>
           <div class="upgrade-list" id="upgradeList"></div>
           <div class="garage-tip">NOTE // 런 도중 획득하는 3택 장비와 달리, 정비소 장비는 새로 시작해도 유지됩니다.</div>
+        </div>
+      </section>
+
+      <section class="factory-overlay" id="factoryOverlay" aria-label="구름 가공 공장">
+        <div class="factory-panel">
+          <header class="factory-heading">
+            <span>PROCESSING BAY // FLIGHT COMPLETE</span>
+            <h2>구름 가공 계약을 선택하세요</h2>
+            <p>화물 구성에 맞는 납품처를 고르면 코인이 정산되고 다음 비행이 시작됩니다.</p>
+          </header>
+          <div class="factory-manifest" id="factoryManifest"></div>
+          <div class="contract-list" id="contractList"></div>
+          <div class="factory-tip">계약마다 구름 종류별 단가가 다릅니다. 현재 화물에서 가장 높은 정산액을 비교하세요.</div>
+          <section class="factory-receipt" id="factoryReceipt">
+            <span>SETTLEMENT COMPLETE</span>
+            <h3 id="receiptContract">납품 완료</h3>
+            <strong id="receiptPayout">◈ 0</strong>
+            <p>정산이 완료되었습니다. 영구 장비를 정비하거나 다음 비행을 시작하세요.</p>
+            <div class="base-actions">
+              <button id="baseGarageButton"><b>MK</b><span>정비소 방문</span></button>
+              <button class="launch-button" id="launchButton"><b>TAKE OFF</b><span>다음 비행 출격</span></button>
+            </div>
+          </section>
         </div>
       </section>
 
@@ -111,6 +135,17 @@ const levelUpDescription = required<HTMLElement>("#levelUpDescription");
 const garageButton = required<HTMLButtonElement>("#garageButton");
 const garageOverlay = required<HTMLElement>("#garageOverlay");
 const garageCloseButton = required<HTMLButtonElement>("#garageCloseButton");
+const returnButton = required<HTMLButtonElement>("#returnButton");
+const cargoValue = required<HTMLElement>("#cargoValue");
+const factoryOverlay = required<HTMLElement>("#factoryOverlay");
+const factoryManifest = required<HTMLElement>("#factoryManifest");
+const contractList = required<HTMLElement>("#contractList");
+const factoryPanel = required<HTMLElement>(".factory-panel");
+const factoryReceipt = required<HTMLElement>("#factoryReceipt");
+const receiptContract = required<HTMLElement>("#receiptContract");
+const receiptPayout = required<HTMLElement>("#receiptPayout");
+const baseGarageButton = required<HTMLButtonElement>("#baseGarageButton");
+const launchButton = required<HTMLButtonElement>("#launchButton");
 
 let toastTimer = 0;
 const showToast = (message: string, tone: "normal" | "success" | "warning" = "normal") => {
@@ -120,7 +155,7 @@ const showToast = (message: string, tone: "normal" | "success" | "warning" = "no
   toastTimer = window.setTimeout(() => { toast.className = "toast"; }, 2200);
 };
 
-const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showToast);
+const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast);
 
 function renderRunState(state: RunState): void {
   runLevel.textContent = `LV.${state.level}`;
@@ -130,7 +165,40 @@ function renderRunState(state: RunState): void {
   feverText.textContent = state.feverActive ? `${Math.max(0, state.feverSeconds).toFixed(1)}s` : `${Math.floor(state.fever)}%`;
   combo.textContent = state.combo > 0 ? `×${state.combo}` : "—";
   combo.parentElement?.classList.toggle("active", state.combo >= 2);
+  const cargoCount = state.cargo.cumulus + state.cargo.rain + state.cargo.electric;
+  const estimatedValue = state.cargoValue.cumulus + state.cargoValue.rain + state.cargoValue.electric + state.cargoBonus;
+  harvested.textContent = `${cargoCount}/${state.cargoCapacity}`;
+  cargoValue.textContent = `예상 ◈${Math.floor(estimatedValue).toLocaleString()}`;
+  returnButton.disabled = cargoCount <= 0;
+  garageButton.disabled = cargoCount > 0;
+  returnButton.classList.toggle("full", cargoCount >= state.cargoCapacity);
   document.body.classList.toggle("fever-active", state.feverActive);
+}
+
+function showFactory(state: RunState): void {
+  factoryPanel.classList.remove("settled");
+  factoryReceipt.classList.remove("show");
+  factoryManifest.innerHTML = (Object.values(CLOUDS)).map((cloud) => `
+    <div class="manifest-item ${cloud.kind}">
+      <span>${cloud.kind === "cumulus" ? "CUM" : cloud.kind === "rain" ? "RAN" : "ELC"}</span>
+      <b>${cloud.name}</b>
+      <strong>${state.cargo[cloud.kind]} UNIT</strong>
+      <small>기본 ◈${Math.floor(state.cargoValue[cloud.kind]).toLocaleString()}</small>
+    </div>
+  `).join("") + `<div class="manifest-bonus"><span>FLIGHT BONUS</span><b>콤보·전선 운항 보너스</b><strong>+ ◈${Math.floor(state.cargoBonus).toLocaleString()}</strong></div>`;
+  const payouts = PROCESSING_CONTRACTS.map((contract) => game.getContractPayout(contract.id));
+  const bestPayout = Math.max(...payouts);
+  contractList.innerHTML = PROCESSING_CONTRACTS.map((contract) => {
+    const payout = game.getContractPayout(contract.id);
+    return `<button class="contract-card ${payout === bestPayout ? "best" : ""}" data-contract="${contract.id}">
+      <span class="contract-code">${contract.code}</span>
+      ${payout === bestPayout ? `<em class="best-offer">BEST OFFER</em>` : ""}
+      <span class="contract-copy"><b>${contract.name}</b><small>${contract.description}</small></span>
+      <span class="contract-rates">흰 ×${contract.multipliers.cumulus.toFixed(2)} · 비 ×${contract.multipliers.rain.toFixed(2)} · 전기 ×${contract.multipliers.electric.toFixed(2)}</span>
+      <strong class="contract-payout">◈ ${payout.toLocaleString()} 정산</strong>
+    </button>`;
+  }).join("");
+  factoryOverlay.classList.add("show");
 }
 
 function showLevelUp(choices: RunSkillId[], pendingPicks: number): void {
@@ -164,7 +232,6 @@ function equipmentEffect(id: UpgradeId, level: number): string {
 
 function renderState(state: GameState): void {
   money.textContent = Math.floor(state.money).toLocaleString();
-  harvested.textContent = `${state.harvested.toLocaleString()}개`;
   altitude.textContent = RANKS[state.rank].altitude;
   rankName.textContent = RANKS[state.rank].name;
   soundButton.textContent = state.sound ? "🔊" : "🔇";
@@ -231,9 +298,35 @@ upgradeList.addEventListener("click", (event) => {
 promoteButton.addEventListener("click", () => game.promote());
 soundButton.addEventListener("click", () => game.toggleSound());
 garageButton.addEventListener("click", () => garageOverlay.classList.add("show"));
-garageCloseButton.addEventListener("click", () => garageOverlay.classList.remove("show"));
+const closeGarage = () => {
+  garageOverlay.classList.remove("show");
+  if (game.isAtFactory() && factoryPanel.classList.contains("settled")) factoryOverlay.classList.add("show");
+};
+garageCloseButton.addEventListener("click", closeGarage);
 garageOverlay.addEventListener("click", (event) => {
-  if (event.target === garageOverlay) garageOverlay.classList.remove("show");
+  if (event.target === garageOverlay) closeGarage();
+});
+returnButton.addEventListener("click", () => game.requestReturn());
+contractList.addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-contract]");
+  if (!button) return;
+  const payout = game.settleCargo(button.dataset.contract as ContractId);
+  if (payout > 0) {
+    factoryPanel.classList.add("settled");
+    factoryReceipt.classList.add("show");
+    receiptContract.textContent = `${button.querySelector(".contract-copy b")?.textContent ?? "가공 계약"} 납품 완료`;
+    receiptPayout.textContent = `◈ ${payout.toLocaleString()}`;
+  }
+});
+baseGarageButton.addEventListener("click", () => {
+  factoryOverlay.classList.remove("show");
+  garageOverlay.classList.add("show");
+});
+launchButton.addEventListener("click", () => {
+  if (!game.launchFlight()) return;
+  factoryOverlay.classList.remove("show");
+  factoryPanel.classList.remove("settled");
+  factoryReceipt.classList.remove("show");
 });
 skillChoices.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-skill]");

@@ -1,4 +1,5 @@
 export type CloudKind = "cumulus" | "rain" | "electric";
+export type ContractId = "water" | "climate" | "energy";
 
 export interface CloudDefinition {
   kind: CloudKind;
@@ -92,7 +93,19 @@ export interface RunState {
   combo: number;
   comboTime: number;
   pendingPicks: number;
+  cargo: Record<CloudKind, number>;
+  cargoValue: Record<CloudKind, number>;
+  cargoBonus: number;
+  cargoCapacity: number;
   skills: Record<RunSkillId, number>;
+}
+
+export interface ProcessingContract {
+  id: ContractId;
+  code: string;
+  name: string;
+  description: string;
+  multipliers: Record<CloudKind, number>;
 }
 
 export interface RankDefinition {

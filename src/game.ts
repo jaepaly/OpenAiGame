@@ -1,9 +1,10 @@
-import { CLOUDS, INITIAL_STATE, RANKS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
-import type { Cloud, CloudKind, FloatingText, GameState, Particle, RunSkillId, RunState, UpgradeId } from "./types";
+import { CLOUDS, INITIAL_STATE, PROCESSING_CONTRACTS, RANKS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
+import type { Cloud, CloudKind, ContractId, FloatingText, GameState, Particle, RunSkillId, RunState, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
 type LevelListener = (choices: RunSkillId[], pendingPicks: number) => void;
+type FactoryListener = (state: RunState) => void;
 type ToastListener = (message: string, tone?: "normal" | "success" | "warning") => void;
 type Shockwave = { x: number; y: number; radius: number; life: number; maxLife: number; color: string };
 
@@ -20,6 +21,10 @@ const freshRunState = (): RunState => ({
   combo: 0,
   comboTime: 0,
   pendingPicks: 0,
+  cargo: { cumulus: 0, rain: 0, electric: 0 },
+  cargoValue: { cumulus: 0, rain: 0, electric: 0 },
+  cargoBonus: 0,
+  cargoCapacity: 16,
   skills: { overclock: 0, wideIntake: 0, chainBurst: 0, profitRain: 0, feverDrive: 0, twinDrone: 0 },
 });
 
@@ -29,6 +34,7 @@ export class CloudHarvestGame {
   private readonly onStateChange: StateListener;
   private readonly onRunChange: RunListener;
   private readonly onLevelUp: LevelListener;
+  private readonly onFactoryOpen: FactoryListener;
   private readonly onToast: ToastListener;
   private state: GameState;
   private run = freshRunState();
@@ -59,6 +65,7 @@ export class CloudHarvestGame {
   private frontActive = 0;
   private frontBanner = 0;
   private frontDirection: 1 | -1 = 1;
+  private atFactory = false;
   private droneAngle = 0;
   private runEmitTimer = 0;
   private audioContext?: AudioContext;
@@ -68,6 +75,7 @@ export class CloudHarvestGame {
     onStateChange: StateListener,
     onRunChange: RunListener,
     onLevelUp: LevelListener,
+    onFactoryOpen: FactoryListener,
     onToast: ToastListener,
   ) {
     this.canvas = canvas;
@@ -77,6 +85,7 @@ export class CloudHarvestGame {
     this.onStateChange = onStateChange;
     this.onRunChange = onRunChange;
     this.onLevelUp = onLevelUp;
+    this.onFactoryOpen = onFactoryOpen;
     this.onToast = onToast;
     this.state = this.loadState();
     this.bindInput();
@@ -88,11 +97,70 @@ export class CloudHarvestGame {
   }
 
   getState(): GameState { return structuredClone(this.state); }
-  getRunState(): RunState { return structuredClone(this.run); }
+  getRunState(): RunState {
+    const state = structuredClone(this.run);
+    state.cargoCapacity = this.getCargoCapacity();
+    return state;
+  }
 
   getUpgradeCost(id: UpgradeId): number {
     const upgrade = UPGRADES.find((item) => item.id === id);
     return upgrade ? upgradeCost(upgrade.baseCost, this.state.levels[id]) : Number.POSITIVE_INFINITY;
+  }
+
+  getContractPayout(id: ContractId): number {
+    const contract = PROCESSING_CONTRACTS.find((item) => item.id === id);
+    if (!contract) return 0;
+    return Math.round((Object.keys(this.run.cargoValue) as CloudKind[])
+      .reduce((total, kind) => total + this.run.cargoValue[kind] * contract.multipliers[kind], this.run.cargoBonus));
+  }
+
+  requestReturn(): boolean {
+    if (this.atFactory) return false;
+    if (this.getCargoCount() <= 0) {
+      this.onToast("화물칸이 비어 있습니다.", "warning");
+      return false;
+    }
+    this.atFactory = true;
+    this.pausedForLevel = true;
+    this.pointer.active = false;
+    this.onFactoryOpen(this.getRunState());
+    return true;
+  }
+
+  isAtFactory(): boolean { return this.atFactory; }
+
+  settleCargo(id: ContractId): number {
+    if (!this.atFactory) return 0;
+    const contract = PROCESSING_CONTRACTS.find((item) => item.id === id);
+    if (!contract) return 0;
+    const payout = this.getContractPayout(id);
+    this.state.money += payout;
+    this.state.totalEarned += payout;
+    this.run = freshRunState();
+    this.combo = 0;
+    this.comboTimer = 0;
+    this.commit();
+    this.onRunChange(this.getRunState());
+    return payout;
+  }
+
+  launchFlight(): boolean {
+    if (!this.atFactory) return false;
+    this.atFactory = false;
+    this.pausedForLevel = false;
+    this.clouds = [];
+    this.particles = [];
+    this.texts = [];
+    this.shockwaves = [];
+    this.frontTimer = 14;
+    this.player.targetX = this.width * .5;
+    this.player.targetY = this.height * .55;
+    for (let index = 0; index < 12; index += 1) this.spawnCloud(true);
+    this.burst(this.player.x, this.player.y, "#8fffe4", 45, 260);
+    this.onToast("정비 완료 — 다음 수확 비행 출격!", "success");
+    this.emitAll();
+    return true;
   }
 
   buyUpgrade(id: UpgradeId): void {
@@ -166,6 +234,7 @@ export class CloudHarvestGame {
     this.state = structuredClone(INITIAL_STATE);
     this.run = freshRunState();
     this.pausedForLevel = false;
+    this.atFactory = false;
     this.clouds = [];
     this.combo = 0;
     for (let i = 0; i < 12; i += 1) this.spawnCloud(true);
@@ -277,6 +346,7 @@ export class CloudHarvestGame {
     const feverPower = this.run.feverActive ? 2.65 : 1;
     const overloadPower = this.overload > 0 ? 0.22 : 1;
     const suctionPower = basePower * skillPower * feverPower * overloadPower;
+    const cargoFull = this.getCargoCount() >= this.getCargoCapacity();
     const collected: Cloud[] = [];
 
     for (const cloud of this.clouds) {
@@ -285,7 +355,7 @@ export class CloudHarvestGame {
       cloud.vx += Math.sin(cloud.phase + cloud.age * 0.6) * dt * 3;
       cloud.vy += Math.cos(cloud.phase + cloud.age * 0.48) * dt * 2;
 
-      if (this.pointer.active) {
+      if (this.pointer.active && !cargoFull) {
         const dx = this.player.x - cloud.x;
         const dy = this.player.y - cloud.y;
         const distance = Math.hypot(dx, dy) || 1;
@@ -379,6 +449,7 @@ export class CloudHarvestGame {
 
   private collectCloud(cloud: Cloud): void {
     if (!this.clouds.some((item) => item.id === cloud.id)) return;
+    if (this.getCargoCount() >= this.getCargoCapacity()) return;
     this.clouds = this.clouds.filter((item) => item.id !== cloud.id);
     const definition = CLOUDS[cloud.kind];
     this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
@@ -390,8 +461,8 @@ export class CloudHarvestGame {
     const insulationValue = cloud.kind === "electric" && this.state.levels.insulation > 0 ? 1.5 : 1;
     const densityValue = cloud.dense ? 3 : 1;
     const earned = Math.round(definition.value * comboMultiplier * permanentValue * runValue * insulationValue * densityValue);
-    this.state.money += earned;
-    this.state.totalEarned += earned;
+    this.run.cargo[cloud.kind] += 1;
+    this.run.cargoValue[cloud.kind] += earned;
     this.state.harvested += 1;
     const baseXp = cloud.kind === "cumulus" ? 2 : cloud.kind === "rain" ? 5 : 9;
     const xp = cloud.dense ? baseXp * 2 : baseXp;
@@ -400,7 +471,7 @@ export class CloudHarvestGame {
     if (!this.run.feverActive) this.run.fever = Math.min(100, this.run.fever + feverGain);
     if (this.run.fever >= 100 && !this.run.feverActive) this.startFever();
 
-    this.texts.push({ x: cloud.x, y: cloud.y, text: `${cloud.dense ? "DENSE  " : ""}+${earned}  +${xp}XP`, color: cloud.dense || cloud.kind === "electric" ? "#fff27a" : "#ffffff", life: 1.15 });
+    this.texts.push({ x: cloud.x, y: cloud.y, text: `${cloud.dense ? "DENSE  " : ""}+1 CARGO  ◈${earned}`, color: cloud.dense || cloud.kind === "electric" ? "#fff27a" : "#ffffff", life: 1.15 });
     if (this.combo >= 3) this.texts.push({ x: cloud.x, y: cloud.y + 28, text: `${this.combo} COMBO!`, color: "#ffdf70", life: .9 });
     this.burst(cloud.x, cloud.y, definition.color, 24 + Math.min(34, this.combo * 2), 270);
     this.burst(cloud.x, cloud.y, "#ffd15e", 8 + Math.min(14, this.combo), 330);
@@ -414,6 +485,7 @@ export class CloudHarvestGame {
 
     if (this.combo % 5 === 0) this.triggerPressureSurge(cloud.x, cloud.y);
     if (cloud.front && !this.clouds.some((item) => item.front)) this.completeCloudFront(cloud.x, cloud.y);
+    if (this.getCargoCount() >= this.getCargoCapacity()) this.onToast("화물칸 가득 참 — 우하단 귀환 버튼을 누르세요.", "warning");
 
     const chainStacks = this.run.skills.chainBurst;
     if (chainStacks > 0) {
@@ -464,8 +536,7 @@ export class CloudHarvestGame {
 
   private triggerPressureSurge(x: number, y: number): void {
     const bonus = this.combo * 3;
-    this.state.money += bonus;
-    this.state.totalEarned += bonus;
+    this.run.cargoBonus += bonus;
     if (!this.run.feverActive) {
       this.run.fever = Math.min(100, this.run.fever + 18);
       if (this.run.fever >= 100) this.startFever();
@@ -491,8 +562,7 @@ export class CloudHarvestGame {
 
   private completeCloudFront(x: number, y: number): void {
     const bonus = 45 + this.state.rank * 35;
-    this.state.money += bonus;
-    this.state.totalEarned += bonus;
+    this.run.cargoBonus += bonus;
     if (!this.run.feverActive) {
       this.run.fever = Math.min(100, this.run.fever + 28);
       if (this.run.fever >= 100) this.startFever();
@@ -934,6 +1004,14 @@ export class CloudHarvestGame {
       const life = .4 + Math.random() * .55;
       this.particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life, maxLife: life, size: 2 + Math.random() * 5, color });
     }
+  }
+
+  private getCargoCount(): number {
+    return this.run.cargo.cumulus + this.run.cargo.rain + this.run.cargo.electric;
+  }
+
+  private getCargoCapacity(): number {
+    return 16 + this.state.rank * 4 + this.state.levels.value * 2;
   }
 
   private emitAll(): void { this.onStateChange(this.getState()); this.onRunChange(this.getRunState()); }

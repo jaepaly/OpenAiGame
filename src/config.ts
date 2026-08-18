@@ -1,4 +1,10 @@
-import type { CloudDefinition, CloudKind, RankDefinition, RunSkillDefinition, RunSkillId, UpgradeDefinition } from "./types";
+import type { CloudDefinition, CloudKind, ProcessingContract, RankDefinition, RunSkillDefinition, RunSkillId, UpgradeDefinition } from "./types";
+
+export const PROCESSING_CONTRACTS: ProcessingContract[] = [
+  { id: "water", code: "H2O", name: "생수 병입 라인", description: "맑은 구름을 프리미엄 생수로 가공합니다.", multipliers: { cumulus: 1.45, rain: 1.05, electric: .85 } },
+  { id: "climate", code: "CLM", name: "기상 솔루션", description: "비구름 중심의 농업·기상 서비스 계약입니다.", multipliers: { cumulus: 1.12, rain: 1.55, electric: 1.05 } },
+  { id: "energy", code: "NRG", name: "에너지 연구소", description: "전기구름을 고밀도 에너지 셀로 변환합니다.", multipliers: { cumulus: .9, rain: 1.2, electric: 1.9 } },
+];
 
 export const CLOUDS: Record<CloudKind, CloudDefinition> = {
   cumulus: {
