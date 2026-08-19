@@ -702,10 +702,10 @@ export class CloudHarvestGame {
     this.burst(cloud.x, cloud.y, "#ffd15e", 8 + Math.min(14, this.combo), 330);
     this.shockwaves.push({ x: cloud.x, y: cloud.y, radius: 12, life: .42, maxLife: .42, color: definition.color });
     this.shockwaves.push({ x: cloud.x, y: cloud.y, radius: 3, life: .22, maxLife: .22, color: "#ffffff" });
-    const harvestShake = Math.min(24, 4 + this.combo * .8 + Math.min(7, cascadeDepth * 1.4));
+    const harvestShake = Math.min(3.2, .7 + this.combo * .12 + Math.min(1.2, cascadeDepth * .24));
     this.shake = this.run.feverActive ? Math.min(.8, harvestShake) : harvestShake;
     this.impactFlash = Math.min(.92, .22 + this.combo * .025 + cascadeDepth * .025);
-    this.impactFreeze = this.run.feverActive ? 0 : Math.min(.075, .025 + this.combo * .002);
+    this.impactFreeze = this.run.feverActive ? 0 : Math.min(.025, .008 + this.combo * .0006);
     this.comboPunch = 1;
     this.playTone(290 + Math.min(590, this.combo * 31) + definition.value * 2 + Math.min(480, cascadeDepth * 58), cascadeDepth > 0 ? .04 : .055);
 
@@ -714,7 +714,7 @@ export class CloudHarvestGame {
       this.texts.push({ x: cloud.x, y: cloud.y - 34, text: `${milestone} ×${this.cascadeCount}!`, color: "#fff36f", life: 1.35 });
       this.shockwaves.push({ x: cloud.x, y: cloud.y, radius: 24, life: .78, maxLife: .78, color: "#fff36f" });
       this.burst(cloud.x, cloud.y, "#fff36f", 16 + Math.min(34, this.cascadeCount), 390);
-      const milestoneShake = Math.min(28, 12 + this.cascadeCount * .42);
+      const milestoneShake = Math.min(5, 2.4 + this.cascadeCount * .07);
       this.shake = this.run.feverActive ? Math.min(.8, milestoneShake) : milestoneShake;
       this.impactFlash = Math.min(1, .48 + this.cascadeCount * .012);
     }
@@ -832,9 +832,9 @@ export class CloudHarvestGame {
     this.texts.push({ x, y: y - 35, text: `PRESSURE SURGE  +${bonus}`, color: "#fff36f", life: 1.45 });
     this.shockwaves.push({ x, y, radius: 28, life: .78, maxLife: .78, color: "#fff36f" });
     this.burst(x, y, "#fff36f", 42, 390);
-    this.shake = this.run.feverActive ? .8 : 20;
+    this.shake = this.run.feverActive ? .8 : 5;
     this.impactFlash = .9;
-    this.impactFreeze = this.run.feverActive ? 0 : .085;
+    this.impactFreeze = this.run.feverActive ? 0 : .035;
     this.playChord();
   }
 
@@ -946,8 +946,9 @@ export class CloudHarvestGame {
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.width, this.height);
     const cameraShake = this.run.feverActive ? Math.min(.8, this.shake) : this.shake;
-    const sx = cameraShake ? (this.run.feverActive ? Math.sin(time * 24) * cameraShake * .45 : (Math.random() - .5) * cameraShake) : 0;
-    const sy = cameraShake ? (this.run.feverActive ? Math.cos(time * 21) * cameraShake * .35 : (Math.random() - .5) * cameraShake) : 0;
+    const smoothShake = this.run.feverActive || cameraShake <= 5;
+    const sx = cameraShake ? (smoothShake ? Math.sin(time * 24) * cameraShake * .45 : (Math.random() - .5) * cameraShake) : 0;
+    const sy = cameraShake ? (smoothShake ? Math.cos(time * 21) * cameraShake * .35 : (Math.random() - .5) * cameraShake) : 0;
     ctx.save();
     ctx.translate(sx, sy);
     if (this.atFactory) {
