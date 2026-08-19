@@ -1,5 +1,5 @@
 import { CLOUDS, FLIGHT_ROUTES, INITIAL_STATE, PROCESSING_CONTRACTS, RANKS, RESEARCH_PROJECTS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
-import type { Cloud, CloudKind, ContractId, FlightRouteId, FloatingText, GameState, Particle, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
+import type { Cloud, CloudFormationKind, CloudKind, ContractId, FlightRouteId, FloatingText, GameState, Particle, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
@@ -8,6 +8,7 @@ type FactoryListener = (state: RunState) => void;
 type ToastListener = (message: string, tone?: "normal" | "success" | "warning") => void;
 type Shockwave = { x: number; y: number; radius: number; life: number; maxLife: number; color: string };
 type CascadeHarvest = { cloudId: number; delay: number; depth: number };
+type DroneBeam = { x: number; y: number; targetX: number; targetY: number };
 
 const SAVE_KEY = "cloud-harvest-inc-save-v2";
 
@@ -50,12 +51,15 @@ export class CloudHarvestGame {
   private particles: Particle[] = [];
   private texts: FloatingText[] = [];
   private shockwaves: Shockwave[] = [];
+  private droneBeams: DroneBeam[] = [];
   private width = 960;
   private height = 640;
   private dpr = 1;
   private lastTime = 0;
   private spawnTimer = 0;
   private cloudId = 0;
+  private formationId = 0;
+  private formationCooldown = 4;
   private running = true;
   private pausedForLevel = false;
   private player = { x: 480, y: 380, targetX: 480, targetY: 380 };
@@ -187,9 +191,12 @@ export class CloudHarvestGame {
     this.launchTimer = 0;
     this.pausedForLevel = false;
     this.clouds = [];
+    this.formationId = 0;
     this.particles = [];
     this.texts = [];
     this.shockwaves = [];
+    this.droneBeams = [];
+    this.formationCooldown = 2.8;
     this.clearCascade();
     this.goldenFront = false;
     this.goldenFrontClaimed = false;
@@ -316,7 +323,10 @@ export class CloudHarvestGame {
     this.goldenFront = false;
     this.goldenFrontClaimed = false;
     this.clouds = [];
+    this.formationId = 0;
     this.combo = 0;
+    this.droneBeams = [];
+    this.formationCooldown = 4;
     this.clearCascade();
     for (let i = 0; i < Math.min(18, this.getMaxClouds()); i += 1) this.spawnCloud(true);
     this.emitAll();
@@ -387,11 +397,15 @@ export class CloudHarvestGame {
       return;
     }
     this.spawnTimer -= dt;
+    this.formationCooldown = Math.max(0, this.formationCooldown - dt);
     const flightPressure = this.run.flight - 1;
     const maxClouds = this.getMaxClouds();
     if (this.spawnTimer <= 0 && this.clouds.length < maxClouds) {
-      this.spawnCloud(false);
-      this.spawnTimer = this.getCloudSpawnInterval();
+      const formationChance = .14 + (this.run.flight - 1) * .06 + (this.run.feverActive ? .22 : 0);
+      const formed = this.formationCooldown <= 0 && maxClouds - this.clouds.length >= 4 && Math.random() < formationChance
+        ? this.spawnFormation(maxClouds - this.clouds.length)
+        : false;
+      this.spawnTimer = this.getCloudSpawnInterval() * (formed ? 1.8 : 1);
     }
 
     const follow = 1 - Math.exp(-dt * 9);
@@ -622,6 +636,7 @@ export class CloudHarvestGame {
   }
 
   private updateDrones(dt: number): void {
+    this.droneBeams = [];
     const stormDroneBonus = this.run.feverActive ? this.run.skills.stormDrones * 2 : 0;
     const count = this.state.levels.drone + this.run.skills.twinDrone + this.run.skills.droneFleet * 3 + stormDroneBonus;
     if (count <= 0 || this.clouds.length === 0) return;
@@ -637,6 +652,7 @@ export class CloudHarvestGame {
         if (distance < nearest) { nearest = distance; target = cloud; }
       }
       if (!target) continue;
+      if (this.run.feverActive && this.run.skills.stormDrones) this.droneBeams.push({ x, y, targetX: target.x, targetY: target.y });
       const stormDronePower = this.run.feverActive && this.run.skills.stormDrones ? 3 : 1;
       target.health -= dt * (7 + count * 3 + this.run.skills.droneFleet * 12) * stormDronePower;
       target.hurtFlash = 0.6;
@@ -723,6 +739,8 @@ export class CloudHarvestGame {
     if (cloud.front && !this.clouds.some((item) => item.front)) this.completeCloudFront(cloud.x, cloud.y);
     if (this.getCargoCount() >= this.getCargoCapacity()) this.onToast("화물칸 가득 참 — 우하단 귀환 버튼을 누르세요.", "warning");
 
+    if (cloud.formationCore && cloud.formationId !== undefined) this.collapseFormation(cloud, cascadeDepth);
+
     const chainStacks = this.run.skills.chainBurst;
     if (chainStacks > 0) {
       const chainRadius = 105 + chainStacks * 35 + this.run.skills.blackHole * 120 + this.run.skills.cascadeGrid * 95;
@@ -757,6 +775,19 @@ export class CloudHarvestGame {
     const tempo = Math.max(.028, .068 - Math.min(5, depth) * .005 - this.run.skills.cascadeGrid * .014);
     const tailDelay = this.cascadeQueue.reduce((latest, item) => Math.max(latest, item.delay), 0);
     this.cascadeQueue.push({ cloudId: cloud.id, delay: tailDelay + tempo + Math.random() * .012, depth });
+  }
+
+  private collapseFormation(core: Cloud, cascadeDepth: number): void {
+    const members = this.clouds.filter((cloud) => cloud.formationId === core.formationId);
+    if (members.length === 0) return;
+    this.texts.push({ x: core.x, y: core.y - 45, text: `FORMATION BREAK  ×${members.length + 1}`, color: "#ffcf67", life: 1.6 });
+    this.shockwaves.push({ x: core.x, y: core.y, radius: 30, life: .9, maxLife: .9, color: "#ffad66" });
+    this.burst(core.x, core.y, "#ffad66", 34, 360);
+    for (const member of members) {
+      member.health = 0;
+      member.hurtFlash = 1;
+      this.queueCascade(member, cascadeDepth + 1);
+    }
   }
 
   private updateCascadeQueue(dt: number): void {
@@ -903,6 +934,54 @@ export class CloudHarvestGame {
     this.clouds.push({ id: ++this.cloudId, kind, x, y, vx: (Math.random() - .5) * 8, vy: (Math.random() - .5) * 6, radius, phase: Math.random() * Math.PI * 2, charged: false, age: initial ? .6 + Math.random() * 4.4 : 0, health, maxHealth: health, hurtFlash: 0, dense, front: false });
   }
 
+  private spawnFormation(availableSlots: number): boolean {
+    const count = Math.min(availableSlots, 5 + (this.run.flight - 1) * 2 + (this.run.feverActive ? 2 : 0));
+    if (count < 4) return false;
+    const kinds: CloudFormationKind[] = ["ring", "stream", "cluster"];
+    const formationKind = kinds[Math.floor(Math.random() * kinds.length)];
+    const id = ++this.formationId;
+    let centerX = 180 + Math.random() * Math.max(120, this.width - 590);
+    let centerY = 245 + Math.random() * Math.max(80, this.height - 470);
+    for (let attempt = 0; attempt < 5 && Math.hypot(centerX - this.player.x, centerY - this.player.y) < 210; attempt += 1) {
+      centerX = 180 + Math.random() * Math.max(120, this.width - 590);
+      centerY = 245 + Math.random() * Math.max(80, this.height - 470);
+    }
+    for (let index = 0; index < count; index += 1) {
+      this.spawnCloud(false);
+      const cloud = this.clouds[this.clouds.length - 1];
+      const centered = index - (count - 1) / 2;
+      if (formationKind === "ring") {
+        const angle = index / count * Math.PI * 2;
+        cloud.x = centerX + Math.cos(angle) * 92;
+        cloud.y = centerY + Math.sin(angle) * 68;
+      } else if (formationKind === "stream") {
+        cloud.x = centerX + centered * 58;
+        cloud.y = centerY + Math.sin(index * 1.25) * 42;
+        cloud.vx += 13;
+      } else {
+        const angle = index * 2.4;
+        const spread = 24 + Math.sqrt(index) * 34;
+        cloud.x = centerX + Math.cos(angle) * spread;
+        cloud.y = centerY + Math.sin(angle) * spread * .72;
+      }
+      cloud.x = Math.max(cloud.radius + 10, Math.min(this.width - cloud.radius - 20, cloud.x));
+      cloud.y = Math.max(120 + cloud.radius, Math.min(this.height - 145 - cloud.radius, cloud.y));
+      cloud.formationId = id;
+      cloud.formationKind = formationKind;
+      cloud.formationCore = index === Math.floor(count / 2);
+      if (cloud.formationCore) {
+        cloud.dense = true;
+        cloud.maxHealth *= 1.75;
+        cloud.health = cloud.maxHealth;
+        cloud.radius *= 1.12;
+      }
+    }
+    this.formationCooldown = this.run.feverActive ? 2.6 : Math.max(4.2, 7 - this.run.flight * .7);
+    const label = formationKind === "ring" ? "CLOUD RING" : formationKind === "stream" ? "JETSTREAM PACK" : "PRESSURE CLUSTER";
+    this.texts.push({ x: centerX, y: centerY - 90, text: `${label}  ·  CORE TARGET`, color: "#8fffe9", life: 1.5 });
+    return true;
+  }
+
   private startCloudFront(): void {
     this.goldenFront = this.run.flight === 3 && !this.goldenFrontClaimed;
     this.frontTimer = this.goldenFront ? 20 : Math.max(24, 36 - this.state.rank * 4);
@@ -960,8 +1039,11 @@ export class CloudHarvestGame {
     }
     this.drawSky(ctx, time);
     this.drawIsland(ctx);
+    this.drawFormationLinks(ctx, time);
     if (this.pointer.active) this.drawSuctionField(ctx, time);
+    this.drawCascadeLinks(ctx, time);
     for (const cloud of this.clouds) this.drawCloud(ctx, cloud, time);
+    this.drawStormDroneBeams(ctx, time);
     for (const wave of this.shockwaves) {
       const alpha = Math.max(0, wave.life / wave.maxLife);
       ctx.globalAlpha = alpha;
@@ -1174,7 +1256,8 @@ export class CloudHarvestGame {
     const healthRatio = Math.max(0, cloud.health / cloud.maxHealth);
     const damageRatio = Math.max(.42, healthRatio);
     const pulse = cloud.hurtFlash > 0 ? 1 + Math.sin(time * 45) * .055 : 1;
-    const suctionRadius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.blackHole * 80;
+    const suctionRadius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.blackHole * 80
+      + (this.run.feverActive ? this.run.skills.cycloneCore * 120 : 0);
     const toPlayerX = this.player.x - cloud.x;
     const toPlayerY = this.player.y - cloud.y;
     const playerDistance = Math.hypot(toPlayerX, toPlayerY);
@@ -1207,6 +1290,15 @@ export class CloudHarvestGame {
       }
       ctx.closePath(); ctx.fill();
       ctx.fillStyle = "#fff36f"; ctx.beginPath(); ctx.arc(0, 0, cloud.radius * .09, 0, Math.PI * 2); ctx.fill();
+    }
+    if (cloud.formationCore) {
+      ctx.shadowColor = "#ffad66"; ctx.shadowBlur = 22;
+      ctx.strokeStyle = "#ffad66"; ctx.lineWidth = 4;
+      ctx.setLineDash([9, 6]); ctx.lineDashOffset = -time * 42;
+      ctx.beginPath(); ctx.arc(0, 0, cloud.radius * 1.18, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = "#fff5bd"; ctx.font = `900 ${Math.max(9, cloud.radius * .25)}px Outfit, sans-serif`; ctx.textAlign = "center";
+      ctx.fillText("CORE", 0, -cloud.radius * .92);
+      ctx.shadowColor = "transparent";
     }
     if (cloud.front) {
       if (this.goldenFront) {
@@ -1254,14 +1346,83 @@ export class CloudHarvestGame {
     ctx.closePath();
   }
 
+  private drawFormationLinks(ctx: CanvasRenderingContext2D, time: number): void {
+    const cores = this.clouds.filter((cloud) => cloud.formationCore && cloud.formationId !== undefined);
+    for (const core of cores) {
+      const members = this.clouds.filter((cloud) => cloud.formationId === core.formationId && cloud.id !== core.id);
+      ctx.save();
+      ctx.strokeStyle = "rgba(143,255,233,.24)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 9]);
+      ctx.lineDashOffset = -time * 24;
+      for (const member of members) {
+        ctx.beginPath(); ctx.moveTo(core.x, core.y); ctx.lineTo(member.x, member.y); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  private drawCascadeLinks(ctx: CanvasRenderingContext2D, time: number): void {
+    if (!this.run.skills.cascadeGrid || this.cascadeQueue.length < 2) return;
+    const queued = this.cascadeQueue
+      .map((item) => this.clouds.find((cloud) => cloud.id === item.cloudId))
+      .filter((cloud): cloud is Cloud => Boolean(cloud));
+    if (queued.length < 2) return;
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,173,102,.88)";
+    ctx.lineWidth = 4;
+    ctx.setLineDash([8, 7]);
+    ctx.lineDashOffset = -time * 80;
+    ctx.shadowColor = "#ffad66";
+    ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.moveTo(queued[0].x, queued[0].y);
+    for (let index = 1; index < queued.length; index += 1) ctx.lineTo(queued[index].x, queued[index].y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawStormDroneBeams(ctx: CanvasRenderingContext2D, time: number): void {
+    if (this.droneBeams.length === 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const beam of this.droneBeams) {
+      const pulse = .72 + Math.sin(time * 34 + beam.x) * .2;
+      ctx.strokeStyle = `rgba(141,255,209,${pulse})`;
+      ctx.lineWidth = 3.5;
+      ctx.shadowColor = "#8dffd1";
+      ctx.shadowBlur = 14;
+      ctx.beginPath(); ctx.moveTo(beam.x, beam.y); ctx.lineTo(beam.targetX, beam.targetY); ctx.stroke();
+      ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(beam.targetX, beam.targetY, 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
   private drawSuctionField(ctx: CanvasRenderingContext2D, time: number): void {
-    const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.blackHole * 80;
+    const cycloneActive = this.run.feverActive && this.run.skills.cycloneCore > 0;
+    const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.blackHole * 80 + (cycloneActive ? 120 : 0);
     const gradient = ctx.createRadialGradient(this.player.x, this.player.y, 20, this.player.x, this.player.y, radius);
     gradient.addColorStop(0, this.run.feverActive ? "rgba(255,244,111,.28)" : "rgba(255,255,255,.2)"); gradient.addColorStop(1, "rgba(255,255,255,0)");
     ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(this.player.x, this.player.y, radius, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = this.overload > 0 ? "rgba(255,215,95,.75)" : this.run.feverActive ? "rgba(255,245,112,.82)" : "rgba(255,255,255,.55)";
     ctx.lineWidth = this.run.feverActive ? 5 : 3; ctx.setLineDash([12, 12]); ctx.lineDashOffset = -time * (this.run.feverActive ? 90 : 48);
     ctx.beginPath(); ctx.arc(this.player.x, this.player.y, radius * (.88 + Math.sin(time * 6) * .03), 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    if (cycloneActive) {
+      ctx.save(); ctx.translate(this.player.x, this.player.y); ctx.rotate(time * 2.4);
+      ctx.strokeStyle = "rgba(115,232,255,.76)"; ctx.lineWidth = 3; ctx.shadowColor = "#73e8ff"; ctx.shadowBlur = 10;
+      for (let arm = 0; arm < 3; arm += 1) {
+        ctx.beginPath();
+        for (let step = 0; step <= 36; step += 1) {
+          const progress = step / 36;
+          const spiralRadius = 20 + progress * radius * .84;
+          const angle = arm * Math.PI * 2 / 3 + progress * Math.PI * 2.6;
+          const x = Math.cos(angle) * spiralRadius;
+          const y = Math.sin(angle) * spiralRadius;
+          if (step === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
   }
 
   private drawPlayer(ctx: CanvasRenderingContext2D, time: number): void {

@@ -1,4 +1,5 @@
 export type CloudKind = "cumulus" | "rain" | "electric";
+export type CloudFormationKind = "ring" | "stream" | "cluster";
 export type ContractId = "water" | "climate" | "energy";
 export type FlightRouteId = "tailwind" | "pressureMine" | "frontline";
 export type ResearchId = "logistics" | "refining" | "forecasting";
@@ -32,6 +33,9 @@ export interface Cloud {
   hurtFlash: number;
   dense: boolean;
   front: boolean;
+  formationId?: number;
+  formationCore?: boolean;
+  formationKind?: CloudFormationKind;
 }
 
 export interface Particle {
