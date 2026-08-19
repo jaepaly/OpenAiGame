@@ -179,6 +179,9 @@ const showToast = (message: string, tone: "normal" | "success" | "warning" = "no
 };
 
 const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast);
+if (import.meta.env.DEV) {
+  (window as typeof window & { __cloudHarvestGame?: CloudHarvestGame }).__cloudHarvestGame = game;
+}
 
 function renderRunState(state: RunState): void {
   runLevel.textContent = `LV.${state.level}`;
@@ -187,6 +190,8 @@ function renderRunState(state: RunState): void {
   feverFill.style.width = `${Math.min(100, state.fever)}%`;
   feverText.textContent = state.feverActive ? `${Math.max(0, state.feverSeconds).toFixed(1)}s` : `${Math.floor(state.fever)}%`;
   dayFlight.textContent = `DAY ${state.day} · FLIGHT ${state.flight}/3`;
+  document.body.classList.toggle("flight-two", state.flight === 2);
+  document.body.classList.toggle("flight-three", state.flight === 3);
   routeName.textContent = FLIGHT_ROUTES[state.routeId].name;
   combo.textContent = state.combo > 0 ? `×${state.combo}` : "—";
   combo.parentElement?.classList.toggle("active", state.combo >= 2);

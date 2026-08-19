@@ -72,6 +72,8 @@ export class CloudHarvestGame {
   private frontActive = 0;
   private frontBanner = 0;
   private frontDirection: 1 | -1 = 1;
+  private goldenFront = false;
+  private goldenFrontClaimed = false;
   private atFactory = false;
   private returning = false;
   private returnTimer = 0;
@@ -180,12 +182,16 @@ export class CloudHarvestGame {
     this.particles = [];
     this.texts = [];
     this.shockwaves = [];
-    this.frontTimer = FLIGHT_ROUTES[routeId].frontDelay;
+    this.goldenFront = false;
+    this.goldenFrontClaimed = false;
+    const flightFrontDelay = this.run.flight === 3 ? 3.5 : this.run.flight === 2 ? .72 : 1;
+    this.frontTimer = FLIGHT_ROUTES[routeId].frontDelay * flightFrontDelay;
     this.player.x = this.width * .5;
     this.player.y = this.height * .61;
     this.player.targetX = this.width * .5;
     this.player.targetY = this.height * .55;
-    this.onToast(`${FLIGHT_ROUTES[routeId].name} 출격 승인 — 격납고 게이트 개방`, "success");
+    const phaseName = this.run.flight === 3 ? "최종 수확" : this.run.flight === 2 ? "고밀도 운항" : "탐색 운항";
+    this.onToast(`FLIGHT ${this.run.flight}/3 ${phaseName} — ${FLIGHT_ROUTES[routeId].name}`, "success");
     this.playTone(165, .28);
     return true;
   }
@@ -279,6 +285,8 @@ export class CloudHarvestGame {
     this.launching = false;
     this.launchTimer = 0;
     this.dayComplete = false;
+    this.goldenFront = false;
+    this.goldenFrontClaimed = false;
     this.clouds = [];
     this.combo = 0;
     for (let i = 0; i < 12; i += 1) this.spawnCloud(true);
@@ -350,10 +358,11 @@ export class CloudHarvestGame {
       return;
     }
     this.spawnTimer -= dt;
-    const maxClouds = 16 + this.state.rank * 5;
+    const flightPressure = this.run.flight - 1;
+    const maxClouds = 16 + this.state.rank * 5 + flightPressure * 4;
     if (this.spawnTimer <= 0 && this.clouds.length < maxClouds) {
       this.spawnCloud(false);
-      this.spawnTimer = Math.max(0.24, (0.88 - this.state.rank * 0.12) * FLIGHT_ROUTES[this.run.routeId].spawnInterval);
+      this.spawnTimer = Math.max(0.18, (0.88 - this.state.rank * 0.12) * FLIGHT_ROUTES[this.run.routeId].spawnInterval * (1 - flightPressure * .16));
     }
 
     const follow = 1 - Math.exp(-dt * 9);
@@ -432,8 +441,9 @@ export class CloudHarvestGame {
       const drag = cloud.front && this.frontActive > 0 ? .993 : .955;
       cloud.vx *= Math.pow(drag, dt * 60);
       cloud.vy *= Math.pow(drag, dt * 60);
-      cloud.x += cloud.vx * dt;
-      cloud.y += cloud.vy * dt;
+      const flightSpeed = 1 + flightPressure * .14;
+      cloud.x += cloud.vx * dt * flightSpeed;
+      cloud.y += cloud.vy * dt * flightSpeed;
       const margin = cloud.radius + 4;
       if (cloud.x < margin) { cloud.x = margin; cloud.vx = Math.abs(cloud.vx) * 0.6; }
       if (cloud.x > this.width - margin) { cloud.x = this.width - margin; cloud.vx = -Math.abs(cloud.vx) * 0.6; }
@@ -738,15 +748,17 @@ export class CloudHarvestGame {
   }
 
   private completeCloudFront(x: number, y: number): void {
-    const bonus = Math.round((45 + this.state.rank * 35) * FLIGHT_ROUTES[this.run.routeId].frontBonus);
+    const jackpot = this.goldenFront;
+    const bonus = Math.round((45 + this.state.rank * 35) * FLIGHT_ROUTES[this.run.routeId].frontBonus * (jackpot ? 3 : 1));
     this.run.cargoBonus += bonus;
     if (!this.run.feverActive) {
-      this.run.fever = Math.min(100, this.run.fever + 28);
+      this.run.fever = Math.min(100, this.run.fever + (jackpot ? 60 : 28));
       if (this.run.fever >= 100) this.startFever();
     }
     this.frontActive = 0;
+    if (jackpot) this.goldenFrontClaimed = true;
     this.frontBanner = 2.4;
-    this.texts.push({ x, y: y - 42, text: `FRONT CLEARED  +${bonus}`, color: "#8fffe4", life: 1.8 });
+    this.texts.push({ x, y: y - 42, text: `${jackpot ? "JACKPOT SECURED" : "FRONT CLEARED"}  +${bonus}`, color: jackpot ? "#fff36f" : "#8fffe4", life: 1.8 });
     this.shockwaves.push({ x, y, radius: 40, life: 1, maxLife: 1, color: "#71ffe0" });
     this.shockwaves.push({ x, y, radius: 16, life: .72, maxLife: .72, color: "#fff36f" });
     this.burst(x, y, "#71ffe0", 65, 430);
@@ -778,7 +790,7 @@ export class CloudHarvestGame {
       if (roll <= cursor) { kind = candidate; break; }
     }
     const definition = CLOUDS[kind];
-    const dense = Math.random() < .085 + this.state.rank * .018 + FLIGHT_ROUTES[this.run.routeId].denseBonus + this.run.skills.denseRadar * .03 + this.state.research.forecasting * .015;
+    const dense = Math.random() < .085 + this.state.rank * .018 + (this.run.flight - 1) * .035 + FLIGHT_ROUTES[this.run.routeId].denseBonus + this.run.skills.denseRadar * .03 + this.state.research.forecasting * .015;
     const radius = (definition.radius[0] + Math.random() * (definition.radius[1] - definition.radius[0])) * (dense ? 1.16 : 1);
     const scale = radius / ((definition.radius[0] + definition.radius[1]) * .5);
     let x = 90 + Math.random() * Math.max(100, this.width - 180);
@@ -801,15 +813,21 @@ export class CloudHarvestGame {
   }
 
   private startCloudFront(): void {
-    this.frontTimer = Math.max(24, 36 - this.state.rank * 4);
+    this.goldenFront = this.run.flight === 3 && !this.goldenFrontClaimed;
+    this.frontTimer = this.goldenFront ? 20 : Math.max(24, 36 - this.state.rank * 4);
     this.frontActive = 11;
     this.frontBanner = 3.2;
     this.frontDirection = Math.random() < .5 ? 1 : -1;
-    const count = 7 + this.state.rank * 2;
+    const count = (this.goldenFront ? 11 : 7) + this.state.rank * 2;
     for (let index = 0; index < count; index += 1) {
       this.spawnCloud(false);
       const cloud = this.clouds[this.clouds.length - 1];
       cloud.front = true;
+      if (this.goldenFront && !cloud.dense) {
+        cloud.dense = true;
+        cloud.maxHealth *= 1.35;
+        cloud.health = cloud.maxHealth;
+      }
       cloud.x = this.frontDirection === 1 ? -cloud.radius : this.width + cloud.radius;
       const rows = Math.min(5, count);
       const routeTop = this.frontDirection === -1 ? 350 : 215;
@@ -819,7 +837,8 @@ export class CloudHarvestGame {
       cloud.vy = (Math.random() - .5) * 9;
     }
     this.shake = 10;
-    this.playTone(145, .28);
+    this.onToast(this.goldenFront ? "GOLDEN HARVEST FRONT — 하루 최대 수익 구간!" : "구름 전선 접근 — 전부 수확하세요!", "success");
+    this.playTone(this.goldenFront ? 220 : 145, .28);
   }
 
   private suctionParticle(cloud: Cloud): void {
@@ -971,9 +990,9 @@ export class CloudHarvestGame {
     }
     const titleAlpha = Math.min(1, Math.max(0, (this.launchTimer - .18) * 3.2)) * (1 - Math.max(0, opening - .45) / .55);
     ctx.globalAlpha = titleAlpha;
-    ctx.textAlign = "center"; ctx.fillStyle = "#7ff5df"; ctx.font = "900 14px Outfit, sans-serif";
-    ctx.fillText("WEATHER ROUTE  ·  CLEAR", this.width * .5, this.height * .43 - 30);
-    ctx.fillStyle = "#ffffff"; ctx.font = "900 44px Outfit, sans-serif"; ctx.fillText("SORTIE LAUNCHED", this.width * .5, this.height * .43 + 12);
+    ctx.textAlign = "center"; ctx.fillStyle = this.run.flight === 3 ? "#fff36f" : "#7ff5df"; ctx.font = "900 14px Outfit, sans-serif";
+    ctx.fillText(`DAY ${this.run.day}  ·  FLIGHT ${this.run.flight}/3  ·  ${this.run.flight === 3 ? "FINAL HARVEST" : this.run.flight === 2 ? "PRESSURE RISING" : "CLEAR ROUTE"}`, this.width * .5, this.height * .43 - 30);
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 44px Outfit, sans-serif"; ctx.fillText(this.run.flight === 3 ? "JACKPOT SORTIE" : "SORTIE LAUNCHED", this.width * .5, this.height * .43 + 12);
     ctx.strokeStyle = "rgba(127,245,223,.62)"; ctx.lineWidth = 4;
     for (let index = 0; index < 7; index += 1) {
       const y = this.height * .22 + index * 52;
@@ -991,6 +1010,15 @@ export class CloudHarvestGame {
     const gradient = ctx.createLinearGradient(0, 0, 0, this.height);
     gradient.addColorStop(0, gradients[0]); gradient.addColorStop(.7, gradients[1]); gradient.addColorStop(1, gradients[2]);
     ctx.fillStyle = gradient; ctx.fillRect(0, 0, this.width, this.height);
+    if (!this.run.feverActive && this.run.flight > 1) {
+      const phase = ctx.createLinearGradient(0, 0, this.width, this.height);
+      if (this.run.flight === 3) {
+        phase.addColorStop(0, "rgba(92,56,154,.42)"); phase.addColorStop(.48, "rgba(255,137,91,.2)"); phase.addColorStop(1, "rgba(255,231,107,.4)");
+      } else {
+        phase.addColorStop(0, "rgba(37,86,142,.28)"); phase.addColorStop(.55, "rgba(117,106,189,.12)"); phase.addColorStop(1, "rgba(255,203,117,.18)");
+      }
+      ctx.fillStyle = phase; ctx.fillRect(0, 0, this.width, this.height);
+    }
     ctx.globalAlpha = this.run.feverActive ? .35 : .16;
     ctx.fillStyle = "#fff";
     for (let i = 0; i < 24; i += 1) {
@@ -1023,7 +1051,7 @@ export class CloudHarvestGame {
       }
     }
     if (this.frontActive > 0) {
-      ctx.strokeStyle = "rgba(222,255,250,.58)"; ctx.lineWidth = 2.5;
+      ctx.strokeStyle = this.goldenFront ? "rgba(255,239,116,.78)" : "rgba(222,255,250,.58)"; ctx.lineWidth = this.goldenFront ? 4 : 2.5;
       const direction = this.frontDirection;
       for (let index = 0; index < 28; index += 1) {
         const travel = (time * (210 + index % 4 * 35) * direction + index * 137) % (this.width + 260);
@@ -1088,10 +1116,14 @@ export class CloudHarvestGame {
       ctx.fillStyle = "#fff36f"; ctx.beginPath(); ctx.arc(0, 0, cloud.radius * .09, 0, Math.PI * 2); ctx.fill();
     }
     if (cloud.front) {
-      ctx.strokeStyle = "#6ff6e2"; ctx.lineWidth = 2.5;
+      if (this.goldenFront) {
+        ctx.shadowColor = "#ffe76b"; ctx.shadowBlur = 24;
+        ctx.fillStyle = "rgba(255,224,77,.22)"; this.cloudPath(ctx, cloud.radius * 1.04, 0); ctx.fill();
+      }
+      ctx.strokeStyle = this.goldenFront ? "#ffe76b" : "#6ff6e2"; ctx.lineWidth = this.goldenFront ? 4 : 2.5;
       ctx.setLineDash([7, 5]); ctx.lineDashOffset = time * 28;
       ctx.beginPath(); ctx.ellipse(0, 0, cloud.radius * 1.06, cloud.radius * .82, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = "#163f55";
+      ctx.fillStyle = this.goldenFront ? "#ffef8c" : "#163f55";
       for (let marker = -1; marker <= 1; marker += 1) {
         const mx = marker * 12;
         ctx.beginPath(); ctx.moveTo(mx - 5, -cloud.radius * .9); ctx.lineTo(mx, -cloud.radius * 1.04); ctx.lineTo(mx + 5, -cloud.radius * .9); ctx.closePath(); ctx.fill();
@@ -1229,25 +1261,26 @@ export class CloudHarvestGame {
     }
     const frontRemaining = this.clouds.filter((cloud) => cloud.front).length;
     if (frontRemaining > 0) {
-      const badgeWidth = 280;
+      const badgeWidth = this.goldenFront ? 360 : 280;
       ctx.fillStyle = "rgba(18,57,75,.82)";
       ctx.beginPath(); ctx.roundRect(this.width / 2 - badgeWidth / 2, this.height - 140, badgeWidth, 55, 16); ctx.fill();
-      ctx.strokeStyle = "rgba(111,246,226,.8)"; ctx.lineWidth = 2; ctx.stroke();
-      ctx.textAlign = "center"; ctx.fillStyle = "#9effea"; ctx.font = "900 13px Outfit, sans-serif";
-      ctx.fillText("CLOUD FRONT TARGETS", this.width / 2, this.height - 117);
+      ctx.strokeStyle = this.goldenFront ? "rgba(255,231,107,.95)" : "rgba(111,246,226,.8)"; ctx.lineWidth = this.goldenFront ? 3 : 2; ctx.stroke();
+      ctx.textAlign = "center"; ctx.fillStyle = this.goldenFront ? "#fff36f" : "#9effea"; ctx.font = "900 13px Outfit, sans-serif";
+      ctx.fillText(this.goldenFront ? "GOLDEN HARVEST TARGETS · 3× FRONT BONUS" : "CLOUD FRONT TARGETS", this.width / 2, this.height - 117);
       ctx.fillStyle = "#ffffff"; ctx.font = "900 19px Outfit, sans-serif";
       ctx.fillText(`${frontRemaining} REMAINING`, this.width / 2, this.height - 96);
     }
     if (this.frontBanner > 0) {
       const entering = frontRemaining > 0;
       const alpha = Math.min(1, this.frontBanner * 1.5);
-      ctx.save(); ctx.globalAlpha = alpha; ctx.translate(this.width / 2, this.height * .34);
+      ctx.save(); ctx.globalAlpha = alpha;
+      ctx.translate(this.width * (this.goldenFront ? .39 : .5), this.height * (this.goldenFront ? .42 : .34));
       ctx.fillStyle = "rgba(16,48,66,.76)"; ctx.beginPath(); ctx.roundRect(-260, -49, 520, 98, 20); ctx.fill();
-      ctx.strokeStyle = entering ? "#70f4df" : "#fff36f"; ctx.lineWidth = 3; ctx.stroke();
-      ctx.textAlign = "center"; ctx.fillStyle = entering ? "#8fffe9" : "#fff36f";
-      ctx.font = "900 13px Outfit, sans-serif"; ctx.fillText(entering ? "WEATHER ALERT" : "SECTOR SECURED", 0, -18);
+      ctx.strokeStyle = this.goldenFront ? "#fff36f" : entering ? "#70f4df" : "#fff36f"; ctx.lineWidth = 3; ctx.stroke();
+      ctx.textAlign = "center"; ctx.fillStyle = this.goldenFront ? "#fff36f" : entering ? "#8fffe9" : "#fff36f";
+      ctx.font = "900 13px Outfit, sans-serif"; ctx.fillText(this.goldenFront ? (entering ? "FINAL SORTIE JACKPOT" : "JACKPOT SECURED") : entering ? "WEATHER ALERT" : "SECTOR SECURED", 0, -18);
       ctx.fillStyle = "#ffffff"; ctx.font = "900 36px Outfit, sans-serif";
-      ctx.fillText(entering ? "CLOUD FRONT" : "FRONT CLEARED", 0, 20);
+      ctx.fillText(this.goldenFront ? (entering ? "GOLDEN HARVEST FRONT" : "GOLDEN FRONT CLEARED") : entering ? "CLOUD FRONT" : "FRONT CLEARED", 0, 20);
       ctx.restore();
     }
     if (this.rankReveal > 0) {
