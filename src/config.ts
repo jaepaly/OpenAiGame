@@ -1,4 +1,22 @@
-import type { CloudDefinition, CloudKind, FlightRouteDefinition, FlightRouteId, ProcessingContract, RankDefinition, RunSkillDefinition, RunSkillId, UpgradeDefinition } from "./types";
+import type { CloudDefinition, CloudKind, FlightRouteDefinition, FlightRouteId, ProcessingContract, RankDefinition, ResearchDefinition, ResearchId, RunSkillDefinition, RunSkillId, UpgradeDefinition } from "./types";
+
+export const RESEARCH_PROJECTS: Record<ResearchId, ResearchDefinition> = {
+  logistics: {
+    id: "logistics", code: "CRG", name: "적운 물류망", color: "#71d8ef",
+    description: "회수 동선을 표준화해 모든 항로의 기본 적재량을 늘립니다.",
+    effect: "영구 화물칸 +1",
+  },
+  refining: {
+    id: "refining", code: "YLD", name: "초임계 정제", color: "#ffd15e",
+    description: "구름 압축 순도를 높여 모든 납품 계약의 원재료 가치를 올립니다.",
+    effect: "영구 판매가 +5%",
+  },
+  forecasting: {
+    id: "forecasting", code: "DNS", name: "고밀도 예보망", color: "#b695ff",
+    description: "밀도 변화를 먼저 포착해 희귀한 고밀도 구름을 더 자주 만납니다.",
+    effect: "영구 고밀도 확률 +1.5%",
+  },
+};
 
 export const FLIGHT_ROUTES: Record<FlightRouteId, FlightRouteDefinition> = {
   tailwind: {
@@ -158,6 +176,7 @@ export const INITIAL_STATE = {
   harvested: 0,
   rank: 0,
   levels: { power: 0, radius: 0, value: 0, drone: 0, insulation: 0 },
+  research: { logistics: 0, refining: 0, forecasting: 0 },
   bestCombo: 0,
   sound: true,
 } as const;

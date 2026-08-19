@@ -1,7 +1,7 @@
 import "./styles.css";
-import { CLOUDS, FLIGHT_ROUTES, PROCESSING_CONTRACTS, RANKS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
+import { CLOUDS, FLIGHT_ROUTES, PROCESSING_CONTRACTS, RANKS, RESEARCH_PROJECTS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
 import { CloudHarvestGame } from "./game";
-import type { ContractId, FlightRouteId, GameState, RunSkillId, RunState, UpgradeId } from "./types";
+import type { ContractId, FlightRouteId, GameState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app 요소를 찾을 수 없습니다.");
@@ -35,7 +35,7 @@ app.innerHTML = `
         <span class="level-badge" id="runLevel">LV.1</span>
         <div class="meter-group xp-group"><small>FLIGHT XP</small><div class="meter-track"><i id="xpFill"></i></div><b id="xpText">0 / 6</b></div>
         <div class="meter-group fever-group"><small>SKY FEVER</small><div class="meter-track"><i id="feverFill"></i></div><b id="feverText">0%</b></div>
-        <div class="route-status"><small>ROUTE</small><b id="routeName">순풍 회랑</b></div>
+        <div class="route-status"><small id="dayFlight">DAY 1 · FLIGHT 1/3</small><b id="routeName">순풍 회랑</b></div>
       </div>
 
       <div class="tutorial" id="tutorial"><b>구름 가까이에서 누르고 유지!</b><span>흡입 범위 안의 구름을 분해해 수확하세요</span></div>
@@ -78,10 +78,15 @@ app.innerHTML = `
           <div class="contract-list" id="contractList"></div>
           <div class="factory-tip">계약마다 구름 종류별 단가가 다릅니다. 현재 화물에서 가장 높은 정산액을 비교하세요.</div>
           <section class="factory-receipt" id="factoryReceipt">
-            <span>SETTLEMENT COMPLETE</span>
+            <span id="receiptKicker">FLIGHT 1/3 COMPLETE</span>
             <h3 id="receiptContract">납품 완료</h3>
             <strong id="receiptPayout">◈ 0</strong>
-            <p>정산이 완료되었습니다. 영구 장비를 정비하거나 다음 비행을 시작하세요.</p>
+            <p id="receiptDescription">레벨과 장비를 유지한 채 다음 비행으로 이어집니다.</p>
+            <section class="day-research" id="dayResearch">
+              <small>DAY COMPLETE // PERMANENT RESEARCH</small>
+              <h4>오늘의 연구 성과를 하나 선택하세요</h4>
+              <div class="research-list" id="researchList"></div>
+            </section>
             <div class="base-actions">
               <button id="baseGarageButton"><b>MK</b><span>정비소 방문</span></button>
               <button class="launch-button" id="launchButton"><b>TAKE OFF</b><span>다음 비행 출격</span></button>
@@ -138,6 +143,7 @@ const xpText = required<HTMLElement>("#xpText");
 const feverFill = required<HTMLElement>("#feverFill");
 const feverText = required<HTMLElement>("#feverText");
 const routeName = required<HTMLElement>("#routeName");
+const dayFlight = required<HTMLElement>("#dayFlight");
 const levelUpOverlay = required<HTMLElement>("#levelUpOverlay");
 const skillChoices = required<HTMLElement>("#skillChoices");
 const levelUpTitle = required<HTMLElement>("#levelUpTitle");
@@ -154,6 +160,10 @@ const factoryPanel = required<HTMLElement>(".factory-panel");
 const factoryReceipt = required<HTMLElement>("#factoryReceipt");
 const receiptContract = required<HTMLElement>("#receiptContract");
 const receiptPayout = required<HTMLElement>("#receiptPayout");
+const receiptKicker = required<HTMLElement>("#receiptKicker");
+const receiptDescription = required<HTMLElement>("#receiptDescription");
+const dayResearch = required<HTMLElement>("#dayResearch");
+const researchList = required<HTMLElement>("#researchList");
 const baseGarageButton = required<HTMLButtonElement>("#baseGarageButton");
 const launchButton = required<HTMLButtonElement>("#launchButton");
 const routeOverlay = required<HTMLElement>("#routeOverlay");
@@ -176,6 +186,7 @@ function renderRunState(state: RunState): void {
   xpText.textContent = `${Math.floor(state.xp)} / ${state.xpNext}`;
   feverFill.style.width = `${Math.min(100, state.fever)}%`;
   feverText.textContent = state.feverActive ? `${Math.max(0, state.feverSeconds).toFixed(1)}s` : `${Math.floor(state.fever)}%`;
+  dayFlight.textContent = `DAY ${state.day} · FLIGHT ${state.flight}/3`;
   routeName.textContent = FLIGHT_ROUTES[state.routeId].name;
   combo.textContent = state.combo > 0 ? `×${state.combo}` : "—";
   combo.parentElement?.classList.toggle("active", state.combo >= 2);
@@ -352,7 +363,37 @@ contractList.addEventListener("click", (event) => {
     factoryReceipt.classList.add("show");
     receiptContract.textContent = `${button.querySelector(".contract-copy b")?.textContent ?? "가공 계약"} 납품 완료`;
     receiptPayout.textContent = `◈ ${payout.toLocaleString()}`;
+    const run = game.getRunState();
+    const dayComplete = game.isDayComplete();
+    const completedFlight = dayComplete ? 3 : run.flight - 1;
+    receiptKicker.textContent = `DAY ${run.day} // FLIGHT ${completedFlight}/3 COMPLETE`;
+    receiptDescription.textContent = dayComplete
+      ? "세 번의 출격으로 오늘의 빌드가 완성되었습니다. 영구 연구를 선택하면 다음 날이 시작됩니다."
+      : `레벨 ${run.level}과 선택한 장비를 유지한 채 FLIGHT ${run.flight}/3으로 이어집니다.`;
+    dayResearch.classList.toggle("show", dayComplete);
+    baseGarageButton.disabled = dayComplete;
+    launchButton.disabled = dayComplete;
+    if (dayComplete) {
+      const state = game.getState();
+      researchList.innerHTML = Object.values(RESEARCH_PROJECTS).map((research) => `
+        <button class="research-card" data-research="${research.id}" style="--research-color:${research.color}">
+          <span>${research.code}</span><small>RESEARCH LV.${state.research[research.id]}</small>
+          <strong>${research.name}</strong><p>${research.description}</p>
+          <b>${research.effect}</b><em>이 연구를 계승</em>
+        </button>
+      `).join("");
+    }
   }
+});
+researchList.addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-research]");
+  if (!button || !game.completeDay(button.dataset.research as ResearchId)) return;
+  const run = game.getRunState();
+  dayResearch.classList.remove("show");
+  baseGarageButton.disabled = false;
+  launchButton.disabled = false;
+  receiptKicker.textContent = `DAY ${run.day} READY // BUILD RESET`;
+  receiptDescription.textContent = "영구 연구는 회사에 남았습니다. 새로운 비행 빌드를 설계할 시간입니다.";
 });
 baseGarageButton.addEventListener("click", () => {
   factoryOverlay.classList.remove("show");

@@ -1,5 +1,5 @@
-import { CLOUDS, FLIGHT_ROUTES, INITIAL_STATE, PROCESSING_CONTRACTS, RANKS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
-import type { Cloud, CloudKind, ContractId, FlightRouteId, FloatingText, GameState, Particle, RunSkillId, RunState, UpgradeId } from "./types";
+import { CLOUDS, FLIGHT_ROUTES, INITIAL_STATE, PROCESSING_CONTRACTS, RANKS, RESEARCH_PROJECTS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
+import type { Cloud, CloudKind, ContractId, FlightRouteId, FloatingText, GameState, Particle, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
@@ -11,7 +11,9 @@ type Shockwave = { x: number; y: number; radius: number; life: number; maxLife: 
 const SAVE_KEY = "cloud-harvest-inc-save-v2";
 const RUN_SKILL_IDS = Object.keys(RUN_SKILLS) as RunSkillId[];
 
-const freshRunState = (): RunState => ({
+const freshRunState = (day = 1): RunState => ({
+  day,
+  flight: 1,
   level: 1,
   xp: 0,
   xpNext: 6,
@@ -75,6 +77,7 @@ export class CloudHarvestGame {
   private returnTimer = 0;
   private launching = false;
   private launchTimer = 0;
+  private dayComplete = false;
   private droneAngle = 0;
   private runEmitTimer = 0;
   private audioContext?: AudioContext;
@@ -140,6 +143,7 @@ export class CloudHarvestGame {
   }
 
   isAtFactory(): boolean { return this.atFactory; }
+  isDayComplete(): boolean { return this.dayComplete; }
 
   settleCargo(id: ContractId): number {
     if (!this.atFactory) return 0;
@@ -148,7 +152,17 @@ export class CloudHarvestGame {
     const payout = this.getContractPayout(id);
     this.state.money += payout;
     this.state.totalEarned += payout;
-    this.run = freshRunState();
+    const finalFlight = this.run.flight >= 3;
+    this.run.cargo = { cumulus: 0, rain: 0, electric: 0 };
+    this.run.cargoValue = { cumulus: 0, rain: 0, electric: 0 };
+    this.run.cargoBonus = 0;
+    this.run.fever = 0;
+    this.run.feverActive = false;
+    this.run.feverSeconds = 0;
+    this.run.combo = 0;
+    this.run.comboTime = 0;
+    this.dayComplete = finalFlight;
+    if (!finalFlight) this.run.flight += 1;
     this.combo = 0;
     this.comboTimer = 0;
     this.commit();
@@ -157,7 +171,7 @@ export class CloudHarvestGame {
   }
 
   launchFlight(routeId: FlightRouteId): boolean {
-    if (!this.atFactory || this.launching || this.returning) return false;
+    if (!this.atFactory || this.launching || this.returning || this.dayComplete) return false;
     this.run.routeId = routeId;
     this.launching = true;
     this.launchTimer = 0;
@@ -173,6 +187,18 @@ export class CloudHarvestGame {
     this.player.targetY = this.height * .55;
     this.onToast(`${FLIGHT_ROUTES[routeId].name} 출격 승인 — 격납고 게이트 개방`, "success");
     this.playTone(165, .28);
+    return true;
+  }
+
+  completeDay(id: ResearchId): boolean {
+    if (!this.atFactory || !this.dayComplete || !RESEARCH_PROJECTS[id]) return false;
+    this.state.research[id] += 1;
+    const nextDay = this.run.day + 1;
+    this.run = freshRunState(nextDay);
+    this.dayComplete = false;
+    this.commit();
+    this.onRunChange(this.getRunState());
+    this.onToast(`${RESEARCH_PROJECTS[id].name} 연구 완료 — DAY ${nextDay} 준비`, "success");
     return true;
   }
 
@@ -252,6 +278,7 @@ export class CloudHarvestGame {
     this.returnTimer = 0;
     this.launching = false;
     this.launchTimer = 0;
+    this.dayComplete = false;
     this.clouds = [];
     this.combo = 0;
     for (let i = 0; i < 12; i += 1) this.spawnCloud(true);
@@ -596,6 +623,7 @@ export class CloudHarvestGame {
     this.state.bestCombo = Math.max(this.state.bestCombo, this.combo);
     const comboMultiplier = 1 + Math.min(1.8, Math.floor(this.combo / 3) * .17);
     const permanentValue = (1 + this.state.levels.value * .24)
+      * (1 + this.state.research.refining * .05)
       * FLIGHT_ROUTES[this.run.routeId].valueMultiplier
       * (1 + this.run.skills.yieldBoost * .1)
       * (this.run.feverActive && this.run.skills.goldenStorm ? 1.5 : 1);
@@ -750,7 +778,7 @@ export class CloudHarvestGame {
       if (roll <= cursor) { kind = candidate; break; }
     }
     const definition = CLOUDS[kind];
-    const dense = Math.random() < .085 + this.state.rank * .018 + FLIGHT_ROUTES[this.run.routeId].denseBonus + this.run.skills.denseRadar * .03;
+    const dense = Math.random() < .085 + this.state.rank * .018 + FLIGHT_ROUTES[this.run.routeId].denseBonus + this.run.skills.denseRadar * .03 + this.state.research.forecasting * .015;
     const radius = (definition.radius[0] + Math.random() * (definition.radius[1] - definition.radius[0])) * (dense ? 1.16 : 1);
     const scale = radius / ((definition.radius[0] + definition.radius[1]) * .5);
     let x = 90 + Math.random() * Math.max(100, this.width - 180);
@@ -1261,7 +1289,7 @@ export class CloudHarvestGame {
   }
 
   private getCargoCapacity(): number {
-    return 16 + this.state.rank * 4 + this.state.levels.value * 2 + FLIGHT_ROUTES[this.run.routeId].capacityBonus + this.run.skills.cargoBay * 2;
+    return 16 + this.state.rank * 4 + this.state.levels.value * 2 + this.state.research.logistics + FLIGHT_ROUTES[this.run.routeId].capacityBonus + this.run.skills.cargoBay * 2;
   }
 
   private emitAll(): void { this.onStateChange(this.getState()); this.onRunChange(this.getRunState()); }
@@ -1271,7 +1299,12 @@ export class CloudHarvestGame {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return structuredClone(INITIAL_STATE);
       const parsed = JSON.parse(raw) as Partial<GameState>;
-      return { ...structuredClone(INITIAL_STATE), ...parsed, levels: { ...INITIAL_STATE.levels, ...parsed.levels } };
+      return {
+        ...structuredClone(INITIAL_STATE),
+        ...parsed,
+        levels: { ...INITIAL_STATE.levels, ...parsed.levels },
+        research: { ...INITIAL_STATE.research, ...parsed.research },
+      };
     } catch { return structuredClone(INITIAL_STATE); }
   }
 

@@ -1,6 +1,7 @@
 export type CloudKind = "cumulus" | "rain" | "electric";
 export type ContractId = "water" | "climate" | "energy";
 export type FlightRouteId = "tailwind" | "pressureMine" | "frontline";
+export type ResearchId = "logistics" | "refining" | "forecasting";
 
 export interface CloudDefinition {
   kind: CloudKind;
@@ -69,6 +70,7 @@ export interface GameState {
   harvested: number;
   rank: number;
   levels: Record<UpgradeId, number>;
+  research: Record<ResearchId, number>;
   bestCombo: number;
   sound: boolean;
 }
@@ -90,6 +92,8 @@ export interface RunSkillDefinition {
 }
 
 export interface RunState {
+  day: number;
+  flight: number;
   level: number;
   xp: number;
   xpNext: number;
@@ -105,6 +109,15 @@ export interface RunState {
   cargoCapacity: number;
   routeId: FlightRouteId;
   skills: Record<RunSkillId, number>;
+}
+
+export interface ResearchDefinition {
+  id: ResearchId;
+  code: string;
+  name: string;
+  description: string;
+  effect: string;
+  color: string;
 }
 
 export interface FlightRouteDefinition {
