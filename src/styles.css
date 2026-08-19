@@ -378,6 +378,14 @@ body { min-width: 320px; background: #92ddf7; }
 .skill-card strong { margin-top: 4px; font-size: 17px; }
 .skill-card p { min-height: 36px; margin: 7px 0 13px; color: #687f8d; font-size: 11px; line-height: 1.45; }
 .skill-card b { width: 100%; margin-top: auto; padding: 8px; color: white; background: var(--skill-color); border-radius: 10px; font-size: 12px; }
+.skill-card.evolution { color: white; background: linear-gradient(155deg,#173f55,#102634); border-color: var(--skill-color); box-shadow: 0 7px 0 color-mix(in srgb,var(--skill-color),#081d29 58%),0 0 30px color-mix(in srgb,var(--skill-color),transparent 72%); }
+.skill-card.evolution::before { content: "EVOLUTION"; position: absolute; top: 14px; right: 14px; color: var(--skill-color); font: 900 9px "Outfit",sans-serif; letter-spacing: .12em; }
+.skill-card.evolution .skill-icon { color: #153547; background: var(--skill-color); box-shadow: 0 0 22px color-mix(in srgb,var(--skill-color),transparent 35%); }
+.skill-card.evolution small { color: var(--skill-color); }
+.skill-card.evolution p { color: #b7ced5; }
+.skill-card.overdrive { background: linear-gradient(165deg,#ffffff,#edf8f8); border-style: dashed; }
+.skill-card.overdrive::before { content: "∞"; position: absolute; top: 10px; right: 15px; color: var(--skill-color); font: 900 28px "Outfit",sans-serif; }
+.skill-requirement { min-height: 30px; margin: -4px 0 10px; padding: 6px 8px; display: grid; place-items: center; color: #17394a; background: var(--skill-color); border-radius: 8px; font-size: 9px; font-weight: 900; text-align: center; }
 
 @media (max-width: 900px) {
   .brand h1 { font-size: 17px; }

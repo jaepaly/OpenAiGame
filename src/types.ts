@@ -73,7 +73,10 @@ export interface GameState {
   sound: boolean;
 }
 
-export type RunSkillId = "overclock" | "wideIntake" | "chainBurst" | "profitRain" | "feverDrive" | "twinDrone";
+export type CoreRunSkillId = "overclock" | "wideIntake" | "chainBurst" | "profitRain" | "feverDrive" | "twinDrone";
+export type EvolutionSkillId = "blackHole" | "goldenStorm" | "droneFleet";
+export type OverdriveSkillId = "cargoBay" | "yieldBoost" | "denseRadar" | "feverReserve";
+export type RunSkillId = CoreRunSkillId | EvolutionSkillId | OverdriveSkillId;
 
 export interface RunSkillDefinition {
   id: RunSkillId;
@@ -82,6 +85,8 @@ export interface RunSkillDefinition {
   icon: string;
   color: string;
   maxStacks: number;
+  category: "core" | "evolution" | "overdrive";
+  requirements?: CoreRunSkillId[];
 }
 
 export interface RunState {

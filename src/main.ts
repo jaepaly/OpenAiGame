@@ -217,19 +217,36 @@ function showFactory(state: RunState): void {
 }
 
 function showLevelUp(choices: RunSkillId[], pendingPicks: number): void {
-  levelUpTitle.textContent = pendingPicks > 1 ? `장비 ${pendingPicks}개를 연속 선택하세요` : "새 장비를 하나 선택하세요";
+  const rewards = choices.map((id) => RUN_SKILLS[id]);
+  const hasEvolution = rewards.some((reward) => reward.category === "evolution");
+  const onlyOverdrive = rewards.every((reward) => reward.category === "overdrive");
+  levelUpTitle.textContent = pendingPicks > 1
+    ? `보상 ${pendingPicks}개를 연속 선택하세요`
+    : hasEvolution ? "조합 진화가 해금되었습니다!"
+      : onlyOverdrive ? "한계를 넘어 오버드라이브하세요"
+        : "이번 비행의 빌드를 선택하세요";
   levelUpDescription.textContent = pendingPicks > 1
-    ? "피버 중 획득한 레벨을 한 번에 정산합니다."
-    : "선택을 마치면 즉시 비행을 재개합니다.";
+    ? "쌓인 레벨을 순서대로 정산합니다. 진화 조건을 완성하면 다음 선택지에 나타납니다."
+    : hasEvolution ? "최대 단계 장비 두 개가 결합해 플레이 방식이 크게 변합니다."
+      : onlyOverdrive ? "모든 핵심 장비를 완성해도 반복 보상은 계속됩니다."
+        : "장비를 최대 3단계까지 강화해 조합 진화를 노리세요.";
   skillChoices.innerHTML = choices.map((id) => {
     const skill = RUN_SKILLS[id];
     const stack = game.getRunState().skills[id];
-    return `<button class="skill-card" data-skill="${id}" style="--skill-color:${skill.color}">
+    const badge = skill.category === "evolution" ? "COMBO EVOLUTION"
+      : skill.category === "overdrive" ? `OVERDRIVE +${stack + 1}`
+        : stack > 0 ? `CORE ${stack + 1} / ${skill.maxStacks}` : "NEW CORE";
+    const requirement = skill.requirements
+      ? `<span class="skill-requirement">${skill.requirements.map((requirementId) => RUN_SKILLS[requirementId].name).join(" + ")}</span>`
+      : "";
+    const action = skill.category === "evolution" ? "진화 장착" : skill.category === "overdrive" ? "출력 증폭" : "장비 선택";
+    return `<button class="skill-card ${skill.category}" data-skill="${id}" style="--skill-color:${skill.color}">
       <span class="skill-icon">${skill.icon}</span>
-      <small>${stack > 0 ? `강화 ${stack + 1}단계` : "신규 장비"}</small>
+      <small>${badge}</small>
       <strong>${skill.name}</strong>
       <p>${skill.description}</p>
-      <b>선택</b>
+      ${requirement}
+      <b>${action}</b>
     </button>`;
   }).join("");
   levelUpOverlay.classList.add("show");
