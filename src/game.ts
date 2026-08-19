@@ -3,13 +3,12 @@ import type { Cloud, CloudKind, ContractId, FlightRouteId, FloatingText, GameSta
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
-type LevelListener = (choices: RunSkillId[], pendingPicks: number) => void;
+type LevelListener = (pendingPicks: number) => void;
 type FactoryListener = (state: RunState) => void;
 type ToastListener = (message: string, tone?: "normal" | "success" | "warning") => void;
 type Shockwave = { x: number; y: number; radius: number; life: number; maxLife: number; color: string };
 
 const SAVE_KEY = "cloud-harvest-inc-save-v2";
-const RUN_SKILL_IDS = Object.keys(RUN_SKILLS) as RunSkillId[];
 
 const freshRunState = (day = 1): RunState => ({
   day,
@@ -231,7 +230,7 @@ export class CloudHarvestGame {
   }
 
   chooseSkill(id: RunSkillId): boolean {
-    if (!this.pausedForLevel || this.run.skills[id] >= RUN_SKILLS[id].maxStacks) return false;
+    if (!this.pausedForLevel || !this.canChooseSkill(id)) return false;
     this.run.skills[id] += 1;
     this.run.pendingPicks = Math.max(0, this.run.pendingPicks - 1);
     this.burst(this.player.x, this.player.y, RUN_SKILLS[id].color, 36, 210);
@@ -241,9 +240,28 @@ export class CloudHarvestGame {
       window.setTimeout(() => this.presentLevelUp(), 140);
       return false;
     }
-    this.pausedForLevel = false;
     this.onToast(`${RUN_SKILLS[id].name} 장착 완료 — 다음 출격 준비!`, "success");
+    window.setTimeout(() => this.presentLevelUp(), 140);
+    return false;
+  }
+
+  canChooseSkill(id: RunSkillId): boolean {
+    const skill = RUN_SKILLS[id];
+    if (!skill || this.run.pendingPicks <= 0 || this.run.skills[id] >= skill.maxStacks) return false;
+    return skill.requirements?.every((requirement) => this.run.skills[requirement] >= RUN_SKILLS[requirement].maxStacks) ?? true;
+  }
+
+  openSkillTree(): boolean {
+    if (!this.atFactory) return false;
+    this.pausedForLevel = true;
+    this.presentLevelUp();
     return true;
+  }
+
+  closeSkillTree(): void {
+    if (!this.atFactory) return;
+    this.pausedForLevel = false;
+    this.onRunChange(this.getRunState());
   }
 
   canPromote(): boolean {
@@ -703,25 +721,10 @@ export class CloudHarvestGame {
   }
 
   private presentLevelUp(): void {
-    if (!this.atFactory || this.run.pendingPicks <= 0) return;
-    const eligible = (id: RunSkillId) => {
-      const reward = RUN_SKILLS[id];
-      if (this.run.skills[id] >= reward.maxStacks) return false;
-      return reward.category !== "evolution"
-        || reward.requirements?.every((requirement) => this.run.skills[requirement] >= RUN_SKILLS[requirement].maxStacks) === true;
-    };
-    const progression = RUN_SKILL_IDS.filter((id) => RUN_SKILLS[id].category !== "overdrive" && eligible(id));
-    const shuffledProgression = [...progression].sort(() => Math.random() - .5);
-    const choices = shuffledProgression.slice(0, 3);
-    if (choices.length < 3) {
-      const overdrives = RUN_SKILL_IDS
-        .filter((id) => RUN_SKILLS[id].category === "overdrive" && eligible(id))
-        .sort(() => Math.random() - .5);
-      choices.push(...overdrives.slice(0, 3 - choices.length));
-    }
+    if (!this.atFactory) return;
     this.pausedForLevel = true;
     this.onRunChange(this.getRunState());
-    this.onLevelUp(choices, this.run.pendingPicks);
+    this.onLevelUp(this.run.pendingPicks);
   }
 
   private triggerPressureSurge(x: number, y: number): void {

@@ -88,7 +88,16 @@ export interface RunSkillDefinition {
   color: string;
   maxStacks: number;
   category: "core" | "evolution" | "overdrive";
-  requirements?: CoreRunSkillId[];
+  requirements?: RunSkillId[];
+}
+
+export interface SkillTreeBranch {
+  id: "vacuum" | "fever" | "automation";
+  code: string;
+  name: string;
+  description: string;
+  color: string;
+  nodes: RunSkillId[];
 }
 
 export interface RunState {

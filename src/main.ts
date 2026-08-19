@@ -1,5 +1,5 @@
 import "./styles.css";
-import { CLOUDS, FLIGHT_ROUTES, PROCESSING_CONTRACTS, RANKS, RESEARCH_PROJECTS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
+import { CLOUDS, FLIGHT_ROUTES, PROCESSING_CONTRACTS, RANKS, RESEARCH_PROJECTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, upgradeCost } from "./config";
 import { CloudHarvestGame } from "./game";
 import type { ContractId, FlightRouteId, GameState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
@@ -63,7 +63,7 @@ app.innerHTML = `
             <button id="garageCloseButton" aria-label="정비소 닫기">×</button>
           </header>
           <div class="upgrade-list" id="upgradeList"></div>
-          <div class="garage-tip">NOTE // 런 도중 획득하는 3택 장비와 달리, 정비소 장비는 새로 시작해도 유지됩니다.</div>
+          <div class="garage-tip">NOTE // 일일 특성 트리는 다음 날 초기화되지만, 정비소 장비는 계속 유지됩니다.</div>
         </div>
       </section>
 
@@ -89,6 +89,7 @@ app.innerHTML = `
             </section>
             <div class="base-actions">
               <button id="baseGarageButton"><b>MK</b><span>정비소 방문</span></button>
+              <button id="skillTreeButton"><b>TREE</b><span>특성 트리</span></button>
               <button class="launch-button" id="launchButton"><b>TAKE OFF</b><span>다음 비행 출격</span></button>
             </div>
           </section>
@@ -103,12 +104,14 @@ app.innerHTML = `
         </div>
       </section>
 
-      <section class="levelup-overlay" id="levelUpOverlay" aria-label="레벨업 스킬 선택">
-        <div class="levelup-panel">
-          <span class="levelup-kicker">BASE UPGRADE INSTALL</span>
-          <h2 id="levelUpTitle">새 장비를 하나 선택하세요</h2>
-          <p id="levelUpDescription">비행 중 저장한 장비 데이터를 기지에서 한꺼번에 장착합니다.</p>
-          <div class="skill-choices" id="skillChoices"></div>
+      <section class="levelup-overlay" id="levelUpOverlay" aria-label="일일 특성 트리">
+        <div class="levelup-panel skill-tree-panel">
+          <span class="levelup-kicker">DAILY FLIGHT SPECIALIZATION</span>
+          <h2 id="levelUpTitle">오늘의 특성 트리</h2>
+          <p id="levelUpDescription">하루 동안 원하는 수확 빌드를 직접 설계하세요.</p>
+          <div class="skill-point-bank"><span>AVAILABLE POINTS</span><strong id="skillPointCount">0</strong><small>남겨둔 포인트는 다음 귀환까지 유지됩니다.</small></div>
+          <div class="skill-choices skill-tree-branches" id="skillChoices"></div>
+          <button class="skill-tree-close" id="skillTreeCloseButton">포인트를 남기고 기지로 돌아가기</button>
         </div>
       </section>
     </section>
@@ -148,6 +151,8 @@ const levelUpOverlay = required<HTMLElement>("#levelUpOverlay");
 const skillChoices = required<HTMLElement>("#skillChoices");
 const levelUpTitle = required<HTMLElement>("#levelUpTitle");
 const levelUpDescription = required<HTMLElement>("#levelUpDescription");
+const skillPointCount = required<HTMLElement>("#skillPointCount");
+const skillTreeCloseButton = required<HTMLButtonElement>("#skillTreeCloseButton");
 const garageButton = required<HTMLButtonElement>("#garageButton");
 const garageOverlay = required<HTMLElement>("#garageOverlay");
 const garageCloseButton = required<HTMLButtonElement>("#garageCloseButton");
@@ -166,6 +171,7 @@ const dayResearch = required<HTMLElement>("#dayResearch");
 const researchList = required<HTMLElement>("#researchList");
 const baseGarageButton = required<HTMLButtonElement>("#baseGarageButton");
 const launchButton = required<HTMLButtonElement>("#launchButton");
+const skillTreeButton = required<HTMLButtonElement>("#skillTreeButton");
 const routeOverlay = required<HTMLElement>("#routeOverlay");
 const routeList = required<HTMLElement>("#routeList");
 const routeBackButton = required<HTMLButtonElement>("#routeBackButton");
@@ -186,6 +192,9 @@ if (import.meta.env.DEV) {
 function renderRunState(state: RunState): void {
   runLevel.textContent = state.pendingPicks > 0 ? `LV.${state.level} +${state.pendingPicks}` : `LV.${state.level}`;
   runLevel.classList.toggle("ready", state.pendingPicks > 0);
+  const treeCode = skillTreeButton.querySelector<HTMLElement>("b");
+  if (treeCode) treeCode.textContent = state.pendingPicks > 0 ? `TREE +${state.pendingPicks}` : "TREE";
+  skillTreeButton.classList.toggle("ready", state.pendingPicks > 0);
   xpFill.style.width = `${Math.min(100, state.xp / state.xpNext * 100)}%`;
   xpText.textContent = `${Math.floor(state.xp)} / ${state.xpNext}`;
   feverFill.style.width = `${Math.min(100, state.fever)}%`;
@@ -233,39 +242,37 @@ function showFactory(state: RunState): void {
   factoryOverlay.classList.add("show");
 }
 
-function showLevelUp(choices: RunSkillId[], pendingPicks: number): void {
-  const rewards = choices.map((id) => RUN_SKILLS[id]);
-  const hasEvolution = rewards.some((reward) => reward.category === "evolution");
-  const onlyOverdrive = rewards.every((reward) => reward.category === "overdrive");
-  levelUpTitle.textContent = pendingPicks > 1
-    ? `저장된 보상 ${pendingPicks}개를 장착하세요`
-    : hasEvolution ? "조합 진화가 해금되었습니다!"
-      : onlyOverdrive ? "한계를 넘어 오버드라이브하세요"
-        : "다음 출격의 장비를 선택하세요";
-  levelUpDescription.textContent = pendingPicks > 1
-    ? "비행은 방해하지 않았습니다. 저장된 장비를 연속 장착하고 다음 출격을 준비하세요."
-    : hasEvolution ? "최대 단계 장비 두 개가 결합해 플레이 방식이 크게 변합니다."
-      : onlyOverdrive ? "모든 핵심 장비를 완성해도 반복 보상은 계속됩니다."
-        : "장비를 최대 3단계까지 강화해 조합 진화를 노리세요.";
-  skillChoices.innerHTML = choices.map((id) => {
-    const skill = RUN_SKILLS[id];
-    const stack = game.getRunState().skills[id];
-    const badge = skill.category === "evolution" ? "COMBO EVOLUTION"
-      : skill.category === "overdrive" ? `OVERDRIVE +${stack + 1}`
-        : stack > 0 ? `CORE ${stack + 1} / ${skill.maxStacks}` : "NEW CORE";
-    const requirement = skill.requirements
-      ? `<span class="skill-requirement">${skill.requirements.map((requirementId) => RUN_SKILLS[requirementId].name).join(" + ")}</span>`
-      : "";
-    const action = skill.category === "evolution" ? "진화 장착" : skill.category === "overdrive" ? "출력 증폭" : "장비 선택";
-    return `<button class="skill-card ${skill.category}" data-skill="${id}" style="--skill-color:${skill.color}">
-      <span class="skill-icon">${skill.icon}</span>
-      <small>${badge}</small>
-      <strong>${skill.name}</strong>
-      <p>${skill.description}</p>
-      ${requirement}
-      <b>${action}</b>
-    </button>`;
-  }).join("");
+function showLevelUp(pendingPicks: number): void {
+  const state = game.getRunState();
+  skillPointCount.textContent = String(pendingPicks);
+  levelUpTitle.textContent = pendingPicks > 0 ? `특성 포인트 ${pendingPicks}개를 투자하세요` : "오늘의 특성 트리";
+  levelUpDescription.textContent = pendingPicks > 0
+    ? "무작위 선택지는 없습니다. 원하는 계열을 끝까지 밀거나 여러 계열을 조합하세요."
+    : "현재 빌드를 확인할 수 있습니다. 다음 레벨의 포인트는 비행을 멈추지 않고 저장됩니다.";
+  skillTreeCloseButton.textContent = pendingPicks > 0 ? `포인트 ${pendingPicks}개를 남기고 기지로 돌아가기` : "기지로 돌아가기";
+  skillChoices.innerHTML = SKILL_TREE_BRANCHES.map((branch) => `
+    <section class="skill-tree-branch" style="--branch-color:${branch.color}">
+      <header><span>${branch.code}</span><div><strong>${branch.name}</strong><small>${branch.description}</small></div></header>
+      <div class="skill-tree-path">
+        ${branch.nodes.map((id, index) => {
+          const skill = RUN_SKILLS[id];
+          const stack = state.skills[id];
+          const maxed = Number.isFinite(skill.maxStacks) && stack >= skill.maxStacks;
+          const unlocked = skill.requirements?.every((requirement) => state.skills[requirement] >= RUN_SKILLS[requirement].maxStacks) ?? true;
+          const available = game.canChooseSkill(id);
+          const tier = Number.isFinite(skill.maxStacks) ? `${stack}/${skill.maxStacks}` : `∞ +${stack}`;
+          const requirement = skill.requirements?.map((requirementId) => RUN_SKILLS[requirementId].name).join(" + ") ?? "";
+          const action = maxed ? "MASTERED" : !unlocked ? `${requirement} 마스터 필요` : pendingPicks <= 0 ? "POINT 필요" : skill.category === "evolution" ? "궁극기 해금 · 1 POINT" : skill.category === "overdrive" ? "반복 강화 · 1 POINT" : "강화 · 1 POINT";
+          return `${index > 0 ? `<i class="tree-connector ${unlocked ? "active" : ""}"></i>` : ""}
+            <button class="skill-node ${skill.category} ${stack > 0 ? "invested" : ""} ${maxed ? "maxed" : ""} ${!unlocked ? "locked" : ""}" data-skill="${id}" style="--skill-color:${skill.color}" ${available ? "" : "disabled"}>
+              <span class="skill-node-icon">${skill.icon}</span>
+              <span class="skill-node-copy"><small>${skill.category === "evolution" ? "ULTIMATE" : skill.category === "overdrive" ? "INFINITE NODE" : `TIER ${index + 1}`}</small><strong>${skill.name}</strong><p>${skill.description}</p></span>
+              <span class="skill-node-level">${tier}</span><b>${action}</b>
+            </button>`;
+        }).join("")}
+      </div>
+    </section>
+  `).join("");
   levelUpOverlay.classList.add("show");
 }
 
@@ -434,9 +441,13 @@ skillChoices.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-skill]");
   if (!button) return;
   skillChoices.querySelectorAll<HTMLButtonElement>("button").forEach((choice) => { choice.disabled = true; });
-  const finished = game.chooseSkill(button.dataset.skill as RunSkillId);
-  if (finished) levelUpOverlay.classList.remove("show");
+  game.chooseSkill(button.dataset.skill as RunSkillId);
 });
+skillTreeCloseButton.addEventListener("click", () => {
+  game.closeSkillTree();
+  levelUpOverlay.classList.remove("show");
+});
+skillTreeButton.addEventListener("click", () => game.openSkillTree());
 resetButton.addEventListener("click", () => {
   if (window.confirm("현재 회사의 진행 상황을 지우고 처음부터 시작할까요?")) game.reset();
 });
