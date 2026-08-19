@@ -106,11 +106,11 @@ app.innerHTML = `
 
       <section class="levelup-overlay" id="levelUpOverlay" aria-label="일일 특성 트리">
         <div class="levelup-panel skill-tree-panel">
-          <span class="levelup-kicker">DAILY FLIGHT SPECIALIZATION</span>
-          <h2 id="levelUpTitle">오늘의 특성 트리</h2>
-          <p id="levelUpDescription">하루 동안 원하는 수확 빌드를 직접 설계하세요.</p>
+          <span class="levelup-kicker">DAILY SYSTEM BLUEPRINT // OPEN GRID</span>
+          <h2 id="levelUpTitle">오늘의 비행 설계도</h2>
+          <p id="levelUpDescription">연결된 노드를 따라 하루의 수확 장치를 직접 조립하세요.</p>
           <div class="skill-point-bank"><span>AVAILABLE POINTS</span><strong id="skillPointCount">0</strong><small>남겨둔 포인트는 다음 귀환까지 유지됩니다.</small></div>
-          <div class="skill-choices skill-tree-branches" id="skillChoices"></div>
+          <div class="skill-choices skill-tree-network-shell" id="skillChoices"></div>
           <button class="skill-tree-close" id="skillTreeCloseButton">포인트를 남기고 기지로 돌아가기</button>
         </div>
       </section>
@@ -189,6 +189,22 @@ if (import.meta.env.DEV) {
   (window as typeof window & { __cloudHarvestGame?: CloudHarvestGame }).__cloudHarvestGame = game;
 }
 
+const SKILL_NODE_LAYOUT: Record<RunSkillId, { x: number; y: number; branch: "vacuum" | "fever" | "automation" }> = {
+  overclock: { x: 135, y: 150, branch: "vacuum" },
+  wideIntake: { x: 82, y: 330, branch: "vacuum" },
+  blackHole: { x: 46, y: 510, branch: "vacuum" },
+  denseRadar: { x: 46, y: 690, branch: "vacuum" },
+  profitRain: { x: 445, y: 150, branch: "fever" },
+  feverDrive: { x: 445, y: 330, branch: "fever" },
+  goldenStorm: { x: 445, y: 510, branch: "fever" },
+  yieldBoost: { x: 335, y: 690, branch: "fever" },
+  feverReserve: { x: 555, y: 690, branch: "fever" },
+  twinDrone: { x: 755, y: 150, branch: "automation" },
+  chainBurst: { x: 808, y: 330, branch: "automation" },
+  droneFleet: { x: 844, y: 510, branch: "automation" },
+  cargoBay: { x: 844, y: 690, branch: "automation" },
+};
+
 function renderRunState(state: RunState): void {
   runLevel.textContent = state.pendingPicks > 0 ? `LV.${state.level} +${state.pendingPicks}` : `LV.${state.level}`;
   runLevel.classList.toggle("ready", state.pendingPicks > 0);
@@ -245,34 +261,53 @@ function showFactory(state: RunState): void {
 function showLevelUp(pendingPicks: number): void {
   const state = game.getRunState();
   skillPointCount.textContent = String(pendingPicks);
-  levelUpTitle.textContent = pendingPicks > 0 ? `특성 포인트 ${pendingPicks}개를 투자하세요` : "오늘의 특성 트리";
+  levelUpTitle.textContent = pendingPicks > 0 ? `설계 포인트 ${pendingPicks}개를 연결하세요` : "오늘의 비행 설계도";
   levelUpDescription.textContent = pendingPicks > 0
-    ? "무작위 선택지는 없습니다. 원하는 계열을 끝까지 밀거나 여러 계열을 조합하세요."
-    : "현재 빌드를 확인할 수 있습니다. 다음 레벨의 포인트는 비행을 멈추지 않고 저장됩니다.";
+    ? "중앙 코어에서 열린 노드를 따라가세요. 한 계열을 관통하거나 여러 장치를 섞어도 됩니다."
+    : "현재 조립된 노드망입니다. 다음 레벨의 포인트는 비행을 멈추지 않고 저장됩니다.";
   skillTreeCloseButton.textContent = pendingPicks > 0 ? `포인트 ${pendingPicks}개를 남기고 기지로 돌아가기` : "기지로 돌아가기";
-  skillChoices.innerHTML = SKILL_TREE_BRANCHES.map((branch) => `
-    <section class="skill-tree-branch" style="--branch-color:${branch.color}">
-      <header><span>${branch.code}</span><div><strong>${branch.name}</strong><small>${branch.description}</small></div></header>
-      <div class="skill-tree-path">
-        ${branch.nodes.map((id, index) => {
-          const skill = RUN_SKILLS[id];
-          const stack = state.skills[id];
-          const maxed = Number.isFinite(skill.maxStacks) && stack >= skill.maxStacks;
-          const unlocked = skill.requirements?.every((requirement) => state.skills[requirement] >= RUN_SKILLS[requirement].maxStacks) ?? true;
-          const available = game.canChooseSkill(id);
-          const tier = Number.isFinite(skill.maxStacks) ? `${stack}/${skill.maxStacks}` : `∞ +${stack}`;
-          const requirement = skill.requirements?.map((requirementId) => RUN_SKILLS[requirementId].name).join(" + ") ?? "";
-          const action = maxed ? "MASTERED" : !unlocked ? `${requirement} 마스터 필요` : pendingPicks <= 0 ? "POINT 필요" : skill.category === "evolution" ? "궁극기 해금 · 1 POINT" : skill.category === "overdrive" ? "반복 강화 · 1 POINT" : "강화 · 1 POINT";
-          return `${index > 0 ? `<i class="tree-connector ${unlocked ? "active" : ""}"></i>` : ""}
-            <button class="skill-node ${skill.category} ${stack > 0 ? "invested" : ""} ${maxed ? "maxed" : ""} ${!unlocked ? "locked" : ""}" data-skill="${id}" style="--skill-color:${skill.color}" ${available ? "" : "disabled"}>
-              <span class="skill-node-icon">${skill.icon}</span>
-              <span class="skill-node-copy"><small>${skill.category === "evolution" ? "ULTIMATE" : skill.category === "overdrive" ? "INFINITE NODE" : `TIER ${index + 1}`}</small><strong>${skill.name}</strong><p>${skill.description}</p></span>
-              <span class="skill-node-level">${tier}</span><b>${action}</b>
-            </button>`;
-        }).join("")}
-      </div>
-    </section>
-  `).join("");
+  const roots = new Set<RunSkillId>(["overclock", "profitRain", "twinDrone"]);
+  const center = { x: 540, y: 83 };
+  const nodeCenter = (id: RunSkillId) => ({ x: SKILL_NODE_LAYOUT[id].x + 95, y: SKILL_NODE_LAYOUT[id].y + 65 });
+  const connectors = (Object.keys(SKILL_NODE_LAYOUT) as RunSkillId[]).flatMap((id) => {
+    const skill = RUN_SKILLS[id];
+    const target = nodeCenter(id);
+    const sources = roots.has(id) ? [center] : (skill.requirements ?? []).map(nodeCenter);
+    const active = roots.has(id) || (skill.requirements?.every((requirement) => state.skills[requirement] >= RUN_SKILLS[requirement].maxStacks) ?? false);
+    return sources.map((source) => `<line class="skill-link ${active ? "active" : ""}" x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" style="--link-color:${skill.color}" />`);
+  }).join("");
+  const investedNodes = (Object.keys(state.skills) as RunSkillId[]).filter((id) => state.skills[id] > 0).length;
+  skillChoices.innerHTML = `
+    <div class="skill-tree-legend">
+      ${SKILL_TREE_BRANCHES.map((branch) => `<span style="--branch-color:${branch.color}"><b>${branch.code}</b><em>${branch.name}</em></span>`).join("")}
+      <strong>${investedNodes} / ${Object.keys(SKILL_NODE_LAYOUT).length} SYSTEMS ONLINE</strong>
+    </div>
+    <div class="skill-tree-scroll-hint">SCROLL BLUEPRINT · CONNECT ADJACENT SYSTEMS</div>
+    <div class="skill-tree-network">
+      <div class="skill-tree-grid-glow"></div>
+      <svg class="skill-tree-links" viewBox="0 0 1080 850" aria-hidden="true">${connectors}</svg>
+      <div class="skill-tree-core"><small>DAY ${state.day} CORE</small><strong>${pendingPicks}</strong><span>POINTS</span></div>
+      ${(Object.keys(SKILL_NODE_LAYOUT) as RunSkillId[]).map((id) => {
+        const skill = RUN_SKILLS[id];
+        const layout = SKILL_NODE_LAYOUT[id];
+        const stack = state.skills[id];
+        const finite = Number.isFinite(skill.maxStacks);
+        const maxed = finite && stack >= skill.maxStacks;
+        const unlocked = skill.requirements?.every((requirement) => state.skills[requirement] >= RUN_SKILLS[requirement].maxStacks) ?? true;
+        const available = game.canChooseSkill(id);
+        const requirement = skill.requirements?.map((requirementId) => RUN_SKILLS[requirementId].name).join(" + ") ?? "중앙 코어";
+        const tier = skill.category === "evolution" ? "BREAKTHROUGH" : skill.category === "overdrive" ? "INFINITE" : "SYSTEM";
+        const action = maxed ? "MASTERED" : !unlocked ? `${requirement} 필요` : pendingPicks <= 0 ? "POINT 대기" : skill.category === "evolution" ? "궁극기 연결" : "1 POINT 투자";
+        const pips = finite
+          ? Array.from({ length: skill.maxStacks }, (_, index) => `<i class="${index < stack ? "on" : ""}"></i>`).join("")
+          : `<i class="infinite">∞</i><b>+${stack}</b>`;
+        return `<button class="skill-node network-node ${skill.category} branch-${layout.branch} ${stack > 0 ? "invested" : ""} ${maxed ? "maxed" : ""} ${!unlocked ? "locked" : ""}" data-skill="${id}" style="--skill-color:${skill.color};left:${layout.x}px;top:${layout.y}px" ${available ? "" : "disabled"} title="${skill.description}">
+          <span class="skill-node-icon">${skill.icon}</span>
+          <span class="skill-node-copy"><small>${tier}</small><strong>${skill.name}</strong><p>${skill.description}</p></span>
+          <span class="skill-node-pips">${pips}</span><b>${action}</b>
+        </button>`;
+      }).join("")}
+    </div>`;
   levelUpOverlay.classList.add("show");
 }
 
