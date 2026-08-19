@@ -105,9 +105,9 @@ app.innerHTML = `
 
       <section class="levelup-overlay" id="levelUpOverlay" aria-label="레벨업 스킬 선택">
         <div class="levelup-panel">
-          <span class="levelup-kicker">FLIGHT LEVEL UP!</span>
+          <span class="levelup-kicker">BASE UPGRADE INSTALL</span>
           <h2 id="levelUpTitle">새 장비를 하나 선택하세요</h2>
-          <p id="levelUpDescription">게임은 선택하는 동안 잠시 멈춥니다.</p>
+          <p id="levelUpDescription">비행 중 저장한 장비 데이터를 기지에서 한꺼번에 장착합니다.</p>
           <div class="skill-choices" id="skillChoices"></div>
         </div>
       </section>
@@ -184,7 +184,8 @@ if (import.meta.env.DEV) {
 }
 
 function renderRunState(state: RunState): void {
-  runLevel.textContent = `LV.${state.level}`;
+  runLevel.textContent = state.pendingPicks > 0 ? `LV.${state.level} +${state.pendingPicks}` : `LV.${state.level}`;
+  runLevel.classList.toggle("ready", state.pendingPicks > 0);
   xpFill.style.width = `${Math.min(100, state.xp / state.xpNext * 100)}%`;
   xpText.textContent = `${Math.floor(state.xp)} / ${state.xpNext}`;
   feverFill.style.width = `${Math.min(100, state.fever)}%`;
@@ -237,12 +238,12 @@ function showLevelUp(choices: RunSkillId[], pendingPicks: number): void {
   const hasEvolution = rewards.some((reward) => reward.category === "evolution");
   const onlyOverdrive = rewards.every((reward) => reward.category === "overdrive");
   levelUpTitle.textContent = pendingPicks > 1
-    ? `보상 ${pendingPicks}개를 연속 선택하세요`
+    ? `저장된 보상 ${pendingPicks}개를 장착하세요`
     : hasEvolution ? "조합 진화가 해금되었습니다!"
       : onlyOverdrive ? "한계를 넘어 오버드라이브하세요"
-        : "이번 비행의 빌드를 선택하세요";
+        : "다음 출격의 장비를 선택하세요";
   levelUpDescription.textContent = pendingPicks > 1
-    ? "쌓인 레벨을 순서대로 정산합니다. 진화 조건을 완성하면 다음 선택지에 나타납니다."
+    ? "비행은 방해하지 않았습니다. 저장된 장비를 연속 장착하고 다음 출격을 준비하세요."
     : hasEvolution ? "최대 단계 장비 두 개가 결합해 플레이 방식이 크게 변합니다."
       : onlyOverdrive ? "모든 핵심 장비를 완성해도 반복 보상은 계속됩니다."
         : "장비를 최대 3단계까지 강화해 조합 진화를 노리세요.";
@@ -271,7 +272,7 @@ function showLevelUp(choices: RunSkillId[], pendingPicks: number): void {
 function equipmentEffect(id: UpgradeId, level: number): string {
   switch (id) {
     case "power": return `흡입력 ${36 + level * 15}`;
-    case "radius": return `흡입 반경 ${112 + level * 18}px`;
+    case "radius": return `흡입 ${112 + level * 18}px · 구름 +${level * 3}`;
     case "value": return `판매 보너스 +${level * 24}%`;
     case "drone": return level === 0 ? "드론 미배치" : `지원 드론 ${level}대`;
     case "insulation": return level === 0 ? "보호 장치 없음" : `절연 출력 ${level}단계`;

@@ -72,6 +72,8 @@ body { min-width: 320px; background: #92ddf7; }
   backdrop-filter: blur(9px); pointer-events: none;
 }
 .level-badge { display: grid; place-items: center; height: 36px; color: #23495c; background: #fff16e; border-radius: 11px; font: 900 14px "Outfit",sans-serif; }
+.level-badge.ready { color: white; background: linear-gradient(135deg,#ff9b55,#e96d8c); box-shadow: 0 0 22px rgba(255,127,100,.55); animation: reward-ready .85s ease-in-out infinite alternate; }
+@keyframes reward-ready { to { transform: scale(1.055); filter: brightness(1.12); } }
 .meter-group { min-width: 0; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 6px; }
 .meter-group small { font: 900 7px "Outfit",sans-serif; letter-spacing: .12em; opacity: .78; }
 .meter-group b { font-size: 8px; }

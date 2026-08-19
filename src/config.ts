@@ -4,7 +4,7 @@ export const RESEARCH_PROJECTS: Record<ResearchId, ResearchDefinition> = {
   logistics: {
     id: "logistics", code: "CRG", name: "적운 물류망", color: "#71d8ef",
     description: "회수 동선을 표준화해 모든 항로의 기본 적재량을 늘립니다.",
-    effect: "영구 화물칸 +1",
+    effect: "영구 화물칸 +4",
   },
   refining: {
     id: "refining", code: "YLD", name: "초임계 정제", color: "#ffd15e",
@@ -22,8 +22,8 @@ export const FLIGHT_ROUTES: Record<FlightRouteId, FlightRouteDefinition> = {
   tailwind: {
     id: "tailwind", code: "WND", name: "순풍 회랑", color: "#6fe3ca",
     description: "넓고 안정적인 항로입니다. 화물칸을 늘리고 구름이 빠르게 유입됩니다.",
-    effect: "화물 +4 · 구름 유입 20%↑", capacityBonus: 4, denseBonus: 0,
-    spawnInterval: .8, valueMultiplier: 1, frontDelay: 14, frontBonus: 1,
+    effect: "화물 +8 · 구름 유입 35%↑", capacityBonus: 8, denseBonus: 0,
+    spawnInterval: .65, valueMultiplier: 1, frontDelay: 14, frontBonus: 1,
   },
   pressureMine: {
     id: "pressureMine", code: "DNS", name: "고기압 광맥", color: "#ffd15e",
@@ -123,7 +123,7 @@ export const UPGRADES: UpgradeDefinition[] = [
   {
     id: "radius",
     name: "확장 흡입구",
-    description: "한 번에 더 넓은 범위의 구름을 흡입합니다.",
+    description: "흡입 범위와 기압 유도 출력을 높여 구름을 더 빠르고 많이 불러옵니다.",
     icon: "INT",
     baseCost: 22,
     maxLevel: 6,
@@ -156,7 +156,7 @@ export const UPGRADES: UpgradeDefinition[] = [
 
 export const RUN_SKILLS: Record<RunSkillId, RunSkillDefinition> = {
   overclock: { id: "overclock", name: "터빈 과충전", description: "흡입력이 45% 강해집니다.", icon: "OVR", color: "#ff8a5b", maxStacks: 3, category: "core" },
-  wideIntake: { id: "wideIntake", name: "광역 흡입구", description: "흡입 범위가 크게 넓어집니다.", icon: "RNG", color: "#55c7df", maxStacks: 3, category: "core" },
+  wideIntake: { id: "wideIntake", name: "광역 흡입구", description: "흡입 범위가 넓어지고 단계마다 구름 최대 수 +4, 유입 속도 +8%를 얻습니다.", icon: "RNG", color: "#55c7df", maxStacks: 3, category: "core" },
   chainBurst: { id: "chainBurst", name: "연쇄 기압폭발", description: "구름 수확 시 주변 구름도 피해를 입습니다.", icon: "CHN", color: "#ffca5c", maxStacks: 3, category: "core" },
   profitRain: { id: "profitRain", name: "황금 빗방울", description: "구름 가치가 40% 증가합니다.", icon: "YLD", color: "#f6c74f", maxStacks: 3, category: "core" },
   feverDrive: { id: "feverDrive", name: "피버 드라이브", description: "피버 충전 속도와 지속시간이 증가합니다.", icon: "FVR", color: "#a788ff", maxStacks: 3, category: "core" },
@@ -164,7 +164,7 @@ export const RUN_SKILLS: Record<RunSkillId, RunSkillDefinition> = {
   blackHole: { id: "blackHole", name: "블랙홀 압축기", description: "흡입장이 거대해지고 수확 폭발이 넓게 연쇄됩니다.", icon: "BLK", color: "#45e1df", maxStacks: 1, category: "evolution", requirements: ["wideIntake", "chainBurst"] },
   goldenStorm: { id: "goldenStorm", name: "황금 폭풍", description: "피버가 강화되고 피버 중 모든 구름 가치가 50% 증가합니다.", icon: "GLD", color: "#ffe05f", maxStacks: 1, category: "evolution", requirements: ["profitRain", "feverDrive"] },
   droneFleet: { id: "droneFleet", name: "과급 드론 편대", description: "과충전 드론 3대가 추가 출격해 구름을 집중 분해합니다.", icon: "FLT", color: "#79f0bd", maxStacks: 1, category: "evolution", requirements: ["twinDrone", "overclock"] },
-  cargoBay: { id: "cargoBay", name: "화물칸 오버드라이브", description: "이번 비행의 화물 용량이 2칸 증가합니다.", icon: "CRG", color: "#71d8ef", maxStacks: Number.POSITIVE_INFINITY, category: "overdrive" },
+  cargoBay: { id: "cargoBay", name: "화물칸 오버드라이브", description: "이번 하루의 화물 용량이 6칸 증가합니다.", icon: "CRG", color: "#71d8ef", maxStacks: Number.POSITIVE_INFINITY, category: "overdrive" },
   yieldBoost: { id: "yieldBoost", name: "수익 오버드라이브", description: "모든 구름의 가치가 추가로 10% 증가합니다.", icon: "YLD+", color: "#ffd15e", maxStacks: Number.POSITIVE_INFINITY, category: "overdrive" },
   denseRadar: { id: "denseRadar", name: "고밀도 레이더", description: "고밀도 구름 출현 확률이 추가로 3% 증가합니다.", icon: "DNS+", color: "#ff9b69", maxStacks: Number.POSITIVE_INFINITY, category: "overdrive" },
   feverReserve: { id: "feverReserve", name: "피버 예비전력", description: "피버 지속시간이 추가로 0.8초 증가합니다.", icon: "FVR+", color: "#b695ff", maxStacks: Number.POSITIVE_INFINITY, category: "overdrive" },

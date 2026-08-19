@@ -26,7 +26,7 @@ const freshRunState = (day = 1): RunState => ({
   cargo: { cumulus: 0, rain: 0, electric: 0 },
   cargoValue: { cumulus: 0, rain: 0, electric: 0 },
   cargoBonus: 0,
-  cargoCapacity: 16,
+  cargoCapacity: 28,
   routeId: "tailwind",
   skills: {
     overclock: 0, wideIntake: 0, chainBurst: 0, profitRain: 0, feverDrive: 0, twinDrone: 0,
@@ -105,7 +105,7 @@ export class CloudHarvestGame {
     this.bindInput();
     this.resize();
     window.addEventListener("resize", () => this.resize());
-    for (let i = 0; i < 12; i += 1) this.spawnCloud(true);
+    for (let i = 0; i < Math.min(18, this.getMaxClouds()); i += 1) this.spawnCloud(true);
     this.emitAll();
     requestAnimationFrame((time) => this.frame(time));
   }
@@ -242,7 +242,7 @@ export class CloudHarvestGame {
       return false;
     }
     this.pausedForLevel = false;
-    this.onToast(`${RUN_SKILLS[id].name} 장착 — 비행 재개!`, "success");
+    this.onToast(`${RUN_SKILLS[id].name} 장착 완료 — 다음 출격 준비!`, "success");
     return true;
   }
 
@@ -261,7 +261,7 @@ export class CloudHarvestGame {
     this.state.money -= next.promotionCost;
     this.state.rank += 1;
     this.clouds = [];
-    for (let i = 0; i < 12 + this.state.rank * 3; i += 1) this.spawnCloud(true);
+    for (let i = 0; i < Math.min(this.getMaxClouds(), 18 + this.state.rank * 4); i += 1) this.spawnCloud(true);
     this.shake = 18;
     this.impactFlash = .65;
     this.rankReveal = 3.2;
@@ -289,7 +289,7 @@ export class CloudHarvestGame {
     this.goldenFrontClaimed = false;
     this.clouds = [];
     this.combo = 0;
-    for (let i = 0; i < 12; i += 1) this.spawnCloud(true);
+    for (let i = 0; i < Math.min(18, this.getMaxClouds()); i += 1) this.spawnCloud(true);
     this.emitAll();
     this.onToast("새로운 수확 비행선이 출격했습니다.");
   }
@@ -343,7 +343,7 @@ export class CloudHarvestGame {
     const dt = Math.min((time - this.lastTime) / 1000 || 0, 0.033);
     this.lastTime = time;
     if (this.impactFreeze > 0) this.impactFreeze -= dt;
-    else if (!this.pausedForLevel) this.update(dt);
+    else if (!this.pausedForLevel && (!this.atFactory || this.launching || this.returning)) this.update(dt);
     this.render(time / 1000);
     requestAnimationFrame((next) => this.frame(next));
   }
@@ -359,10 +359,10 @@ export class CloudHarvestGame {
     }
     this.spawnTimer -= dt;
     const flightPressure = this.run.flight - 1;
-    const maxClouds = 16 + this.state.rank * 5 + flightPressure * 4;
+    const maxClouds = this.getMaxClouds();
     if (this.spawnTimer <= 0 && this.clouds.length < maxClouds) {
       this.spawnCloud(false);
-      this.spawnTimer = Math.max(0.18, (0.88 - this.state.rank * 0.12) * FLIGHT_ROUTES[this.run.routeId].spawnInterval * (1 - flightPressure * .16));
+      this.spawnTimer = this.getCloudSpawnInterval();
     }
 
     const follow = 1 - Math.exp(-dt * 9);
@@ -395,9 +395,7 @@ export class CloudHarvestGame {
         this.run.feverActive = false;
         this.run.fever = 0;
         if (this.run.pendingPicks > 0) {
-          this.pausedForLevel = true;
-          this.onToast(`피버 정산 — 장비 ${this.run.pendingPicks}개 선택`, "success");
-          window.setTimeout(() => this.presentLevelUp(), 240);
+          this.onToast(`피버 종료 — 장비 데이터 ${this.run.pendingPicks}개 기지 전송`, "success");
         } else this.onToast("피버 종료 — 다시 게이지를 채우세요!");
       }
     }
@@ -501,7 +499,7 @@ export class CloudHarvestGame {
         this.shake = 0;
         this.player.x = -100;
         this.player.y = this.height * .62;
-        for (let index = 0; index < 12; index += 1) this.spawnCloud(true);
+        for (let index = 0; index < Math.min(18 + (this.run.flight - 1) * 4, this.getMaxClouds()); index += 1) this.spawnCloud(true);
       }
     } else {
       const entry = Math.min(1, (this.launchTimer - 1.1) / .62);
@@ -542,8 +540,11 @@ export class CloudHarvestGame {
       });
       if (this.returnTimer >= 2.25) {
         this.returning = false;
-        this.pausedForLevel = true;
         this.onFactoryOpen(this.getRunState());
+        if (this.run.pendingPicks > 0) {
+          this.pausedForLevel = true;
+          window.setTimeout(() => this.presentLevelUp(), 240);
+        }
       }
       return;
     }
@@ -689,18 +690,20 @@ export class CloudHarvestGame {
   }
 
   private bankLevelUps(): void {
+    let gained = 0;
     while (this.run.xp >= this.run.xpNext) {
       this.run.xp -= this.run.xpNext;
       this.run.level += 1;
       this.run.xpNext = Math.round(6 + (this.run.level - 1) * 4.5);
       this.run.pendingPicks += 1;
+      gained += 1;
     }
     this.onRunChange(this.getRunState());
-    if (!this.run.feverActive) this.presentLevelUp();
+    if (gained > 0) this.onToast(`LEVEL ${this.run.level} — 장비 데이터 ${this.run.pendingPicks}개 저장`, "success");
   }
 
   private presentLevelUp(): void {
-    if (this.run.pendingPicks <= 0) return;
+    if (!this.atFactory || this.run.pendingPicks <= 0) return;
     const eligible = (id: RunSkillId) => {
       const reward = RUN_SKILLS[id];
       if (this.run.skills[id] >= reward.maxStacks) return false;
@@ -1322,7 +1325,18 @@ export class CloudHarvestGame {
   }
 
   private getCargoCapacity(): number {
-    return 16 + this.state.rank * 4 + this.state.levels.value * 2 + this.state.research.logistics + FLIGHT_ROUTES[this.run.routeId].capacityBonus + this.run.skills.cargoBay * 2;
+    return 28 + this.state.rank * 8 + this.state.levels.radius * 4 + this.state.research.logistics * 4 + FLIGHT_ROUTES[this.run.routeId].capacityBonus + this.run.skills.cargoBay * 6;
+  }
+
+  private getMaxClouds(): number {
+    return 22 + this.state.rank * 7 + (this.run.flight - 1) * 6 + this.state.levels.radius * 3 + this.run.skills.wideIntake * 4 + this.run.skills.blackHole * 8;
+  }
+
+  private getCloudSpawnInterval(): number {
+    const flightPressure = this.run.flight - 1;
+    const permanentInduction = Math.max(.58, 1 - this.state.levels.radius * .05);
+    const runInduction = Math.max(.58, 1 - this.run.skills.wideIntake * .08 - this.run.skills.blackHole * .15);
+    return Math.max(.11, (0.78 - this.state.rank * .08) * FLIGHT_ROUTES[this.run.routeId].spawnInterval * (1 - flightPressure * .14) * permanentInduction * runInduction);
   }
 
   private emitAll(): void { this.onStateChange(this.getState()); this.onRunChange(this.getRunState()); }
