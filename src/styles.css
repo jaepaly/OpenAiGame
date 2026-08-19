@@ -601,3 +601,120 @@ body { min-width: 320px; background: #92ddf7; }
   .skill-card strong { font-size: 15px; }
   .skill-card p { font-size: 12px; }
 }
+
+/* Readability pass: every gameplay panel must be legible at normal viewing distance. */
+@media (min-width: 681px) {
+  .run-meter { width: 740px; height: 78px; grid-template-columns: 82px 1fr 1fr 170px; }
+  .level-badge { height: 54px; font-size: 21px; }
+  .meter-group small { font-size: 13px; }
+  .meter-group b { font-size: 14px; }
+  .route-status { height: 54px; }
+  .route-status small { font-size: 12px; }
+  .route-status b { font-size: 16px; }
+
+  .promotion-card { width: 410px; min-height: 142px; }
+  .promotion-copy strong { font-size: 21px; }
+  .promotion-copy p { font-size: 15px; white-space: normal; }
+  .promotion-requirements span { font-size: 14px; }
+  .promote-button { width: 112px; min-height: 48px; font-size: 15px; }
+
+  .garage-panel { width: min(1180px, calc(100% - 32px)); }
+  .garage-heading span { font-size: 15px; }
+  .garage-heading p { font-size: 17px; }
+  .equipment-slot { height: 408px; padding: 17px; }
+  .equipment-status b { font-size: 13px; }
+  .equipment-status em { font-size: 12px; }
+  .equipment-info strong { font-size: 21px; }
+  .equipment-info small { height: 50px; font-size: 14px; }
+  .equipment-output > small { font-size: 12px; }
+  .equipment-output > b { font-size: 17px; }
+  .equipment-output > span { font-size: 14px; }
+  .equipment-action { min-height: 52px; }
+  .equipment-action b, .equipment-action strong { font-size: 15px; }
+  .garage-tip { font-size: 16px; }
+
+  .factory-panel { width: min(1160px, calc(100% - 32px)); padding: 34px 38px 38px; }
+  .factory-heading > span { font-size: 15px; }
+  .factory-heading h2 { font-size: 38px; }
+  .factory-heading p { font-size: 17px; }
+  .manifest-item { min-height: 92px; padding: 15px; }
+  .manifest-item > span { width: 58px; height: 58px; font-size: 16px; }
+  .manifest-item b { font-size: 17px; }
+  .manifest-item strong { font-size: 21px; }
+  .manifest-item small { font-size: 14px; }
+  .manifest-bonus span { font-size: 13px; }
+  .manifest-bonus b { font-size: 15px; }
+  .manifest-bonus strong { font-size: 19px; }
+  .contract-card { min-height: 276px; padding: 21px; }
+  .best-offer { font-size: 12px; }
+  .contract-code { width: 68px; height: 50px; font-size: 18px; }
+  .contract-copy b { font-size: 22px; }
+  .contract-copy small { min-height: 48px; font-size: 15px; }
+  .contract-rates { padding: 10px; font-size: 14px; }
+  .contract-payout { padding: 13px; font-size: 21px; }
+  .factory-tip { font-size: 16px; }
+  .factory-receipt > span { font-size: 15px; }
+  .factory-receipt h3 { font-size: 36px; }
+  .factory-receipt p { font-size: 17px; }
+  .day-research > small { font-size: 13px; }
+  .day-research h4 { font-size: 25px; }
+  .research-card { min-height: 245px; padding: 18px; }
+  .research-card > span { font-size: 16px; }
+  .research-card small { font-size: 12px; }
+  .research-card strong { font-size: 21px; }
+  .research-card p { font-size: 15px; }
+  .research-card b { font-size: 16px; }
+  .research-card em { padding: 10px; font-size: 14px; }
+  .base-actions button { min-height: 98px; }
+  .base-actions button b { font-size: 17px; }
+  .base-actions button span { font-size: 21px; }
+
+  .route-panel { width: min(1100px, calc(100% - 32px)); padding: 36px 38px 32px; }
+  .route-panel header span { font-size: 15px; }
+  .route-panel header h2 { font-size: 38px; }
+  .route-panel header p { font-size: 17px; }
+  .route-card { min-height: 360px; padding: 24px; }
+  .route-card small { font-size: 13px; }
+  .route-card strong { font-size: 24px; }
+  .route-card p { min-height: 78px; font-size: 16px; }
+  .route-card b { padding: 13px; font-size: 16px; }
+  .route-card em { font-size: 18px; }
+  .route-back { font-size: 15px; }
+
+  .skill-card small { font-size: 14px; }
+  .skill-card p { font-size: 16px; }
+  .skill-requirement { font-size: 13px; }
+}
+
+@media (max-width: 680px) {
+  .meter-group small { font-size: 11px; }
+  .meter-group b { font-size: 12px; }
+  .promotion-copy p, .promotion-requirements span, .promote-button { font-size: 13px; }
+  .garage-button small, .return-button small { font-size: 11px; }
+  .garage-heading span { font-size: 12px; }
+  .garage-heading p { font-size: 15px; }
+  .equipment-status b { font-size: 12px; }
+  .equipment-status em { font-size: 11px; }
+  .equipment-info strong { font-size: 17px; }
+  .equipment-info small { font-size: 13px; }
+  .equipment-output > small { font-size: 11px; }
+  .equipment-output > b { font-size: 15px; }
+  .equipment-output > span { font-size: 13px; }
+  .equipment-action b, .equipment-action strong { font-size: 13px; }
+  .factory-heading > span, .route-panel header span { font-size: 13px; }
+  .factory-heading p, .route-panel header p { font-size: 14px; }
+  .manifest-item b, .manifest-item small { font-size: 14px; }
+  .contract-copy b { font-size: 20px; }
+  .contract-copy small, .contract-rates { font-size: 14px; }
+  .factory-tip, .factory-receipt p { font-size: 14px; }
+  .research-card small { font-size: 12px; }
+  .research-card strong { font-size: 19px; }
+  .research-card p, .research-card em { font-size: 14px; }
+  .route-card small { font-size: 12px; }
+  .route-card p, .route-card b { font-size: 15px; }
+  .route-card em { font-size: 17px; }
+  .levelup-kicker, .levelup-panel > p { font-size: 14px; }
+  .skill-card small, .skill-requirement { font-size: 12px; }
+  .skill-card strong { font-size: 17px; }
+  .skill-card p, .skill-card b { font-size: 14px; }
+}
