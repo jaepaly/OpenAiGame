@@ -68,6 +68,8 @@ export class CloudHarvestGame {
   private atFactory = false;
   private returning = false;
   private returnTimer = 0;
+  private launching = false;
+  private launchTimer = 0;
   private droneAngle = 0;
   private runEmitTimer = 0;
   private audioContext?: AudioContext;
@@ -150,20 +152,21 @@ export class CloudHarvestGame {
   }
 
   launchFlight(): boolean {
-    if (!this.atFactory) return false;
-    this.atFactory = false;
+    if (!this.atFactory || this.launching || this.returning) return false;
+    this.launching = true;
+    this.launchTimer = 0;
     this.pausedForLevel = false;
     this.clouds = [];
     this.particles = [];
     this.texts = [];
     this.shockwaves = [];
     this.frontTimer = 14;
+    this.player.x = this.width * .5;
+    this.player.y = this.height * .61;
     this.player.targetX = this.width * .5;
     this.player.targetY = this.height * .55;
-    for (let index = 0; index < 12; index += 1) this.spawnCloud(true);
-    this.burst(this.player.x, this.player.y, "#8fffe4", 45, 260);
-    this.onToast("정비 완료 — 다음 수확 비행 출격!", "success");
-    this.emitAll();
+    this.onToast("출격 승인 — 격납고 게이트 개방", "success");
+    this.playTone(165, .28);
     return true;
   }
 
@@ -241,6 +244,8 @@ export class CloudHarvestGame {
     this.atFactory = false;
     this.returning = false;
     this.returnTimer = 0;
+    this.launching = false;
+    this.launchTimer = 0;
     this.clouds = [];
     this.combo = 0;
     for (let i = 0; i < 12; i += 1) this.spawnCloud(true);
@@ -303,6 +308,10 @@ export class CloudHarvestGame {
   }
 
   private update(dt: number): void {
+    if (this.launching) {
+      this.updateLaunchSequence(dt);
+      return;
+    }
     if (this.returning) {
       this.updateReturnSequence(dt);
       return;
@@ -418,6 +427,63 @@ export class CloudHarvestGame {
     });
     this.runEmitTimer -= dt;
     if (this.runEmitTimer <= 0) { this.onRunChange(this.getRunState()); this.runEmitTimer = 0.08; }
+  }
+
+  private updateLaunchSequence(dt: number): void {
+    this.launchTimer += dt;
+    const centerX = this.width * .5;
+    const hangarY = this.height * .61;
+    if (this.atFactory) {
+      if (this.launchTimer < .48) {
+        this.player.x = centerX + Math.sin(this.launchTimer * 68) * (1 + this.launchTimer * 7);
+        this.player.y = hangarY;
+        this.shake = 1 + this.launchTimer * 5;
+      } else {
+        const progress = Math.min(1, (this.launchTimer - .48) / .62);
+        const thrust = progress * progress * progress;
+        this.player.x = centerX + thrust * this.width * .78;
+        this.player.y = hangarY - thrust * this.height * .24;
+        this.shake = 4 + progress * 9;
+      }
+      if (Math.random() < dt * (35 + this.launchTimer * 45)) {
+        this.particles.push({
+          x: this.player.x - 48, y: this.player.y + (Math.random() - .5) * 18,
+          vx: -240 - Math.random() * 300, vy: 30 + Math.random() * 70,
+          life: .28 + Math.random() * .3, maxLife: .58, size: 3 + Math.random() * 5,
+          color: Math.random() < .5 ? "#fff36f" : "#7ff5df",
+        });
+      }
+      if (this.launchTimer >= 1.1) {
+        this.atFactory = false;
+        this.shake = 0;
+        this.player.x = -100;
+        this.player.y = this.height * .62;
+        for (let index = 0; index < 12; index += 1) this.spawnCloud(true);
+      }
+    } else {
+      const entry = Math.min(1, (this.launchTimer - 1.1) / .62);
+      const eased = 1 - Math.pow(1 - entry, 3);
+      this.player.x = -100 + (centerX + 100) * eased;
+      this.player.y = this.height * .62 + (this.height * .55 - this.height * .62) * eased;
+      this.shake = Math.max(0, (1 - entry) * 8);
+      if (entry >= 1) {
+        this.launching = false;
+        this.launchTimer = 0;
+        this.player.x = centerX;
+        this.player.y = this.height * .55;
+        this.player.targetX = this.player.x;
+        this.player.targetY = this.player.y;
+        this.burst(this.player.x, this.player.y, "#8fffe4", 45, 260);
+        this.onToast("기상 항로 진입 — 수확 비행 시작!", "success");
+        this.emitAll();
+      }
+    }
+    this.particles = this.particles.filter((particle) => {
+      particle.life -= dt;
+      particle.x += particle.vx * dt;
+      particle.y += particle.vy * dt;
+      return particle.life > 0;
+    });
   }
 
   private updateReturnSequence(dt: number): void {
@@ -733,6 +799,7 @@ export class CloudHarvestGame {
       this.drawBase(ctx, time);
       this.drawPlayer(ctx, time);
       ctx.restore();
+      if (this.launching) this.drawLaunchTransition(ctx);
       return;
     }
     this.drawSky(ctx, time);
@@ -778,6 +845,7 @@ export class CloudHarvestGame {
     this.drawImpactOverlay(ctx, time);
     ctx.restore();
     if (this.returning) this.drawReturnTransition(ctx);
+    if (this.launching) this.drawLaunchTransition(ctx);
   }
 
   private drawBase(ctx: CanvasRenderingContext2D, time: number): void {
@@ -844,6 +912,29 @@ export class CloudHarvestGame {
     }
     ctx.textAlign = "center"; ctx.fillStyle = "#ffffff"; ctx.font = "900 42px Outfit, sans-serif"; ctx.fillText("RETURN TO BASE", this.width * .5, this.height * .44);
     ctx.fillStyle = "#fff36f"; ctx.font = "900 15px Outfit, sans-serif"; ctx.fillText("FLIGHT COMPLETE  ·  CARGO SECURED", this.width * .5, this.height * .44 + 30);
+    ctx.restore();
+  }
+
+  private drawLaunchTransition(ctx: CanvasRenderingContext2D): void {
+    const closing = Math.max(0, Math.min(1, (this.launchTimer - .48) / .5));
+    const opening = Math.max(0, Math.min(1, (this.launchTimer - 1.1) / .58));
+    const cover = this.launchTimer < 1.1 ? closing : 1 - opening;
+    ctx.save();
+    if (cover > 0) {
+      ctx.fillStyle = `rgba(5,22,31,${cover * .96})`;
+      const edge = this.width * (1.32 - cover * 1.58);
+      ctx.beginPath(); ctx.moveTo(edge, 0); ctx.lineTo(this.width + 220, 0); ctx.lineTo(this.width + 220, this.height); ctx.lineTo(edge - 270, this.height); ctx.closePath(); ctx.fill();
+    }
+    const titleAlpha = Math.min(1, Math.max(0, (this.launchTimer - .18) * 3.2)) * (1 - Math.max(0, opening - .45) / .55);
+    ctx.globalAlpha = titleAlpha;
+    ctx.textAlign = "center"; ctx.fillStyle = "#7ff5df"; ctx.font = "900 14px Outfit, sans-serif";
+    ctx.fillText("WEATHER ROUTE  ·  CLEAR", this.width * .5, this.height * .43 - 30);
+    ctx.fillStyle = "#ffffff"; ctx.font = "900 44px Outfit, sans-serif"; ctx.fillText("SORTIE LAUNCHED", this.width * .5, this.height * .43 + 12);
+    ctx.strokeStyle = "rgba(127,245,223,.62)"; ctx.lineWidth = 4;
+    for (let index = 0; index < 7; index += 1) {
+      const y = this.height * .22 + index * 52;
+      ctx.beginPath(); ctx.moveTo(this.width * .08, y + 55); ctx.lineTo(this.width * (.3 + closing * .4), y); ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -1022,14 +1113,15 @@ export class CloudHarvestGame {
       ctx.beginPath(); ctx.ellipse(0, 0, 66, 44, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     }
 
-    if (this.pointer.active || (this.returning && !this.atFactory)) {
-      const exhaustColor = this.run.feverActive || this.returning ? "#fff36f" : "#8ff5ff";
+    const cinematicBoost = (this.returning && !this.atFactory) || this.launching;
+    if (this.pointer.active || cinematicBoost) {
+      const exhaustColor = this.run.feverActive || cinematicBoost ? "#fff36f" : "#8ff5ff";
       ctx.fillStyle = exhaustColor;
-      const exhaustCount = this.returning ? 8 : 3 + Math.min(3, powerLevel);
+      const exhaustCount = cinematicBoost ? 8 : 3 + Math.min(3, powerLevel);
       for (let i = 0; i < exhaustCount; i += 1) {
-        const trail = 16 + ((time * (this.returning ? 330 : 170) + i * 19) % (this.returning ? 88 : 34));
+        const trail = 16 + ((time * (cinematicBoost ? 330 : 170) + i * 19) % (cinematicBoost ? 88 : 34));
         ctx.globalAlpha = .8 - i * .08;
-        ctx.beginPath(); ctx.ellipse(-54 - trail, (i - exhaustCount / 2) * 4, (this.returning ? 20 : 12) + powerLevel * 1.5, this.returning ? 4 : 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(-54 - trail, (i - exhaustCount / 2) * 4, (cinematicBoost ? 20 : 12) + powerLevel * 1.5, cinematicBoost ? 4 : 3, 0, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
     }

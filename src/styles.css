@@ -186,6 +186,18 @@ body { min-width: 320px; background: #92ddf7; }
 .return-button small { margin-top: 2px; color: #ffe8a8; font-size: 10px; font-weight: 900; }
 .returning .return-button,
 .returning .garage-button { pointer-events: none; opacity: 0; transform: translateY(18px) scale(.86); }
+.returning .game-hud-top,
+.returning .run-meter,
+.returning .tutorial,
+.returning .cloud-legend,
+.returning .promotion-card,
+.launching .game-hud-top,
+.launching .run-meter,
+.launching .tutorial,
+.launching .cloud-legend,
+.launching .promotion-card,
+.launching .garage-button,
+.launching .return-button { pointer-events: none; opacity: 0; transform: translateY(-12px); transition: opacity .18s ease,transform .18s ease; }
 @keyframes return-ready { to { transform: translateY(-3px) scale(1.04); box-shadow: 0 12px 0 rgba(92,42,39,.24),0 0 30px rgba(255,194,74,.5); } }
 
 .garage-overlay {

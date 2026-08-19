@@ -333,6 +333,8 @@ launchButton.addEventListener("click", () => {
   factoryPanel.classList.remove("settled");
   factoryReceipt.classList.remove("show");
   document.body.classList.remove("returning");
+  document.body.classList.add("launching");
+  window.setTimeout(() => document.body.classList.remove("launching"), 1850);
 });
 skillChoices.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-skill]");
