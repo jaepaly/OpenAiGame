@@ -1,7 +1,7 @@
 import "./styles.css";
-import { CLOUDS, PROCESSING_CONTRACTS, RANKS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
+import { CLOUDS, FLIGHT_ROUTES, PROCESSING_CONTRACTS, RANKS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
 import { CloudHarvestGame } from "./game";
-import type { ContractId, GameState, RunSkillId, RunState, UpgradeId } from "./types";
+import type { ContractId, FlightRouteId, GameState, RunSkillId, RunState, UpgradeId } from "./types";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app 요소를 찾을 수 없습니다.");
@@ -35,6 +35,7 @@ app.innerHTML = `
         <span class="level-badge" id="runLevel">LV.1</span>
         <div class="meter-group xp-group"><small>FLIGHT XP</small><div class="meter-track"><i id="xpFill"></i></div><b id="xpText">0 / 6</b></div>
         <div class="meter-group fever-group"><small>SKY FEVER</small><div class="meter-track"><i id="feverFill"></i></div><b id="feverText">0%</b></div>
+        <div class="route-status"><small>ROUTE</small><b id="routeName">순풍 회랑</b></div>
       </div>
 
       <div class="tutorial" id="tutorial"><b>구름 가까이에서 누르고 유지!</b><span>흡입 범위 안의 구름을 분해해 수확하세요</span></div>
@@ -89,6 +90,14 @@ app.innerHTML = `
         </div>
       </section>
 
+      <section class="route-overlay" id="routeOverlay" aria-label="오늘의 비행 항로 선택">
+        <div class="route-panel">
+          <header><span>NEXT SORTIE // ROUTE SELECT</span><h2>오늘의 항로를 선택하세요</h2><p>항로마다 이번 비행의 위험도와 수익 구조가 달라집니다.</p></header>
+          <div class="route-list" id="routeList"></div>
+          <button class="route-back" id="routeBackButton">← 정산 결과로 돌아가기</button>
+        </div>
+      </section>
+
       <section class="levelup-overlay" id="levelUpOverlay" aria-label="레벨업 스킬 선택">
         <div class="levelup-panel">
           <span class="levelup-kicker">FLIGHT LEVEL UP!</span>
@@ -128,6 +137,7 @@ const xpFill = required<HTMLElement>("#xpFill");
 const xpText = required<HTMLElement>("#xpText");
 const feverFill = required<HTMLElement>("#feverFill");
 const feverText = required<HTMLElement>("#feverText");
+const routeName = required<HTMLElement>("#routeName");
 const levelUpOverlay = required<HTMLElement>("#levelUpOverlay");
 const skillChoices = required<HTMLElement>("#skillChoices");
 const levelUpTitle = required<HTMLElement>("#levelUpTitle");
@@ -146,6 +156,9 @@ const receiptContract = required<HTMLElement>("#receiptContract");
 const receiptPayout = required<HTMLElement>("#receiptPayout");
 const baseGarageButton = required<HTMLButtonElement>("#baseGarageButton");
 const launchButton = required<HTMLButtonElement>("#launchButton");
+const routeOverlay = required<HTMLElement>("#routeOverlay");
+const routeList = required<HTMLElement>("#routeList");
+const routeBackButton = required<HTMLButtonElement>("#routeBackButton");
 
 let toastTimer = 0;
 const showToast = (message: string, tone: "normal" | "success" | "warning" = "normal") => {
@@ -163,6 +176,7 @@ function renderRunState(state: RunState): void {
   xpText.textContent = `${Math.floor(state.xp)} / ${state.xpNext}`;
   feverFill.style.width = `${Math.min(100, state.fever)}%`;
   feverText.textContent = state.feverActive ? `${Math.max(0, state.feverSeconds).toFixed(1)}s` : `${Math.floor(state.fever)}%`;
+  routeName.textContent = FLIGHT_ROUTES[state.routeId].name;
   combo.textContent = state.combo > 0 ? `×${state.combo}` : "—";
   combo.parentElement?.classList.toggle("active", state.combo >= 2);
   const cargoCount = state.cargo.cumulus + state.cargo.rain + state.cargo.electric;
@@ -328,7 +342,23 @@ baseGarageButton.addEventListener("click", () => {
   garageOverlay.classList.add("show");
 });
 launchButton.addEventListener("click", () => {
-  if (!game.launchFlight()) return;
+  routeList.innerHTML = Object.values(FLIGHT_ROUTES).map((route) => `
+    <button class="route-card" data-route="${route.id}" style="--route-color:${route.color}">
+      <span class="route-code">${route.code}</span>
+      <small>FLIGHT PLAN</small>
+      <strong>${route.name}</strong>
+      <p>${route.description}</p>
+      <b>${route.effect}</b>
+      <em>이 항로로 출격</em>
+    </button>
+  `).join("");
+  routeOverlay.classList.add("show");
+});
+routeBackButton.addEventListener("click", () => routeOverlay.classList.remove("show"));
+routeList.addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-route]");
+  if (!button || !game.launchFlight(button.dataset.route as FlightRouteId)) return;
+  routeOverlay.classList.remove("show");
   factoryOverlay.classList.remove("show");
   factoryPanel.classList.remove("settled");
   factoryReceipt.classList.remove("show");

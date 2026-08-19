@@ -1,5 +1,6 @@
 export type CloudKind = "cumulus" | "rain" | "electric";
 export type ContractId = "water" | "climate" | "energy";
+export type FlightRouteId = "tailwind" | "pressureMine" | "frontline";
 
 export interface CloudDefinition {
   kind: CloudKind;
@@ -97,7 +98,23 @@ export interface RunState {
   cargoValue: Record<CloudKind, number>;
   cargoBonus: number;
   cargoCapacity: number;
+  routeId: FlightRouteId;
   skills: Record<RunSkillId, number>;
+}
+
+export interface FlightRouteDefinition {
+  id: FlightRouteId;
+  code: string;
+  name: string;
+  description: string;
+  effect: string;
+  color: string;
+  capacityBonus: number;
+  denseBonus: number;
+  spawnInterval: number;
+  valueMultiplier: number;
+  frontDelay: number;
+  frontBonus: number;
 }
 
 export interface ProcessingContract {

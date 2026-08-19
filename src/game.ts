@@ -1,5 +1,5 @@
-import { CLOUDS, INITIAL_STATE, PROCESSING_CONTRACTS, RANKS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
-import type { Cloud, CloudKind, ContractId, FloatingText, GameState, Particle, RunSkillId, RunState, UpgradeId } from "./types";
+import { CLOUDS, FLIGHT_ROUTES, INITIAL_STATE, PROCESSING_CONTRACTS, RANKS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
+import type { Cloud, CloudKind, ContractId, FlightRouteId, FloatingText, GameState, Particle, RunSkillId, RunState, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
@@ -25,6 +25,7 @@ const freshRunState = (): RunState => ({
   cargoValue: { cumulus: 0, rain: 0, electric: 0 },
   cargoBonus: 0,
   cargoCapacity: 16,
+  routeId: "tailwind",
   skills: { overclock: 0, wideIntake: 0, chainBurst: 0, profitRain: 0, feverDrive: 0, twinDrone: 0 },
 });
 
@@ -151,8 +152,9 @@ export class CloudHarvestGame {
     return payout;
   }
 
-  launchFlight(): boolean {
+  launchFlight(routeId: FlightRouteId): boolean {
     if (!this.atFactory || this.launching || this.returning) return false;
+    this.run.routeId = routeId;
     this.launching = true;
     this.launchTimer = 0;
     this.pausedForLevel = false;
@@ -160,12 +162,12 @@ export class CloudHarvestGame {
     this.particles = [];
     this.texts = [];
     this.shockwaves = [];
-    this.frontTimer = 14;
+    this.frontTimer = FLIGHT_ROUTES[routeId].frontDelay;
     this.player.x = this.width * .5;
     this.player.y = this.height * .61;
     this.player.targetX = this.width * .5;
     this.player.targetY = this.height * .55;
-    this.onToast("출격 승인 — 격납고 게이트 개방", "success");
+    this.onToast(`${FLIGHT_ROUTES[routeId].name} 출격 승인 — 격납고 게이트 개방`, "success");
     this.playTone(165, .28);
     return true;
   }
@@ -320,7 +322,7 @@ export class CloudHarvestGame {
     const maxClouds = 16 + this.state.rank * 5;
     if (this.spawnTimer <= 0 && this.clouds.length < maxClouds) {
       this.spawnCloud(false);
-      this.spawnTimer = Math.max(0.28, 0.88 - this.state.rank * 0.12);
+      this.spawnTimer = Math.max(0.24, (0.88 - this.state.rank * 0.12) * FLIGHT_ROUTES[this.run.routeId].spawnInterval);
     }
 
     const follow = 1 - Math.exp(-dt * 9);
@@ -589,7 +591,7 @@ export class CloudHarvestGame {
     this.comboTimer = 3.4;
     this.state.bestCombo = Math.max(this.state.bestCombo, this.combo);
     const comboMultiplier = 1 + Math.min(1.8, Math.floor(this.combo / 3) * .17);
-    const permanentValue = 1 + this.state.levels.value * .24;
+    const permanentValue = (1 + this.state.levels.value * .24) * FLIGHT_ROUTES[this.run.routeId].valueMultiplier;
     const runValue = 1 + this.run.skills.profitRain * .4;
     const insulationValue = cloud.kind === "electric" && this.state.levels.insulation > 0 ? 1.5 : 1;
     const densityValue = cloud.dense ? 3 : 1;
@@ -694,7 +696,7 @@ export class CloudHarvestGame {
   }
 
   private completeCloudFront(x: number, y: number): void {
-    const bonus = 45 + this.state.rank * 35;
+    const bonus = Math.round((45 + this.state.rank * 35) * FLIGHT_ROUTES[this.run.routeId].frontBonus);
     this.run.cargoBonus += bonus;
     if (!this.run.feverActive) {
       this.run.fever = Math.min(100, this.run.fever + 28);
@@ -734,7 +736,7 @@ export class CloudHarvestGame {
       if (roll <= cursor) { kind = candidate; break; }
     }
     const definition = CLOUDS[kind];
-    const dense = Math.random() < .085 + this.state.rank * .018;
+    const dense = Math.random() < .085 + this.state.rank * .018 + FLIGHT_ROUTES[this.run.routeId].denseBonus;
     const radius = (definition.radius[0] + Math.random() * (definition.radius[1] - definition.radius[0])) * (dense ? 1.16 : 1);
     const scale = radius / ((definition.radius[0] + definition.radius[1]) * .5);
     let x = 90 + Math.random() * Math.max(100, this.width - 180);
@@ -1245,7 +1247,7 @@ export class CloudHarvestGame {
   }
 
   private getCargoCapacity(): number {
-    return 16 + this.state.rank * 4 + this.state.levels.value * 2;
+    return 16 + this.state.rank * 4 + this.state.levels.value * 2 + FLIGHT_ROUTES[this.run.routeId].capacityBonus;
   }
 
   private emitAll(): void { this.onStateChange(this.getState()); this.onRunChange(this.getRunState()); }

@@ -66,7 +66,7 @@ body { min-width: 320px; background: #92ddf7; }
 
 .run-meter {
   position: absolute; z-index: 5; top: 82px; left: 50%; transform: translateX(-50%);
-  width: 430px; height: 54px; padding: 7px 12px; display: grid; grid-template-columns: 58px 1fr 1fr;
+  width: 570px; height: 54px; padding: 7px 12px; display: grid; grid-template-columns: 58px 1fr 1fr 115px;
   align-items: center; gap: 10px; color: white; background: rgba(25,69,91,.74);
   border: 2px solid rgba(255,255,255,.48); border-radius: 18px; box-shadow: 0 6px 0 rgba(20,58,77,.2);
   backdrop-filter: blur(9px); pointer-events: none;
@@ -78,6 +78,9 @@ body { min-width: 320px; background: #92ddf7; }
 .meter-track { grid-column: 1/3; height: 10px; overflow: hidden; background: rgba(10,39,54,.42); border: 2px solid rgba(255,255,255,.18); border-radius: 99px; }
 .meter-track i { display: block; width: 0; height: 100%; background: linear-gradient(90deg,#48d7ee,#c6fbff); border-radius: inherit; transition: width .2s ease; }
 .fever-group .meter-track i { background: linear-gradient(90deg,#ff9a55,#fff36f); }
+.route-status { height: 36px; padding: 5px 9px; display: flex; flex-direction: column; justify-content: center; color: #17394a; background: #7ff5df; border-radius: 11px; overflow: hidden; }
+.route-status small { font: 900 7px "Outfit",sans-serif; letter-spacing: .13em; opacity: .65; }
+.route-status b { margin-top: 1px; overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .fever-active .run-meter { border-color: #fff36f; box-shadow: 0 0 30px rgba(255,243,111,.5),0 6px 0 rgba(20,58,77,.2); }
 
 .tutorial {
@@ -323,6 +326,29 @@ body { min-width: 320px; background: #92ddf7; }
 .base-actions .launch-button { color: #17394a; background: #fff06f; border-color: #fff6ad; box-shadow: 0 6px 0 #b98c32; }
 .base-actions .launch-button b { color: #a56120; }
 
+.route-overlay {
+  position: absolute; z-index: 32; inset: 0; padding: 24px; display: grid; place-items: center;
+  color: #eaffff; background: rgba(7,24,34,.72); opacity: 0; pointer-events: none; backdrop-filter: blur(0); transition: .22s ease;
+}
+.route-overlay.show { opacity: 1; pointer-events: auto; backdrop-filter: blur(9px); }
+.route-panel { width: min(980px,100%); padding: 30px 32px 26px; background: linear-gradient(155deg,#173e52,#0c2939); border: 3px solid #7ed9dc; border-radius: 30px; box-shadow: 0 12px 0 #071c28,0 30px 80px rgba(0,0,0,.42); }
+.route-panel header { text-align: center; }
+.route-panel header span { color: #7ff5df; font: 900 12px "Outfit",sans-serif; letter-spacing: .16em; }
+.route-panel header h2 { margin: 6px 0 2px; color: white; font-size: 31px; }
+.route-panel header p { margin: 0; color: #9eb8c2; font-size: 13px; }
+.route-list { margin-top: 24px; display: grid; grid-template-columns: repeat(3,1fr); gap: 17px; }
+.route-card { min-height: 315px; padding: 20px; display: flex; flex-direction: column; align-items: flex-start; color: white; text-align: left; background: linear-gradient(155deg,rgba(41,92,111,.96),rgba(17,51,67,.96)); border: 3px solid color-mix(in srgb,var(--route-color),#31566a 32%); border-radius: 23px; box-shadow: 0 8px 0 #061c28; cursor: pointer; transition: .16s ease; }
+.route-card:hover { transform: translateY(-8px); border-color: var(--route-color); box-shadow: 0 16px 0 #061c28,0 24px 38px rgba(0,0,0,.25); }
+.route-card:active { transform: translateY(3px); box-shadow: 0 4px 0 #061c28; }
+.route-code { width: 70px; height: 54px; display: grid; place-items: center; color: #153547; background: var(--route-color); border-radius: 14px; font: 900 18px "Outfit",sans-serif; }
+.route-card small { margin-top: 18px; color: var(--route-color); font: 900 10px "Outfit",sans-serif; letter-spacing: .13em; }
+.route-card strong { margin-top: 3px; font-size: 23px; }
+.route-card p { min-height: 62px; margin: 8px 0 12px; color: #afc7ce; font-size: 13px; line-height: 1.5; }
+.route-card b { width: 100%; padding: 10px; color: #17394a; background: var(--route-color); border-radius: 11px; text-align: center; font-size: 13px; }
+.route-card em { width: 100%; margin-top: auto; padding-top: 17px; color: white; text-align: center; font-size: 15px; font-style: normal; font-weight: 900; }
+.route-back { display: block; margin: 23px auto 0; padding: 10px 18px; color: #a9c7cf; background: transparent; border: 0; font-size: 12px; font-weight: 900; cursor: pointer; }
+.route-back:hover { color: white; }
+
 .levelup-overlay {
   position: absolute; z-index: 30; inset: 0; display: grid; place-items: center; padding: 24px;
   background: rgba(20,48,68,.38); backdrop-filter: blur(0); opacity: 0; pointer-events: none; transition: .22s ease;
@@ -425,14 +451,17 @@ body { min-width: 320px; background: #92ddf7; }
   .icon-button { width: 62px; height: 62px; align-self: center; font-size: 25px; }
 
   .run-meter {
-    top: 105px; width: 510px; height: 70px; padding: 9px 15px;
-    grid-template-columns: 76px 1fr 1fr; gap: 13px; border-radius: 22px;
+    top: 105px; width: 660px; height: 70px; padding: 9px 15px;
+    grid-template-columns: 76px 1fr 1fr 138px; gap: 13px; border-radius: 22px;
   }
   .level-badge { height: 48px; border-radius: 14px; font-size: 19px; }
   .meter-group { gap: 4px 8px; }
   .meter-group small { font-size: 10px; }
   .meter-group b { font-size: 11px; }
   .meter-track { height: 13px; }
+  .route-status { height: 48px; padding: 7px 12px; border-radius: 14px; }
+  .route-status small { font-size: 9px; }
+  .route-status b { font-size: 13px; }
 
   .tutorial { top: 190px; padding: 13px 23px; border-radius: 19px; }
   .tutorial b { font-size: 18px; }
@@ -503,6 +532,8 @@ body { min-width: 320px; background: #92ddf7; }
   .mini-stat { min-width: 66px; }
   .mini-stat strong { font-size: 16px; }
   .run-meter { height: 56px; }
+  .route-status { display: none; }
+  .run-meter { grid-template-columns: 50px 1fr 1fr; }
   .level-badge { font-size: 16px; }
   .meter-group small { font-size: 9px; }
   .meter-group b { font-size: 10px; }
@@ -537,6 +568,11 @@ body { min-width: 320px; background: #92ddf7; }
   .factory-receipt { min-height: 420px; padding-inline: 4px; }
   .factory-receipt > strong { font-size: 45px; }
   .base-actions { grid-template-columns: 1fr; }
+  .route-overlay { padding: 9px; }
+  .route-panel { max-height: 96vh; padding: 19px 13px; overflow: auto; }
+  .route-panel header h2 { font-size: 23px; }
+  .route-list { grid-template-columns: 1fr; gap: 10px; }
+  .route-card { min-height: 215px; }
   .skill-card strong { font-size: 15px; }
   .skill-card p { font-size: 12px; }
 }

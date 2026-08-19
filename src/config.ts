@@ -1,4 +1,25 @@
-import type { CloudDefinition, CloudKind, ProcessingContract, RankDefinition, RunSkillDefinition, RunSkillId, UpgradeDefinition } from "./types";
+import type { CloudDefinition, CloudKind, FlightRouteDefinition, FlightRouteId, ProcessingContract, RankDefinition, RunSkillDefinition, RunSkillId, UpgradeDefinition } from "./types";
+
+export const FLIGHT_ROUTES: Record<FlightRouteId, FlightRouteDefinition> = {
+  tailwind: {
+    id: "tailwind", code: "WND", name: "순풍 회랑", color: "#6fe3ca",
+    description: "넓고 안정적인 항로입니다. 화물칸을 늘리고 구름이 빠르게 유입됩니다.",
+    effect: "화물 +4 · 구름 유입 20%↑", capacityBonus: 4, denseBonus: 0,
+    spawnInterval: .8, valueMultiplier: 1, frontDelay: 14, frontBonus: 1,
+  },
+  pressureMine: {
+    id: "pressureMine", code: "DNS", name: "고기압 광맥", color: "#ffd15e",
+    description: "고밀도 구름이 뭉치는 수익형 항로입니다. 어렵지만 단가가 높습니다.",
+    effect: "고밀도 +13% · 가치 15%↑", capacityBonus: 0, denseBonus: .13,
+    spawnInterval: 1, valueMultiplier: 1.15, frontDelay: 14, frontBonus: 1,
+  },
+  frontline: {
+    id: "frontline", code: "FRT", name: "전선 추적로", color: "#a98bff",
+    description: "구름 전선을 쫓는 고위험 항로입니다. 전선 보너스를 자주 노릴 수 있습니다.",
+    effect: "전선 조기 출현 · 보너스 50%↑", capacityBonus: 0, denseBonus: .04,
+    spawnInterval: .92, valueMultiplier: 1.05, frontDelay: 6, frontBonus: 1.5,
+  },
+};
 
 export const PROCESSING_CONTRACTS: ProcessingContract[] = [
   { id: "water", code: "H2O", name: "생수 병입 라인", description: "맑은 구름을 프리미엄 생수로 가공합니다.", multipliers: { cumulus: 1.45, rain: 1.05, electric: .85 } },
