@@ -189,20 +189,23 @@ if (import.meta.env.DEV) {
   (window as typeof window & { __cloudHarvestGame?: CloudHarvestGame }).__cloudHarvestGame = game;
 }
 
-const SKILL_NODE_LAYOUT: Record<RunSkillId, { x: number; y: number; branch: "vacuum" | "fever" | "automation" }> = {
+const SKILL_NODE_LAYOUT: Record<RunSkillId, { x: number; y: number; branch: "vacuum" | "fever" | "automation" | "hybrid" }> = {
   overclock: { x: 135, y: 150, branch: "vacuum" },
   wideIntake: { x: 82, y: 330, branch: "vacuum" },
-  blackHole: { x: 46, y: 510, branch: "vacuum" },
-  denseRadar: { x: 46, y: 690, branch: "vacuum" },
+  blackHole: { x: 46, y: 650, branch: "vacuum" },
+  denseRadar: { x: 46, y: 830, branch: "vacuum" },
   profitRain: { x: 445, y: 150, branch: "fever" },
   feverDrive: { x: 445, y: 330, branch: "fever" },
-  goldenStorm: { x: 445, y: 510, branch: "fever" },
-  yieldBoost: { x: 335, y: 690, branch: "fever" },
-  feverReserve: { x: 555, y: 690, branch: "fever" },
+  goldenStorm: { x: 445, y: 650, branch: "fever" },
+  yieldBoost: { x: 335, y: 830, branch: "fever" },
+  feverReserve: { x: 555, y: 830, branch: "fever" },
   twinDrone: { x: 755, y: 150, branch: "automation" },
   chainBurst: { x: 808, y: 330, branch: "automation" },
-  droneFleet: { x: 844, y: 510, branch: "automation" },
-  cargoBay: { x: 844, y: 690, branch: "automation" },
+  droneFleet: { x: 844, y: 650, branch: "automation" },
+  cargoBay: { x: 844, y: 830, branch: "automation" },
+  cycloneCore: { x: 245, y: 475, branch: "hybrid" },
+  cascadeGrid: { x: 445, y: 475, branch: "hybrid" },
+  stormDrones: { x: 645, y: 475, branch: "hybrid" },
 };
 
 function renderRunState(state: RunState): void {
@@ -285,7 +288,7 @@ function showLevelUp(pendingPicks: number): void {
     <div class="skill-tree-scroll-hint">SCROLL BLUEPRINT · CONNECT ADJACENT SYSTEMS</div>
     <div class="skill-tree-network">
       <div class="skill-tree-grid-glow"></div>
-      <svg class="skill-tree-links" viewBox="0 0 1080 850" aria-hidden="true">${connectors}</svg>
+      <svg class="skill-tree-links" viewBox="0 0 1080 1010" aria-hidden="true">${connectors}</svg>
       <div class="skill-tree-core"><small>DAY ${state.day} CORE</small><strong>${pendingPicks}</strong><span>POINTS</span></div>
       ${(Object.keys(SKILL_NODE_LAYOUT) as RunSkillId[]).map((id) => {
         const skill = RUN_SKILLS[id];
@@ -296,13 +299,13 @@ function showLevelUp(pendingPicks: number): void {
         const unlocked = skill.requirements?.every((requirement) => state.skills[requirement] >= RUN_SKILLS[requirement].maxStacks) ?? true;
         const available = game.canChooseSkill(id);
         const requirement = skill.requirements?.map((requirementId) => RUN_SKILLS[requirementId].name).join(" + ") ?? "중앙 코어";
-        const tier = skill.category === "evolution" ? "BREAKTHROUGH" : skill.category === "overdrive" ? "INFINITE" : "SYSTEM";
-        const action = maxed ? "MASTERED" : !unlocked ? `${requirement} 필요` : pendingPicks <= 0 ? "POINT 대기" : skill.category === "evolution" ? "궁극기 연결" : "1 POINT 투자";
+        const tier = skill.category === "evolution" ? "BREAKTHROUGH" : skill.category === "overdrive" ? "INFINITE" : skill.category === "synergy" ? "CROSS SYNERGY" : "SYSTEM";
+        const action = maxed ? "MASTERED" : !unlocked ? `${requirement} 필요` : pendingPicks <= 0 ? "POINT 대기" : skill.category === "evolution" ? "궁극기 연결" : skill.category === "synergy" ? "교차 시스템 연결" : "1 POINT 투자";
         const pips = finite
           ? Array.from({ length: skill.maxStacks }, (_, index) => `<i class="${index < stack ? "on" : ""}"></i>`).join("")
           : `<i class="infinite">∞</i><b>+${stack}</b>`;
         return `<button class="skill-node network-node ${skill.category} branch-${layout.branch} ${stack > 0 ? "invested" : ""} ${maxed ? "maxed" : ""} ${!unlocked ? "locked" : ""}" data-skill="${id}" style="--skill-color:${skill.color};left:${layout.x}px;top:${layout.y}px" ${available ? "" : "disabled"} title="${skill.description}">
-          <span class="skill-node-icon">${skill.icon}</span>
+          <span class="skill-node-icon" data-icon="${skill.icon}">${skill.icon}</span>
           <span class="skill-node-copy"><small>${tier}</small><strong>${skill.name}</strong><p>${skill.description}</p></span>
           <span class="skill-node-pips">${pips}</span><b>${action}</b>
         </button>`;

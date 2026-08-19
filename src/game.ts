@@ -32,6 +32,7 @@ const freshRunState = (day = 1): RunState => ({
     overclock: 0, wideIntake: 0, chainBurst: 0, profitRain: 0, feverDrive: 0, twinDrone: 0,
     blackHole: 0, goldenStorm: 0, droneFleet: 0,
     cargoBay: 0, yieldBoost: 0, denseRadar: 0, feverReserve: 0,
+    cycloneCore: 0, cascadeGrid: 0, stormDrones: 0,
   },
 });
 
@@ -430,7 +431,8 @@ export class CloudHarvestGame {
         } else this.onToast("피버 종료 — 다시 게이지를 채우세요!");
       }
     }
-    const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.blackHole * 80;
+    const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.blackHole * 80
+      + (this.run.feverActive ? this.run.skills.cycloneCore * 120 : 0);
     const basePower = 36 + this.state.levels.power * 15;
     const skillPower = (1 + this.run.skills.overclock * 0.45) * (1 + this.run.skills.blackHole * .25);
     const feverPower = this.run.feverActive ? (this.run.skills.goldenStorm ? 3.6 : 2.65) : 1;
@@ -620,7 +622,8 @@ export class CloudHarvestGame {
   }
 
   private updateDrones(dt: number): void {
-    const count = this.state.levels.drone + this.run.skills.twinDrone + this.run.skills.droneFleet * 3;
+    const stormDroneBonus = this.run.feverActive ? this.run.skills.stormDrones * 2 : 0;
+    const count = this.state.levels.drone + this.run.skills.twinDrone + this.run.skills.droneFleet * 3 + stormDroneBonus;
     if (count <= 0 || this.clouds.length === 0) return;
     for (let index = 0; index < Math.min(6, count); index += 1) {
       const angle = this.droneAngle + index * (Math.PI * 2 / Math.min(6, count));
@@ -634,7 +637,8 @@ export class CloudHarvestGame {
         if (distance < nearest) { nearest = distance; target = cloud; }
       }
       if (!target) continue;
-      target.health -= dt * (7 + count * 3 + this.run.skills.droneFleet * 12);
+      const stormDronePower = this.run.feverActive && this.run.skills.stormDrones ? 3 : 1;
+      target.health -= dt * (7 + count * 3 + this.run.skills.droneFleet * 12) * stormDronePower;
       target.hurtFlash = 0.6;
       if (target.health <= 0) this.collectCloud(target);
       if (Math.random() < dt * 12) this.particles.push({ x, y, vx: (target.x - x) * 1.4, vy: (target.y - y) * 1.4, life: .26, maxLife: .26, size: 2, color: "#6ff6e2" });
@@ -698,9 +702,10 @@ export class CloudHarvestGame {
     this.burst(cloud.x, cloud.y, "#ffd15e", 8 + Math.min(14, this.combo), 330);
     this.shockwaves.push({ x: cloud.x, y: cloud.y, radius: 12, life: .42, maxLife: .42, color: definition.color });
     this.shockwaves.push({ x: cloud.x, y: cloud.y, radius: 3, life: .22, maxLife: .22, color: "#ffffff" });
-    this.shake = Math.min(24, 4 + this.combo * .8 + Math.min(7, cascadeDepth * 1.4));
+    const harvestShake = Math.min(24, 4 + this.combo * .8 + Math.min(7, cascadeDepth * 1.4));
+    this.shake = this.run.feverActive ? Math.min(.8, harvestShake) : harvestShake;
     this.impactFlash = Math.min(.92, .22 + this.combo * .025 + cascadeDepth * .025);
-    this.impactFreeze = Math.min(.075, .025 + this.combo * .002);
+    this.impactFreeze = this.run.feverActive ? 0 : Math.min(.075, .025 + this.combo * .002);
     this.comboPunch = 1;
     this.playTone(290 + Math.min(590, this.combo * 31) + definition.value * 2 + Math.min(480, cascadeDepth * 58), cascadeDepth > 0 ? .04 : .055);
 
@@ -709,7 +714,8 @@ export class CloudHarvestGame {
       this.texts.push({ x: cloud.x, y: cloud.y - 34, text: `${milestone} ×${this.cascadeCount}!`, color: "#fff36f", life: 1.35 });
       this.shockwaves.push({ x: cloud.x, y: cloud.y, radius: 24, life: .78, maxLife: .78, color: "#fff36f" });
       this.burst(cloud.x, cloud.y, "#fff36f", 16 + Math.min(34, this.cascadeCount), 390);
-      this.shake = Math.min(28, 12 + this.cascadeCount * .42);
+      const milestoneShake = Math.min(28, 12 + this.cascadeCount * .42);
+      this.shake = this.run.feverActive ? Math.min(.8, milestoneShake) : milestoneShake;
       this.impactFlash = Math.min(1, .48 + this.cascadeCount * .012);
     }
 
@@ -719,11 +725,11 @@ export class CloudHarvestGame {
 
     const chainStacks = this.run.skills.chainBurst;
     if (chainStacks > 0) {
-      const chainRadius = 105 + chainStacks * 35 + this.run.skills.blackHole * 120;
+      const chainRadius = 105 + chainStacks * 35 + this.run.skills.blackHole * 120 + this.run.skills.cascadeGrid * 95;
       for (const nearby of this.clouds) {
         const distance = Math.hypot(nearby.x - cloud.x, nearby.y - cloud.y);
         if (distance < chainRadius) {
-          nearby.health -= 11 + chainStacks * 12 + this.run.skills.blackHole * 25;
+          nearby.health -= 11 + chainStacks * 12 + this.run.skills.blackHole * 25 + this.run.skills.cascadeGrid * 38;
           nearby.hurtFlash = 1;
           const dx = nearby.x - cloud.x;
           const dy = nearby.y - cloud.y;
@@ -748,7 +754,7 @@ export class CloudHarvestGame {
     cloud.hurtFlash = 1;
     this.cascadeCount = Math.max(1, this.cascadeCount);
     this.cascadeTimer = .72;
-    const tempo = Math.max(.036, .068 - Math.min(5, depth) * .005);
+    const tempo = Math.max(.028, .068 - Math.min(5, depth) * .005 - this.run.skills.cascadeGrid * .014);
     const tailDelay = this.cascadeQueue.reduce((latest, item) => Math.max(latest, item.delay), 0);
     this.cascadeQueue.push({ cloudId: cloud.id, delay: tailDelay + tempo + Math.random() * .012, depth });
   }
@@ -826,9 +832,9 @@ export class CloudHarvestGame {
     this.texts.push({ x, y: y - 35, text: `PRESSURE SURGE  +${bonus}`, color: "#fff36f", life: 1.45 });
     this.shockwaves.push({ x, y, radius: 28, life: .78, maxLife: .78, color: "#fff36f" });
     this.burst(x, y, "#fff36f", 42, 390);
-    this.shake = 20;
+    this.shake = this.run.feverActive ? .8 : 20;
     this.impactFlash = .9;
-    this.impactFreeze = .085;
+    this.impactFreeze = this.run.feverActive ? 0 : .085;
     this.playChord();
   }
 
@@ -848,16 +854,16 @@ export class CloudHarvestGame {
     this.shockwaves.push({ x, y, radius: 16, life: .72, maxLife: .72, color: "#fff36f" });
     this.burst(x, y, "#71ffe0", 65, 430);
     this.burst(x, y, "#fff36f", 35, 360);
-    this.shake = 22;
+    this.shake = this.run.feverActive ? .8 : 22;
     this.impactFlash = 1;
-    this.impactFreeze = .1;
+    this.impactFreeze = this.run.feverActive ? 0 : .1;
     this.playChord();
   }
 
   private startFever(): void {
     this.run.feverActive = true;
     this.run.feverSeconds = 7 + this.run.skills.feverDrive * 2.5 + this.run.skills.goldenStorm * 3 + this.run.skills.feverReserve * .8;
-    this.shake = 18;
+    this.shake = 1.2;
     this.impactFlash = .85;
     this.comboPunch = 1;
     this.onToast(this.run.skills.goldenStorm ? "황금 폭풍! 흡입력 360% · 가치 150%" : "SKY FEVER! 흡입력 265%", "success");
@@ -939,8 +945,9 @@ export class CloudHarvestGame {
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.width, this.height);
-    const sx = this.shake ? (Math.random() - .5) * this.shake : 0;
-    const sy = this.shake ? (Math.random() - .5) * this.shake : 0;
+    const cameraShake = this.run.feverActive ? Math.min(.8, this.shake) : this.shake;
+    const sx = cameraShake ? (this.run.feverActive ? Math.sin(time * 24) * cameraShake * .45 : (Math.random() - .5) * cameraShake) : 0;
+    const sy = cameraShake ? (this.run.feverActive ? Math.cos(time * 21) * cameraShake * .35 : (Math.random() - .5) * cameraShake) : 0;
     ctx.save();
     ctx.translate(sx, sy);
     if (this.atFactory) {
@@ -1402,7 +1409,8 @@ export class CloudHarvestGame {
   }
 
   private drawDrones(ctx: CanvasRenderingContext2D): void {
-    const count = Math.min(6, this.state.levels.drone + this.run.skills.twinDrone + this.run.skills.droneFleet * 3);
+    const stormDroneBonus = this.run.feverActive ? this.run.skills.stormDrones * 2 : 0;
+    const count = Math.min(6, this.state.levels.drone + this.run.skills.twinDrone + this.run.skills.droneFleet * 3 + stormDroneBonus);
     for (let i = 0; i < count; i += 1) {
       const angle = this.droneAngle + i * Math.PI * 2 / count;
       const x = this.player.x + Math.cos(angle) * 70; const y = this.player.y + Math.sin(angle) * 50;
@@ -1428,13 +1436,15 @@ export class CloudHarvestGame {
   }
 
   private getMaxClouds(): number {
-    return 22 + this.state.rank * 7 + (this.run.flight - 1) * 6 + this.state.levels.radius * 3 + this.run.skills.wideIntake * 4 + this.run.skills.blackHole * 8;
+    return 22 + this.state.rank * 7 + (this.run.flight - 1) * 6 + this.state.levels.radius * 3 + this.run.skills.wideIntake * 4 + this.run.skills.blackHole * 8
+      + (this.run.feverActive ? this.run.skills.cycloneCore * 6 : 0);
   }
 
   private getCloudSpawnInterval(): number {
     const flightPressure = this.run.flight - 1;
     const permanentInduction = Math.max(.58, 1 - this.state.levels.radius * .05);
-    const runInduction = Math.max(.58, 1 - this.run.skills.wideIntake * .08 - this.run.skills.blackHole * .15);
+    const cycloneInduction = this.run.feverActive ? this.run.skills.cycloneCore * .45 : 0;
+    const runInduction = Math.max(.4, 1 - this.run.skills.wideIntake * .08 - this.run.skills.blackHole * .15 - cycloneInduction);
     return Math.max(.11, (0.78 - this.state.rank * .08) * FLIGHT_ROUTES[this.run.routeId].spawnInterval * (1 - flightPressure * .14) * permanentInduction * runInduction);
   }
 

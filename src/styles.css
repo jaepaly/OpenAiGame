@@ -424,9 +424,9 @@ body { min-width: 320px; background: #92ddf7; }
 .skill-tree-legend > span em { color: #e7f4f5; font-size: 12px; font-style: normal; font-weight: 900; }
 .skill-tree-legend > strong { margin-left: auto; color: #fff36f; font: 900 12px "Outfit",sans-serif; letter-spacing: .08em; }
 .skill-tree-scroll-hint { min-width: 1080px; padding: 8px; color: #7396a1; background: #0d2a38; border-bottom: 1px solid #244b5b; font: 900 10px "Outfit",sans-serif; letter-spacing: .16em; text-align: center; }
-.skill-tree-network { position: relative; width: 1080px; height: 850px; margin: 0 auto; overflow: hidden; background: radial-gradient(circle at 50% 12%,rgba(255,243,111,.11),transparent 23%),radial-gradient(circle at 18% 50%,rgba(85,199,223,.11),transparent 30%),radial-gradient(circle at 82% 50%,rgba(121,240,189,.1),transparent 30%),linear-gradient(180deg,#0d2a39,#071c27); }
+.skill-tree-network { position: relative; width: 1080px; height: 1010px; margin: 0 auto; overflow: hidden; background: radial-gradient(circle at 50% 12%,rgba(255,243,111,.11),transparent 23%),radial-gradient(circle at 18% 50%,rgba(85,199,223,.11),transparent 30%),radial-gradient(circle at 82% 50%,rgba(121,240,189,.1),transparent 30%),linear-gradient(180deg,#0d2a39,#071c27); }
 .skill-tree-grid-glow { position: absolute; inset: 0; opacity: .42; background-image: linear-gradient(rgba(108,174,185,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(108,174,185,.12) 1px,transparent 1px),radial-gradient(circle,rgba(142,216,220,.33) 1px,transparent 1.5px); background-size: 40px 40px,40px 40px,20px 20px; mask-image: linear-gradient(to bottom,#000 75%,transparent); }
-.skill-tree-links { position: absolute; inset: 0; width: 1080px; height: 850px; overflow: visible; }
+.skill-tree-links { position: absolute; inset: 0; width: 1080px; height: 1010px; overflow: visible; }
 .skill-link { stroke: #294957; stroke-width: 8; stroke-linecap: round; stroke-dasharray: 4 13; filter: drop-shadow(0 2px 0 #071923); transition: .2s ease; }
 .skill-link.active { stroke: var(--link-color); stroke-width: 10; stroke-dasharray: none; filter: drop-shadow(0 0 8px color-mix(in srgb,var(--link-color),transparent 22%)); }
 .skill-tree-core { position: absolute; left: 450px; top: 24px; z-index: 3; width: 180px; height: 118px; display: grid; grid-template-columns: 1fr 64px; grid-template-rows: 30px 1fr; align-items: center; color: white; background: linear-gradient(145deg,#17495b,#0c2b3a); border: 4px solid #fff36f; border-radius: 25px; box-shadow: 0 0 35px rgba(255,243,111,.23),0 7px 0 #071923; }
@@ -450,6 +450,11 @@ body { min-width: 320px; background: #92ddf7; }
 .network-node.invested > b { color: #102c39; background: var(--skill-color); }
 .network-node.evolution { border-width: 4px; box-shadow: 0 7px 0 #061923,0 0 30px color-mix(in srgb,var(--skill-color),transparent 72%); }
 .network-node.evolution::after { content: "ULT"; position: absolute; top: -10px; right: 13px; padding: 3px 8px; color: #102c39; background: var(--skill-color); border: 2px solid #eaffff; border-radius: 7px; font: 900 9px "Outfit",sans-serif; }
+.network-node.synergy { border-width: 4px; border-color: var(--skill-color); background: linear-gradient(145deg,#25364a,#102c3a); box-shadow: 0 7px 0 #061923,0 0 26px color-mix(in srgb,var(--skill-color),transparent 70%); }
+.network-node.synergy::after { content: "LINK"; position: absolute; top: -10px; right: 13px; padding: 3px 8px; color: #102c39; background: var(--skill-color); border: 2px solid #eaffff; border-radius: 7px; font: 900 9px "Outfit",sans-serif; }
+.network-node.branch-hybrid .skill-node-icon { transform: rotate(45deg); border-radius: 13px; }
+.network-node.branch-hybrid .skill-node-icon { font-size: 0; }
+.network-node.branch-hybrid .skill-node-icon::after { content: attr(data-icon); transform: rotate(-45deg); font-size: 14px; }
 .network-node.overdrive { border-style: dashed; }
 .network-node.maxed > b { color: white; background: #2a9b7e; }
 .network-node.locked { opacity: .42; filter: grayscale(.72); }
@@ -506,6 +511,7 @@ body { min-width: 320px; background: #92ddf7; }
   .skill-card strong { font-size: 13px; }
   .skill-card p { font-size: 9px; }
 }
+
 
 
 /* Large, game-first HUD sizing: readable from a normal desktop viewing distance. */

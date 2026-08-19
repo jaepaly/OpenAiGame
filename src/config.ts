@@ -168,6 +168,9 @@ export const RUN_SKILLS: Record<RunSkillId, RunSkillDefinition> = {
   yieldBoost: { id: "yieldBoost", name: "수익 오버드라이브", description: "모든 구름의 가치가 추가로 10% 증가합니다.", icon: "YLD+", color: "#ffd15e", maxStacks: Number.POSITIVE_INFINITY, category: "overdrive", requirements: ["goldenStorm"] },
   denseRadar: { id: "denseRadar", name: "고밀도 레이더", description: "고밀도 구름 출현 확률이 추가로 3% 증가합니다.", icon: "DNS+", color: "#ff9b69", maxStacks: Number.POSITIVE_INFINITY, category: "overdrive", requirements: ["blackHole"] },
   feverReserve: { id: "feverReserve", name: "피버 예비전력", description: "피버 지속시간이 추가로 0.8초 증가합니다.", icon: "FVR+", color: "#b695ff", maxStacks: Number.POSITIVE_INFINITY, category: "overdrive", requirements: ["goldenStorm"] },
+  cycloneCore: { id: "cycloneCore", name: "사이클론 코어", description: "피버 중 흡입장이 확장되고 구름 유입 속도가 45% 증가합니다.", icon: "CYC", color: "#73e8ff", maxStacks: 1, category: "synergy", requirements: ["wideIntake", "feverDrive"] },
+  cascadeGrid: { id: "cascadeGrid", name: "연쇄 수확망", description: "연쇄 폭발의 범위와 피해가 크게 증가하고 폭발 박자가 빨라집니다.", icon: "NET", color: "#ffad66", maxStacks: 1, category: "synergy", requirements: ["wideIntake", "chainBurst"] },
+  stormDrones: { id: "stormDrones", name: "폭풍 드론 프로토콜", description: "피버 중 지원 드론 2대가 추가되고 분해 속도가 세 배가 됩니다.", icon: "SDR", color: "#8dffd1", maxStacks: 1, category: "synergy", requirements: ["feverDrive", "chainBurst"] },
 };
 
 export const SKILL_TREE_BRANCHES: SkillTreeBranch[] = [
