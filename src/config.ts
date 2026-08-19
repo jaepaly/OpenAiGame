@@ -157,11 +157,11 @@ export const UPGRADES: UpgradeDefinition[] = [
 export const RUN_SKILLS: Record<RunSkillId, RunSkillDefinition> = {
   overclock: { id: "overclock", name: "터빈 과충전", description: "흡입력이 45% 강해집니다.", icon: "OVR", color: "#ff8a5b", maxStacks: 3, category: "core" },
   wideIntake: { id: "wideIntake", name: "광역 흡입구", description: "흡입 범위가 넓어지고 단계마다 구름 최대 수 +4, 유입 속도 +8%를 얻습니다.", icon: "RNG", color: "#55c7df", maxStacks: 3, category: "core", requirements: ["overclock"] },
-  chainBurst: { id: "chainBurst", name: "연쇄 기압폭발", description: "구름 수확 시 주변 구름도 피해를 입습니다.", icon: "CHN", color: "#ffca5c", maxStacks: 3, category: "core", requirements: ["twinDrone"] },
+  chainBurst: { id: "chainBurst", name: "연쇄 기압폭발", description: "수확 폭발이 주변 구름을 차례로 터뜨려 실제 연쇄 수확을 일으킵니다.", icon: "CHN", color: "#ffca5c", maxStacks: 3, category: "core", requirements: ["twinDrone"] },
   profitRain: { id: "profitRain", name: "황금 빗방울", description: "구름 가치가 40% 증가합니다.", icon: "YLD", color: "#f6c74f", maxStacks: 3, category: "core" },
   feverDrive: { id: "feverDrive", name: "피버 드라이브", description: "피버 충전 속도와 지속시간이 증가합니다.", icon: "FVR", color: "#a788ff", maxStacks: 3, category: "core", requirements: ["profitRain"] },
   twinDrone: { id: "twinDrone", name: "지원 드론", description: "자동으로 구름을 분해하는 드론이 출격합니다.", icon: "DRN", color: "#65d6b4", maxStacks: 3, category: "core" },
-  blackHole: { id: "blackHole", name: "블랙홀 압축기", description: "흡입장이 거대해지고 수확 폭발이 넓게 연쇄됩니다.", icon: "BLK", color: "#45e1df", maxStacks: 1, category: "evolution", requirements: ["wideIntake"] },
+  blackHole: { id: "blackHole", name: "블랙홀 압축기", description: "흡입장이 거대해지고 반 화면의 구름을 연속 붕괴시킵니다.", icon: "BLK", color: "#45e1df", maxStacks: 1, category: "evolution", requirements: ["wideIntake"] },
   goldenStorm: { id: "goldenStorm", name: "황금 폭풍", description: "피버가 강화되고 피버 중 모든 구름 가치가 50% 증가합니다.", icon: "GLD", color: "#ffe05f", maxStacks: 1, category: "evolution", requirements: ["feverDrive"] },
   droneFleet: { id: "droneFleet", name: "과급 드론 편대", description: "과충전 드론 3대가 추가 출격해 구름을 집중 분해합니다.", icon: "FLT", color: "#79f0bd", maxStacks: 1, category: "evolution", requirements: ["chainBurst"] },
   cargoBay: { id: "cargoBay", name: "화물칸 오버드라이브", description: "이번 하루의 화물 용량이 6칸 증가합니다.", icon: "CRG", color: "#71d8ef", maxStacks: Number.POSITIVE_INFINITY, category: "overdrive", requirements: ["droneFleet"] },
