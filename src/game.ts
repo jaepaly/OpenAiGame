@@ -67,6 +67,8 @@ export class CloudHarvestGame {
   private pausedForLevel = false;
   private player = { x: 480, y: 380, targetX: 480, targetY: 380 };
   private pointer = { x: 480, y: 380, active: false, visible: false };
+  private aimAngle = 0;
+  private aimInitialized = false;
   private playerVelocity = { x: 0, y: 0 };
   private keys = new Set<string>();
   private touchDirect = false;
@@ -423,8 +425,29 @@ export class CloudHarvestGame {
   }
 
   private getAimAngle(): number {
-    if (!this.pointer.visible) return 0;
-    return Math.atan2(this.pointer.y - this.player.y, this.pointer.x - this.player.x);
+    return this.aimAngle;
+  }
+
+  private updateAimDirection(dt: number): void {
+    if (!this.pointer.visible || this.touchDirect) return;
+    const dx = this.pointer.x - this.player.x;
+    const dy = this.pointer.y - this.player.y;
+    const distance = Math.hypot(dx, dy);
+    const aimDeadZone = 82;
+    if (distance < aimDeadZone) return;
+
+    const targetAngle = Math.atan2(dy, dx);
+    if (!this.aimInitialized) {
+      this.aimAngle = targetAngle;
+      this.aimInitialized = true;
+      return;
+    }
+
+    const delta = Math.atan2(Math.sin(targetAngle - this.aimAngle), Math.cos(targetAngle - this.aimAngle));
+    const easedTurn = delta * (1 - Math.exp(-dt * 10));
+    const maxTurn = 6.5 * dt;
+    this.aimAngle += Math.max(-maxTurn, Math.min(maxTurn, easedTurn));
+    this.aimAngle = Math.atan2(Math.sin(this.aimAngle), Math.cos(this.aimAngle));
   }
 
   private getSuctionHalfAngle(): number {
@@ -534,6 +557,7 @@ export class CloudHarvestGame {
     this.player.targetX = Math.max(55, Math.min(this.width - 55, this.player.targetX));
     this.player.targetY = Math.max(100, Math.min(this.height - 150, this.player.targetY));
     this.updatePlayerMovement(dt);
+    this.updateAimDirection(dt);
     this.overload = Math.max(0, this.overload - dt);
     this.shockToastCooldown = Math.max(0, this.shockToastCooldown - dt);
     this.comboTimer -= dt;
@@ -1632,11 +1656,9 @@ export class CloudHarvestGame {
     const shipScale = 1 + Math.min(.25, totalParts * .018);
     ctx.save();
     ctx.translate(this.player.x, this.player.y + Math.sin(time * 4) * (this.atFactory ? .6 : 3));
-    if (!this.atFactory && !this.returning && !this.launching && this.pointer.visible) ctx.rotate(this.getAimAngle());
+    if (!this.atFactory && !this.returning && !this.launching && this.pointer.visible && !this.touchDirect) ctx.rotate(this.getAimAngle());
     ctx.scale(shipScale, shipScale);
     if (this.run.feverActive) { ctx.shadowColor = "#fff36f"; ctx.shadowBlur = 34; }
-
-    ctx.fillStyle = "rgba(24,65,86,.2)"; ctx.beginPath(); ctx.ellipse(0, 34, 57, 13, 0, 0, Math.PI * 2); ctx.fill();
 
     if (insulationLevel > 0) {
       ctx.strokeStyle = `rgba(134,232,255,${.36 + insulationLevel * .2})`; ctx.lineWidth = 3 + insulationLevel;
