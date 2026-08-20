@@ -116,6 +116,7 @@ app.innerHTML = `
           <button class="skill-tree-close" id="skillTreeCloseButton">기지로 돌아가기</button>
         </div>
       </section>
+      <aside class="skill-hover-card" id="skillHoverCard" aria-hidden="true"></aside>
     </section>
   </main>
 `;
@@ -155,6 +156,7 @@ const levelUpTitle = required<HTMLElement>("#levelUpTitle");
 const levelUpDescription = required<HTMLElement>("#levelUpDescription");
 const skillPointCount = required<HTMLElement>("#skillPointCount");
 const skillTreeCloseButton = required<HTMLButtonElement>("#skillTreeCloseButton");
+const skillHoverCard = required<HTMLElement>("#skillHoverCard");
 const garageButton = required<HTMLButtonElement>("#garageButton");
 const garageOverlay = required<HTMLElement>("#garageOverlay");
 const garageCloseButton = required<HTMLButtonElement>("#garageCloseButton");
@@ -366,7 +368,6 @@ function showLevelUp(_pendingPicks: number): void {
           <span class="skill-node-icon" data-icon="${skill.icon}">${skill.icon}</span>
           <span class="skill-node-copy"><small>${tier}</small><strong>${skill.name}</strong><p>${skill.description}</p></span>
           <span class="skill-node-pips">${pips}</span><b>${action}</b>
-          <span class="skill-tooltip"><small>${tier}</small><strong>${skill.name}</strong><p>${skill.description}</p><b>비용 ${skillCostLabel(id)}</b><em>${requirement === "중앙 코어" ? "시작 노드" : `선행: ${requirement}`}</em></span>
         </button>`;
       }).join("")}
     </div>`;
@@ -450,8 +451,13 @@ upgradeList.addEventListener("click", (event) => {
 
 promoteButton.addEventListener("click", () => game.promote());
 soundButton.addEventListener("click", () => game.toggleSound());
-garageButton.addEventListener("click", () => garageOverlay.classList.add("show"));
+const openGarage = () => {
+  document.body.classList.add("garage-open");
+  garageOverlay.classList.add("show");
+};
+garageButton.addEventListener("click", openGarage);
 const closeGarage = () => {
+  document.body.classList.remove("garage-open");
   garageOverlay.classList.remove("show");
 };
 garageCloseButton.addEventListener("click", closeGarage);
@@ -509,7 +515,7 @@ researchList.addEventListener("click", (event) => {
 });
 baseGarageButton.addEventListener("click", () => {
   factoryOverlay.classList.remove("show");
-  garageOverlay.classList.add("show");
+  openGarage();
 });
 launchButton.addEventListener("click", () => {
   routeList.innerHTML = Object.values(FLIGHT_ROUTES).map((route) => `
@@ -544,10 +550,37 @@ skillChoices.addEventListener("click", (event) => {
   if (!button) return;
   skillChoices.querySelectorAll<HTMLButtonElement>("button").forEach((choice) => { choice.disabled = true; });
   game.chooseSkill(button.dataset.skill as RunSkillId);
+  skillHoverCard.classList.remove("show");
+});
+const positionSkillHover = (event: PointerEvent) => {
+  const rect = skillHoverCard.getBoundingClientRect();
+  const left = Math.max(12, Math.min(window.innerWidth - rect.width - 12, event.clientX + 20));
+  const top = Math.max(12, Math.min(window.innerHeight - rect.height - 12, event.clientY + 18));
+  skillHoverCard.style.left = `${left}px`;
+  skillHoverCard.style.top = `${top}px`;
+};
+skillChoices.addEventListener("pointerover", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-skill]");
+  if (!button) return;
+  const id = button.dataset.skill as RunSkillId;
+  const skill = RUN_SKILLS[id];
+  const requirement = skill.requirements?.map((requirementId) => RUN_SKILLS[requirementId].name).join(" + ") ?? "시작 노드";
+  const tier = skill.category === "evolution" ? "BREAKTHROUGH" : skill.category === "overdrive" ? "ADVANCED SYSTEM" : skill.category === "synergy" ? "CROSS SYNERGY" : "SYSTEM";
+  skillHoverCard.style.setProperty("--skill-color", skill.color);
+  skillHoverCard.innerHTML = `<small>${tier}</small><strong>${skill.name}</strong><p>${skill.description}</p><b>비용 ${skillCostLabel(id)}</b><em>${requirement === "시작 노드" ? requirement : `선행: ${requirement}`}</em>`;
+  skillHoverCard.classList.add("show");
+  positionSkillHover(event);
+});
+skillChoices.addEventListener("pointermove", (event) => { if (skillHoverCard.classList.contains("show")) positionSkillHover(event); });
+skillChoices.addEventListener("pointerout", (event) => {
+  const from = (event.target as HTMLElement).closest("[data-skill]");
+  const to = (event.relatedTarget as HTMLElement | null)?.closest?.("[data-skill]");
+  if (from && from !== to) skillHoverCard.classList.remove("show");
 });
 skillTreeCloseButton.addEventListener("click", () => {
   game.closeSkillTree();
   levelUpOverlay.classList.remove("show");
+  skillHoverCard.classList.remove("show");
 });
 skillTreeButton.addEventListener("click", () => game.openSkillTree());
 resetButton.addEventListener("click", () => {

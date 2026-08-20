@@ -219,6 +219,13 @@ body { min-width: 320px; background: #92ddf7; }
   background: rgba(16,47,65,.45); opacity: 0; pointer-events: none; backdrop-filter: blur(0); transition: .2s ease;
 }
 .garage-overlay.show { opacity: 1; pointer-events: auto; backdrop-filter: blur(8px); }
+body.garage-open .game-hud-top,
+body.garage-open .run-meter,
+body.garage-open .tutorial,
+body.garage-open .cloud-legend,
+body.garage-open .promotion-card,
+body.garage-open .return-button,
+body.garage-open .base-hub { opacity: 0 !important; pointer-events: none !important; }
 .garage-panel {
   width: min(880px,100%); padding: 24px 26px 28px; color: var(--ink); background: linear-gradient(165deg,#f9ffff,#dff3f4);
   border: 4px solid white; border-radius: 30px; box-shadow: 0 12px 0 rgba(23,75,98,.27),0 30px 70px rgba(14,49,67,.3);
@@ -507,6 +514,13 @@ body { min-width: 320px; background: #92ddf7; }
 .network-node:disabled { cursor: default; }
 .skill-tree-close { position: static; display: block; width: min(520px,100%); min-height: 58px; margin: 26px auto 5px; padding: 12px 18px; color: white; background: #285e73; border: 3px solid #75c8d2; border-radius: 15px; box-shadow: 0 5px 0 #17394a; font-size: 17px; font-weight: 900; cursor: pointer; }
 .skill-tree-close:hover { transform: translateY(-3px); background: #33758c; }
+.skill-hover-card { position: fixed; z-index: 80; left: 0; top: 0; width: min(330px,calc(100vw - 24px)); padding: 16px 18px; display: flex; flex-direction: column; color: #eaffff; background: rgba(5,24,34,.98); border: 3px solid var(--skill-color,#7ff5df); border-radius: 18px; box-shadow: 0 9px 0 #03131c,0 20px 40px rgba(0,0,0,.42); opacity: 0; pointer-events: none; transform: translateY(7px) scale(.97); transition: opacity .12s ease,transform .12s ease; }
+.skill-hover-card.show { opacity: 1; transform: translateY(0) scale(1); }
+.skill-hover-card small { color: var(--skill-color); font: 900 11px "Outfit",sans-serif; letter-spacing: .13em; }
+.skill-hover-card strong { margin-top: 4px; color: white; font-size: 21px; }
+.skill-hover-card p { margin: 8px 0 10px; color: #c0d7dc; font-size: 14px; line-height: 1.5; }
+.skill-hover-card b { padding: 8px 10px; color: #102c39; background: var(--skill-color); border-radius: 9px; font-size: 13px; }
+.skill-hover-card em { margin-top: 7px; color: #9bb7be; font-size: 12px; font-style: normal; }
 
 @media (max-width: 900px) {
   .brand h1 { font-size: 17px; }
