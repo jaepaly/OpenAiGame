@@ -512,6 +512,7 @@ export class CloudHarvestGame {
       const formed = this.formationCooldown <= 0 && maxClouds - this.clouds.length >= 4 && Math.random() < formationChance
         ? this.spawnFormation(maxClouds - this.clouds.length)
         : false;
+      if (!formed) this.spawnCloud(false);
       this.spawnTimer = this.getCloudSpawnInterval() * (formed ? 1.8 : 1);
     }
 
@@ -604,6 +605,7 @@ export class CloudHarvestGame {
     this.updateDrones(dt);
     for (const cloud of collected) if (this.clouds.some((item) => item.id === cloud.id)) this.collectCloud(cloud);
     this.updateCascadeQueue(dt);
+    this.replenishCloudFloor();
 
     this.particles = this.particles.filter((particle) => {
       particle.life -= dt;
@@ -1751,6 +1753,18 @@ export class CloudHarvestGame {
   private getMaxClouds(): number {
     return 22 + this.state.rank * 7 + (this.run.flight - 1) * 6 + this.state.levels.radius * 3 + this.run.skills.wideIntake * 4 + this.run.skills.blackHole * 8
       + (this.run.feverActive ? this.run.skills.cycloneCore * 6 : 0);
+  }
+
+  private getMinimumClouds(): number {
+    const maxClouds = this.getMaxClouds();
+    const ratio = this.run.feverActive ? .78 : .55;
+    const feverReserve = this.run.feverActive ? 3 : 0;
+    return Math.min(maxClouds, Math.max(12, Math.ceil(maxClouds * ratio) + feverReserve));
+  }
+
+  private replenishCloudFloor(): void {
+    const minimumClouds = this.getMinimumClouds();
+    while (this.clouds.length < minimumClouds) this.spawnCloud(false);
   }
 
   private getCloudSpawnInterval(): number {
