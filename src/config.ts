@@ -40,9 +40,12 @@ export const FLIGHT_ROUTES: Record<FlightRouteId, FlightRouteDefinition> = {
 };
 
 export const PROCESSING_CONTRACTS: ProcessingContract[] = [
-  { id: "water", code: "H2O", name: "생수 병입 라인", description: "맑은 구름을 프리미엄 생수로 가공합니다.", multipliers: { cumulus: 1.45, rain: 1.05, electric: .85 } },
-  { id: "climate", code: "CLM", name: "기상 솔루션", description: "비구름 중심의 농업·기상 서비스 계약입니다.", multipliers: { cumulus: 1.12, rain: 1.55, electric: 1.05 } },
-  { id: "energy", code: "NRG", name: "에너지 연구소", description: "전기구름을 고밀도 에너지 셀로 변환합니다.", multipliers: { cumulus: .9, rain: 1.2, electric: 1.9 } },
+  { id: "water", code: "H2O", name: "생수 병입 라인", description: "맑은 구름을 프리미엄 생수로 가공합니다.", multipliers: { cumulus: 1.45, rain: 1.05, electric: .85, ice: .82, solar: .72, aurora: .68 } },
+  { id: "climate", code: "CLM", name: "기상 솔루션", description: "비구름 중심의 농업·기상 서비스 계약입니다.", multipliers: { cumulus: 1.12, rain: 1.55, electric: 1.05, ice: 1.1, solar: .84, aurora: .8 } },
+  { id: "energy", code: "NRG", name: "에너지 연구소", description: "전기구름을 고밀도 에너지 셀로 변환합니다.", multipliers: { cumulus: .9, rain: 1.2, electric: 1.9, ice: 1.15, solar: 1.35, aurora: 1.25 } },
+  { id: "cryogenic", code: "CRY", name: "극저온 소재국", description: "빙정구름을 초전도 냉각재로 정제합니다.", multipliers: { cumulus: .72, rain: .9, electric: 1.15, ice: 2.05, solar: 1.05, aurora: 1.18 } },
+  { id: "stellar", code: "SOL", name: "태양광 연성로", description: "태양구름을 고효율 광자 연료로 가공합니다.", multipliers: { cumulus: .68, rain: .76, electric: 1.08, ice: 1.05, solar: 2.2, aurora: 1.35 } },
+  { id: "spectrum", code: "AUR", name: "오로라 스펙트럼국", description: "오로라구름의 희귀 입자를 최고가로 매입합니다.", multipliers: { cumulus: .62, rain: .7, electric: .92, ice: 1.1, solar: 1.35, aurora: 2.45 } },
 ];
 
 export const CLOUDS: Record<CloudKind, CloudDefinition> = {
@@ -82,6 +85,18 @@ export const CLOUDS: Record<CloudKind, CloudDefinition> = {
     unlockRank: 2,
     health: 165,
   },
+  ice: {
+    kind: "ice", name: "빙정구름", icon: "❄", value: 58, resistance: 5.5,
+    radius: [30, 43], color: "#b9f3ff", shadow: "#5b9ab6", unlockRank: 3, health: 250,
+  },
+  solar: {
+    kind: "solar", name: "태양구름", icon: "☀", value: 135, resistance: 7,
+    radius: [33, 46], color: "#ffd86a", shadow: "#d36f45", unlockRank: 4, health: 390,
+  },
+  aurora: {
+    kind: "aurora", name: "오로라구름", icon: "✦", value: 310, resistance: 9,
+    radius: [36, 50], color: "#8fffd2", shadow: "#6750b7", unlockRank: 5, health: 600,
+  },
 };
 
 export const RANKS: RankDefinition[] = [
@@ -90,7 +105,7 @@ export const RANKS: RankDefinition[] = [
     altitude: "해발 120m",
     promotionCost: 0,
     requiredHarvest: 0,
-    weights: { cumulus: 1, rain: 0, electric: 0 },
+    weights: { cumulus: 1, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 },
     description: "가벼운 뭉게구름으로 수확의 기본을 익히세요.",
   },
   {
@@ -98,7 +113,7 @@ export const RANKS: RankDefinition[] = [
     altitude: "상공 2,000m",
     promotionCost: 120,
     requiredHarvest: 22,
-    weights: { cumulus: 0.62, rain: 0.38, electric: 0 },
+    weights: { cumulus: 0.62, rain: 0.38, electric: 0, ice: 0, solar: 0, aurora: 0 },
     description: "무겁지만 가치 높은 비구름이 유입됩니다.",
   },
   {
@@ -106,7 +121,7 @@ export const RANKS: RankDefinition[] = [
     altitude: "상공 5,500m",
     promotionCost: 650,
     requiredHarvest: 65,
-    weights: { cumulus: 0.28, rain: 0.47, electric: 0.25 },
+    weights: { cumulus: 0.28, rain: 0.47, electric: 0.25, ice: 0, solar: 0, aurora: 0 },
     description: "위험하고 짜릿한 전기구름이 나타납니다.",
   },
   {
@@ -114,24 +129,24 @@ export const RANKS: RankDefinition[] = [
     altitude: "상공 15,000m",
     promotionCost: 2800,
     requiredHarvest: 180,
-    weights: { cumulus: 0.16, rain: 0.39, electric: 0.45 },
-    description: "고밀도 전기구름이 몰려드는 성층권 항로를 개척합니다.",
+    weights: { cumulus: 0.12, rain: 0.28, electric: 0.38, ice: 0.22, solar: 0, aurora: 0 },
+    description: "차갑고 단단한 빙정구름이 나타나는 성층권 항로를 개척합니다.",
   },
   {
     name: "제트기류 산업연합",
     altitude: "상공 30,000m",
     promotionCost: 11500,
     requiredHarvest: 480,
-    weights: { cumulus: 0.08, rain: 0.31, electric: 0.61 },
-    description: "거대한 구름 전선과 초고속 제트기류를 산업화합니다.",
+    weights: { cumulus: 0.06, rain: 0.18, electric: 0.3, ice: 0.28, solar: 0.18, aurora: 0 },
+    description: "빛나는 태양구름과 초고속 제트기류를 산업화합니다.",
   },
   {
     name: "전리층 기상공단",
     altitude: "상공 60,000m",
     promotionCost: 48000,
     requiredHarvest: 1200,
-    weights: { cumulus: 0.03, rain: 0.2, electric: 0.77 },
-    description: "대기가 끝나는 곳에서 번개 폭풍을 무한 자원으로 바꿉니다.",
+    weights: { cumulus: 0.03, rain: 0.09, electric: 0.18, ice: 0.25, solar: 0.27, aurora: 0.18 },
+    description: "대기가 끝나는 곳에서 오로라구름을 최고급 자원으로 회수합니다.",
   },
 ];
 
@@ -171,7 +186,7 @@ export const UPGRADES: UpgradeDefinition[] = [
   {
     id: "insulation",
     name: "절연 코팅",
-    description: "전기구름의 과부하를 막고 보너스를 얻습니다.",
+    description: "전기·태양·오로라구름의 과부하를 안정화해 보너스를 얻습니다.",
     icon: "ISO",
     baseCost: 230,
     maxLevel: 10,
@@ -218,20 +233,20 @@ export const RUN_SKILLS: Record<RunSkillId, RunSkillDefinition> = {
 export const RUN_SKILL_COSTS: Record<RunSkillId, RunSkillCost> = {
   overclock: { cumulus: 8 }, intakeServo: { cumulus: 12 }, wideIntake: { cumulus: 20 },
   pressureChamber: { cumulus: 24, rain: 6 }, massInduction: { cumulus: 30, rain: 14 },
-  blackHole: { cumulus: 40, rain: 28 }, eventHorizon: { rain: 42, electric: 12 },
-  vacuumMomentum: { rain: 32, electric: 18 }, denseRadar: { rain: 24, electric: 22 },
+  blackHole: { cumulus: 40, rain: 28 }, eventHorizon: { electric: 18, ice: 8 },
+  vacuumMomentum: { electric: 24, ice: 16 }, denseRadar: { electric: 20, ice: 20 },
   profitRain: { cumulus: 8 }, comboCapacitor: { cumulus: 12 }, feverDrive: { cumulus: 20 },
   feverInjector: { cumulus: 20, rain: 8 }, stormCatalyst: { cumulus: 25, rain: 16 },
-  goldenStorm: { cumulus: 35, rain: 30 }, sunStorm: { rain: 42, electric: 12 },
-  jackpotPulse: { rain: 32, electric: 18 }, yieldBoost: { rain: 24, electric: 22 },
-  feverReserve: { rain: 28, electric: 20 },
+  goldenStorm: { cumulus: 35, rain: 30 }, sunStorm: { electric: 18, ice: 8 },
+  jackpotPulse: { electric: 24, ice: 16 }, yieldBoost: { electric: 20, solar: 10 },
+  feverReserve: { electric: 22, ice: 18 },
   twinDrone: { cumulus: 8 }, droneAI: { cumulus: 12 }, chainBurst: { cumulus: 20 },
   relayBurst: { cumulus: 20, rain: 8 }, salvageProtocol: { cumulus: 25, rain: 16 },
-  droneFleet: { cumulus: 35, rain: 30 }, nanoSwarm: { rain: 42, electric: 12 },
-  swarmMatrix: { rain: 32, electric: 18 }, cargoBay: { rain: 24, electric: 22 },
-  cycloneCore: { cumulus: 30, rain: 24 }, cascadeGrid: { rain: 34, electric: 10 },
-  stormDrones: { rain: 34, electric: 10 }, goldenVacuum: { rain: 40, electric: 28 },
-  cargoCyclone: { rain: 36, electric: 32 }, chainReactor: { rain: 36, electric: 32 },
+  droneFleet: { cumulus: 35, rain: 30 }, nanoSwarm: { electric: 18, ice: 8 },
+  swarmMatrix: { electric: 24, ice: 16 }, cargoBay: { electric: 20, solar: 10 },
+  cycloneCore: { cumulus: 30, rain: 24 }, cascadeGrid: { rain: 28, electric: 14, ice: 8 },
+  stormDrones: { rain: 28, electric: 14, ice: 8 }, goldenVacuum: { ice: 28, solar: 12 },
+  cargoCyclone: { solar: 28, aurora: 8 }, chainReactor: { solar: 28, aurora: 8 },
 };
 
 export const SKILL_TREE_BRANCHES: SkillTreeBranch[] = [
@@ -249,7 +264,7 @@ export const INITIAL_STATE = {
   research: { logistics: 0, refining: 0, forecasting: 0 },
   bestCombo: 0,
   sound: true,
-  materials: { cumulus: 0, rain: 0, electric: 0 },
+  materials: { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 },
   career: {
     day: 1, level: 1, xp: 0, xpNext: 6, pendingPicks: 0,
     skills: {

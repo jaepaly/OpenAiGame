@@ -109,7 +109,7 @@ app.innerHTML = `
           <span class="levelup-kicker">CAREER SYSTEM BLUEPRINT // 34 NODE GRID</span>
           <h2 id="levelUpTitle">회사의 장기 성장 설계도</h2>
           <p id="levelUpDescription">연결된 노드를 따라 영구 유지되는 수확 장치를 조립하세요.</p>
-          <div class="skill-point-bank"><span>CLOUD STOCKPILE</span><strong id="skillPointCount">☁ 0 · 🌧 0 · ⚡ 0</strong><small>정산한 구름을 보관하고 노드 해금에 직접 사용합니다.</small></div>
+          <div class="skill-point-bank"><span>CLOUD STOCKPILE</span><strong id="skillPointCount">☁ 0 · 🌧 0 · ⚡ 0 · ❄ 0 · ☀ 0 · ✦ 0</strong><small>정산한 구름을 보관하고 노드 해금에 직접 사용합니다.</small></div>
           <div class="skill-choices skill-tree-network-shell" id="skillChoices"></div>
           <button class="skill-tree-close" id="skillTreeCloseButton">기지로 돌아가기</button>
         </div>
@@ -226,11 +226,16 @@ const SKILL_NODE_LAYOUT: Record<RunSkillId, { x: number; y: number; branch: "vac
   chainReactor: { x: 740, y: 1900, branch: "hybrid" },
 };
 
+const CLOUD_ORDER = Object.keys(CLOUDS) as (keyof GameState["materials"])[];
+const CLOUD_CODES: Record<keyof GameState["materials"], string> = {
+  cumulus: "CUM", rain: "RAN", electric: "ELC", ice: "ICE", solar: "SOL", aurora: "AUR",
+};
+
 function skillCostLabel(id: RunSkillId): string {
   const cost = RUN_SKILL_COSTS[id];
-  return (["cumulus", "rain", "electric"] as const)
+  return CLOUD_ORDER
     .filter((kind) => (cost[kind] ?? 0) > 0)
-    .map((kind) => `${kind === "cumulus" ? "☁" : kind === "rain" ? "🌧" : "⚡"} ${cost[kind]}`)
+    .map((kind) => `${CLOUDS[kind].icon} ${cost[kind]}`)
     .join(" · ");
 }
 
@@ -259,8 +264,8 @@ function renderRunState(state: RunState): void {
   routeName.textContent = FLIGHT_ROUTES[state.routeId].name;
   combo.textContent = state.combo > 0 ? `×${state.combo}` : "—";
   combo.parentElement?.classList.toggle("active", state.combo >= 2);
-  const cargoCount = state.cargo.cumulus + state.cargo.rain + state.cargo.electric;
-  const estimatedValue = state.cargoValue.cumulus + state.cargoValue.rain + state.cargoValue.electric + state.cargoBonus;
+  const cargoCount = (Object.values(state.cargo) as number[]).reduce((total, amount) => total + amount, 0);
+  const estimatedValue = (Object.values(state.cargoValue) as number[]).reduce((total, amount) => total + amount, state.cargoBonus);
   harvested.textContent = `${cargoCount}/${state.cargoCapacity}`;
   cargoValue.textContent = `예상 ◈${Math.floor(estimatedValue).toLocaleString()}`;
   returnButton.disabled = cargoCount <= 0;
@@ -275,21 +280,23 @@ function showFactory(state: RunState): void {
   factoryReceipt.classList.remove("show");
   factoryManifest.innerHTML = (Object.values(CLOUDS)).map((cloud) => `
     <div class="manifest-item ${cloud.kind}">
-      <span>${cloud.kind === "cumulus" ? "CUM" : cloud.kind === "rain" ? "RAN" : "ELC"}</span>
+      <span>${CLOUD_CODES[cloud.kind]}</span>
       <b>${cloud.name}</b>
       <strong>${state.cargo[cloud.kind]} UNIT</strong>
       <small>기본 ◈${Math.floor(state.cargoValue[cloud.kind]).toLocaleString()}</small>
     </div>
   `).join("") + `<div class="manifest-bonus"><span>FLIGHT BONUS</span><b>콤보·전선 운항 보너스</b><strong>+ ◈${Math.floor(state.cargoBonus).toLocaleString()}</strong></div>`;
-  const payouts = PROCESSING_CONTRACTS.map((contract) => game.getContractPayout(contract.id));
+  const availableContracts = PROCESSING_CONTRACTS.filter((_, index) => index < 3 || index <= game.getState().rank);
+  const payouts = availableContracts.map((contract) => game.getContractPayout(contract.id));
   const bestPayout = Math.max(...payouts);
-  contractList.innerHTML = PROCESSING_CONTRACTS.map((contract) => {
+  const unlockedClouds = Object.values(CLOUDS).filter((cloud) => cloud.unlockRank <= game.getState().rank);
+  contractList.innerHTML = availableContracts.map((contract) => {
     const payout = game.getContractPayout(contract.id);
     return `<button class="contract-card ${payout === bestPayout ? "best" : ""}" data-contract="${contract.id}">
       <span class="contract-code">${contract.code}</span>
       ${payout === bestPayout ? `<em class="best-offer">BEST OFFER</em>` : ""}
       <span class="contract-copy"><b>${contract.name}</b><small>${contract.description}</small></span>
-      <span class="contract-rates">흰 ×${contract.multipliers.cumulus.toFixed(2)} · 비 ×${contract.multipliers.rain.toFixed(2)} · 전기 ×${contract.multipliers.electric.toFixed(2)}</span>
+      <span class="contract-rates">${unlockedClouds.map((cloud) => `${cloud.icon} ×${contract.multipliers[cloud.kind].toFixed(2)}`).join(" · ")}</span>
       <strong class="contract-payout">◈ ${payout.toLocaleString()} 정산</strong>
     </button>`;
   }).join("");
@@ -300,10 +307,10 @@ function showLevelUp(_pendingPicks: number): void {
   const state = game.getRunState();
   const companyState = game.getState();
   const stock = companyState.materials;
-  const totalStock = stock.cumulus + stock.rain + stock.electric;
-  skillPointCount.textContent = `☁ ${stock.cumulus} · 🌧 ${stock.rain} · ⚡ ${stock.electric}`;
+  const totalStock = (Object.values(stock) as number[]).reduce((total, amount) => total + amount, 0);
+  skillPointCount.textContent = CLOUD_ORDER.map((kind) => `${CLOUDS[kind].icon} ${stock[kind]}`).join(" · ");
   levelUpTitle.textContent = "보관한 구름으로 시스템을 해금하세요";
-  levelUpDescription.textContent = "초반에는 흰 구름, 중반에는 비구름, 후반 궁극 시스템에는 전기구름이 필요합니다.";
+  levelUpDescription.textContent = "고도가 오를수록 빙정·태양·오로라구름이 열리고, 새로운 구름은 더 깊은 시스템의 재료가 됩니다.";
   skillTreeCloseButton.textContent = "기지로 돌아가기";
   const roots = new Set<RunSkillId>(["overclock", "profitRain", "twinDrone"]);
   const center = { x: 540, y: 83 };

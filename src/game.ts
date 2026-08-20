@@ -24,11 +24,11 @@ const freshRunState = (day = 1): RunState => ({
   combo: 0,
   comboTime: 0,
   pendingPicks: 0,
-  cargo: { cumulus: 0, rain: 0, electric: 0 },
-  cargoValue: { cumulus: 0, rain: 0, electric: 0 },
+  cargo: { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 },
+  cargoValue: { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 },
   cargoBonus: 0,
   cargoCapacity: 28,
-  materials: { cumulus: 0, rain: 0, electric: 0 },
+  materials: { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 },
   routeId: "tailwind",
   skills: {
     overclock: 0, intakeServo: 0, wideIntake: 0, pressureChamber: 0, massInduction: 0, vacuumMomentum: 0,
@@ -183,8 +183,8 @@ export class CloudHarvestGame {
       this.state.materials[kind] += this.run.cargo[kind];
     });
     const finalFlight = this.run.flight >= 3;
-    this.run.cargo = { cumulus: 0, rain: 0, electric: 0 };
-    this.run.cargoValue = { cumulus: 0, rain: 0, electric: 0 };
+    this.run.cargo = { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 };
+    this.run.cargoValue = { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 };
     this.run.cargoBonus = 0;
     this.run.fever = 0;
     this.run.feverActive = false;
@@ -332,7 +332,7 @@ export class CloudHarvestGame {
     this.impactFlash = .65;
     this.rankReveal = 3.2;
     this.burst(this.width / 2, this.height / 2, "#fff4a8", 85, 260);
-    const unlocked = this.state.rank === 1 ? "비구름" : this.state.rank === 2 ? "전기구름" : "고밀도 기상 항로";
+    const unlocked = ["", "비구름", "전기구름", "빙정구름", "태양구름", "오로라구름"][this.state.rank];
     this.onToast(`${next.name} 진입! ${unlocked} 출현!`, "success");
     this.playChord();
     this.commit();
@@ -815,14 +815,15 @@ export class CloudHarvestGame {
       * (this.run.feverActive && this.run.skills.goldenStorm ? 1.5 : 1)
       * (this.run.feverActive ? 1 + this.run.skills.jackpotPulse * .15 + this.run.skills.sunStorm * .25 + this.run.skills.goldenVacuum * .2 : 1);
     const runValue = 1 + this.run.skills.profitRain * .4 + this.run.skills.salvageProtocol * .08;
-    const insulationValue = cloud.kind === "electric" && this.state.levels.insulation > 0 ? 1.5 : 1;
+    const energizedCloud = cloud.kind === "electric" || cloud.kind === "solar" || cloud.kind === "aurora";
+    const insulationValue = energizedCloud && this.state.levels.insulation > 0 ? 1.5 : 1;
     const densityValue = cloud.dense ? 3 : 1;
     const altitudeValue = 1 + this.state.rank * .18;
     const earned = Math.round(definition.value * comboMultiplier * permanentValue * runValue * insulationValue * densityValue * altitudeValue);
     this.run.cargo[cloud.kind] += 1;
     this.run.cargoValue[cloud.kind] += earned;
     this.state.harvested += 1;
-    const baseXp = cloud.kind === "cumulus" ? 2 : cloud.kind === "rain" ? 5 : 9;
+    const baseXp = { cumulus: 2, rain: 5, electric: 9, ice: 14, solar: 22, aurora: 34 }[cloud.kind];
     const xp = cloud.dense ? baseXp * 2 : baseXp;
     this.run.xp += xp;
     const feverGain = (12 + Math.min(10, this.combo))
@@ -836,7 +837,7 @@ export class CloudHarvestGame {
       this.cascadePunch = 1;
     }
     const cascadeLabel = cascadeDepth > 0 ? `  CASCADE ×${this.cascadeCount}` : "";
-    this.texts.push({ x: cloud.x, y: cloud.y, text: `${cloud.dense ? "DENSE  " : ""}+1 CARGO  ◈${earned}${cascadeLabel}`, color: cloud.dense || cloud.kind === "electric" || cascadeDepth > 0 ? "#fff27a" : "#ffffff", life: 1.15 });
+    this.texts.push({ x: cloud.x, y: cloud.y, text: `${cloud.dense ? "DENSE  " : ""}+1 CARGO  ◈${earned}${cascadeLabel}`, color: cloud.dense || definition.value >= 28 || cascadeDepth > 0 ? "#fff27a" : "#ffffff", life: 1.15 });
     if (this.combo >= 3) this.texts.push({ x: cloud.x, y: cloud.y + 28, text: `${this.combo} COMBO!`, color: "#ffdf70", life: .9 });
     this.burst(cloud.x, cloud.y, definition.color, 24 + Math.min(34, this.combo * 2), 270);
     this.burst(cloud.x, cloud.y, "#ffd15e", 8 + Math.min(14, this.combo), 330);
@@ -1446,6 +1447,32 @@ export class CloudHarvestGame {
     }
     if (cloud.kind === "rain") { ctx.fillStyle = "#3d8cca"; for (let i = -1; i <= 1; i += 1) { ctx.beginPath(); ctx.ellipse(i * 13, cloud.radius * .65, 3, 7, .4, 0, Math.PI * 2); ctx.fill(); } }
     if (cloud.kind === "electric") { ctx.strokeStyle = "#ffe45e"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(2, cloud.radius * .2); ctx.lineTo(-8, cloud.radius * .56); ctx.lineTo(3, cloud.radius * .5); ctx.lineTo(-2, cloud.radius * .9); ctx.lineTo(14, cloud.radius * .4); ctx.stroke(); }
+    if (cloud.kind === "ice") {
+      ctx.strokeStyle = "#eaffff"; ctx.lineWidth = 3; ctx.shadowColor = "#72e7ff"; ctx.shadowBlur = 12;
+      for (let arm = 0; arm < 3; arm += 1) {
+        const angle = arm * Math.PI / 3;
+        ctx.beginPath(); ctx.moveTo(-Math.cos(angle) * 17, -Math.sin(angle) * 17); ctx.lineTo(Math.cos(angle) * 17, Math.sin(angle) * 17); ctx.stroke();
+      }
+      ctx.shadowColor = "transparent";
+    }
+    if (cloud.kind === "solar") {
+      ctx.strokeStyle = "#fff5a0"; ctx.lineWidth = 3; ctx.shadowColor = "#ffb84d"; ctx.shadowBlur = 16;
+      ctx.beginPath(); ctx.arc(0, 0, cloud.radius * .42, 0, Math.PI * 2); ctx.stroke();
+      for (let ray = 0; ray < 8; ray += 1) {
+        const angle = ray * Math.PI / 4 + time * .4;
+        ctx.beginPath(); ctx.moveTo(Math.cos(angle) * cloud.radius * .52, Math.sin(angle) * cloud.radius * .52); ctx.lineTo(Math.cos(angle) * cloud.radius * .72, Math.sin(angle) * cloud.radius * .72); ctx.stroke();
+      }
+      ctx.shadowColor = "transparent";
+    }
+    if (cloud.kind === "aurora") {
+      ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.shadowColor = "#b48cff"; ctx.shadowBlur = 15;
+      ["#8fffd2", "#c69cff", "#7bdcff"].forEach((color, ribbon) => {
+        const offset = (ribbon - 1) * 9;
+        ctx.strokeStyle = color; ctx.beginPath(); ctx.moveTo(-cloud.radius * .55, offset);
+        ctx.quadraticCurveTo(0, offset - 13 + Math.sin(time * 3 + ribbon) * 5, cloud.radius * .55, offset); ctx.stroke();
+      });
+      ctx.shadowColor = "transparent";
+    }
     if (beingSucked) {
       ctx.globalAlpha = .45 + proximity * .4;
       ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2 / Math.max(.5, damageRatio);
@@ -1463,7 +1490,7 @@ export class CloudHarvestGame {
     if (cloud.health < cloud.maxHealth) {
       const width = cloud.radius * 1.35;
       ctx.fillStyle = "rgba(25,54,74,.32)"; ctx.fillRect(cloud.x - width / 2, cloud.y + cloud.radius + 12, width, 5);
-      ctx.fillStyle = cloud.kind === "electric" ? "#ffe45e" : "#fff"; ctx.fillRect(cloud.x - width / 2, cloud.y + cloud.radius + 12, width * Math.max(0, cloud.health / cloud.maxHealth), 5);
+      ctx.fillStyle = definition.color; ctx.fillRect(cloud.x - width / 2, cloud.y + cloud.radius + 12, width * Math.max(0, cloud.health / cloud.maxHealth), 5);
     }
   }
 
@@ -1768,7 +1795,7 @@ export class CloudHarvestGame {
   }
 
   private getCargoCount(): number {
-    return this.run.cargo.cumulus + this.run.cargo.rain + this.run.cargo.electric;
+    return (Object.values(this.run.cargo) as number[]).reduce((total, amount) => total + amount, 0);
   }
 
   private getCargoCapacity(): number {

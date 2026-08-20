@@ -103,6 +103,9 @@ body { min-width: 320px; background: #92ddf7; }
 .legend-item { width: max-content; padding: 5px 9px; color: #34566a; background: rgba(255,255,255,.66); border: 1px solid rgba(255,255,255,.72); border-radius: 9px; font-size: 10px; font-weight: 900; backdrop-filter: blur(5px); }
 .legend-item b { margin-left: 5px; color: #258ba9; }
 .legend-item.electric { color: #4b3b90; }
+.legend-item.ice { color: #267e9f; }
+.legend-item.solar { color: #a75a22; }
+.legend-item.aurora { color: #4d3c9c; }
 .toast {
   position: absolute; z-index: 9; left: 50%; top: 155px; max-width: calc(100% - 40px); padding: 11px 18px;
   color: white; background: rgba(24,53,77,.91); border: 2px solid rgba(255,255,255,.3); border-radius: 14px;
@@ -291,6 +294,9 @@ body { min-width: 320px; background: #92ddf7; }
 .manifest-item > span { grid-row: 1/3; width: 48px; height: 48px; display: grid; place-items: center; color: #17394a; background: #eefeff; border-radius: 12px; font: 900 13px "Outfit",sans-serif; }
 .manifest-item.rain > span { color: white; background: #6486a4; }
 .manifest-item.electric > span { color: #fff16c; background: #5e4ba2; }
+.manifest-item.ice > span { color: #14526b; background: #b9f3ff; }
+.manifest-item.solar > span { color: #713615; background: #ffd86a; }
+.manifest-item.aurora > span { color: #173f54; background: linear-gradient(135deg,#8fffd2,#8cc8ff 52%,#c69cff); }
 .manifest-item b { font-size: 14px; }
 .manifest-item strong { justify-self: end; color: #7ff5df; font: 900 18px "Outfit",sans-serif; }
 .manifest-item small { color: #8ca8b3; font-size: 11px; }
@@ -415,7 +421,7 @@ body { min-width: 320px; background: #92ddf7; }
 .skill-tree-panel > p { color: #58727e; font-size: 15px; font-weight: 800; }
 .skill-point-bank { position: sticky; top: -1px; z-index: 12; margin: 14px auto 16px; padding: 10px 16px; display: grid; grid-template-columns: auto minmax(260px,1fr) 1.2fr; align-items: center; gap: 14px; color: #d9edf0; background: rgba(12,42,57,.96); border: 2px solid #75c8d2; border-radius: 17px; text-align: left; box-shadow: 0 7px 18px rgba(9,35,47,.24); backdrop-filter: blur(8px); }
 .skill-point-bank > span { font: 900 13px "Outfit",sans-serif; letter-spacing: .12em; }
-.skill-point-bank > strong { min-height: 48px; padding: 6px 14px; display: grid; place-items: center; color: #183c4d; background: #fff36f; border: 3px solid white; border-radius: 14px; box-shadow: 0 4px 0 #d1aa43; font: 900 20px "Outfit",sans-serif; white-space: nowrap; }
+.skill-point-bank > strong { min-height: 48px; padding: 6px 14px; display: grid; place-items: center; color: #183c4d; background: #fff36f; border: 3px solid white; border-radius: 14px; box-shadow: 0 4px 0 #d1aa43; font: 900 17px/1.25 "Outfit",sans-serif; text-align: center; white-space: normal; }
 .skill-point-bank > small { color: #afcbd0; font-size: 14px; font-weight: 800; }
 .skill-tree-network-shell { display: block; overflow: auto; color: white; background: #0a2432; border: 4px solid #28586b; border-radius: 24px; box-shadow: inset 0 0 55px rgba(0,0,0,.38),0 8px 0 #153847; scrollbar-color: #65c9cf #102e3c; }
 .skill-tree-legend { position: sticky; left: 0; z-index: 8; min-width: 1080px; padding: 13px 18px; display: flex; align-items: center; gap: 12px; color: #b9d3d8; background: rgba(11,35,48,.96); border-bottom: 2px solid #31596a; }

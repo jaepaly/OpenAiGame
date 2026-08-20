@@ -1,6 +1,6 @@
-export type CloudKind = "cumulus" | "rain" | "electric";
+export type CloudKind = "cumulus" | "rain" | "electric" | "ice" | "solar" | "aurora";
 export type CloudFormationKind = "ring" | "stream" | "cluster";
-export type ContractId = "water" | "climate" | "energy";
+export type ContractId = "water" | "climate" | "energy" | "cryogenic" | "stellar" | "spectrum";
 export type FlightRouteId = "tailwind" | "pressureMine" | "frontline";
 export type ResearchId = "logistics" | "refining" | "forecasting";
 
