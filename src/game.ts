@@ -30,10 +30,12 @@ const freshRunState = (day = 1): RunState => ({
   cargoCapacity: 28,
   routeId: "tailwind",
   skills: {
-    overclock: 0, wideIntake: 0, chainBurst: 0, profitRain: 0, feverDrive: 0, twinDrone: 0,
-    blackHole: 0, goldenStorm: 0, droneFleet: 0,
+    overclock: 0, intakeServo: 0, wideIntake: 0, pressureChamber: 0, massInduction: 0, vacuumMomentum: 0,
+    profitRain: 0, comboCapacitor: 0, feverDrive: 0, feverInjector: 0, stormCatalyst: 0, jackpotPulse: 0,
+    twinDrone: 0, droneAI: 0, chainBurst: 0, relayBurst: 0, salvageProtocol: 0, swarmMatrix: 0,
+    blackHole: 0, eventHorizon: 0, goldenStorm: 0, sunStorm: 0, droneFleet: 0, nanoSwarm: 0,
     cargoBay: 0, yieldBoost: 0, denseRadar: 0, feverReserve: 0,
-    cycloneCore: 0, cascadeGrid: 0, stormDrones: 0,
+    cycloneCore: 0, cascadeGrid: 0, stormDrones: 0, goldenVacuum: 0, chainReactor: 0, cargoCyclone: 0,
   },
 });
 
@@ -115,6 +117,7 @@ export class CloudHarvestGame {
     this.onFactoryOpen = onFactoryOpen;
     this.onToast = onToast;
     this.state = this.loadState();
+    this.restoreCareerProgress();
     this.bindInput();
     this.resize();
     window.addEventListener("resize", () => this.resize());
@@ -228,7 +231,10 @@ export class CloudHarvestGame {
     if (!this.atFactory || !this.dayComplete || !RESEARCH_PROJECTS[id]) return false;
     this.state.research[id] += 1;
     const nextDay = this.run.day + 1;
+    this.syncCareerProgress();
+    this.state.career.day = nextDay;
     this.run = freshRunState(nextDay);
+    this.restoreCareerProgress();
     this.dayComplete = false;
     this.pointer = { x: this.width * .7, y: this.height * .55, active: false, visible: false };
     this.touchDirect = false;
@@ -236,7 +242,7 @@ export class CloudHarvestGame {
     this.playerVelocity = { x: 0, y: 0 };
     this.commit();
     this.onRunChange(this.getRunState());
-    this.onToast(`${RESEARCH_PROJECTS[id].name} 연구 완료 — DAY ${nextDay} 준비`, "success");
+    this.onToast(`${RESEARCH_PROJECTS[id].name} 연구 완료 — 모든 성장 유지 · DAY ${nextDay}`, "success");
     return true;
   }
 
@@ -266,6 +272,7 @@ export class CloudHarvestGame {
     if (!this.pausedForLevel || !this.canChooseSkill(id)) return false;
     this.run.skills[id] += 1;
     this.run.pendingPicks = Math.max(0, this.run.pendingPicks - 1);
+    this.commit();
     this.burst(this.player.x, this.player.y, RUN_SKILLS[id].color, 36, 210);
     this.playChord();
     this.onRunChange(this.getRunState());
@@ -317,7 +324,7 @@ export class CloudHarvestGame {
     this.impactFlash = .65;
     this.rankReveal = 3.2;
     this.burst(this.width / 2, this.height / 2, "#fff4a8", 85, 260);
-    const unlocked = this.state.rank === 1 ? "비구름" : "전기구름";
+    const unlocked = this.state.rank === 1 ? "비구름" : this.state.rank === 2 ? "전기구름" : "고밀도 기상 항로";
     this.onToast(`${next.name} 진입! ${unlocked} 출현!`, "success");
     this.playChord();
     this.commit();
@@ -414,7 +421,7 @@ export class CloudHarvestGame {
 
   private getSuctionHalfAngle(): number {
     if (this.run.feverActive || this.touchDirect) return Math.PI;
-    return Math.min(1.22, .62 + this.run.skills.wideIntake * .1 + this.run.skills.cycloneCore * .14);
+    return Math.min(1.38, .62 + this.run.skills.intakeServo * .055 + this.run.skills.wideIntake * .1 + this.run.skills.cycloneCore * .14);
   }
 
   private isCloudInSuctionArc(cloud: Cloud, radius: number): boolean {
@@ -440,8 +447,8 @@ export class CloudHarvestGame {
       const inputX = Number(this.keys.has("KeyD") || this.keys.has("ArrowRight")) - Number(this.keys.has("KeyA") || this.keys.has("ArrowLeft"));
       const inputY = Number(this.keys.has("KeyS") || this.keys.has("ArrowDown")) - Number(this.keys.has("KeyW") || this.keys.has("ArrowUp"));
       const inputLength = Math.hypot(inputX, inputY) || 1;
-      const feverMovementBoost = this.run.feverActive ? 1.55 : 1;
-      const acceleration = 1250 * (this.run.feverActive ? 1.35 : 1);
+      const feverMovementBoost = this.run.feverActive ? 1.55 + this.run.skills.feverInjector * .08 : 1;
+      const acceleration = 1250 * (this.run.feverActive ? 1.35 + this.run.skills.feverInjector * .06 : 1);
       if (inputX || inputY) {
         this.playerVelocity.x += inputX / inputLength * acceleration * dt;
         this.playerVelocity.y += inputY / inputLength * acceleration * dt;
@@ -450,7 +457,7 @@ export class CloudHarvestGame {
         this.playerVelocity.x *= drag;
         this.playerVelocity.y *= drag;
       }
-      const maxSpeed = (315 + this.run.skills.overclock * 18) * feverMovementBoost;
+      const maxSpeed = (315 + this.run.skills.overclock * 18 + this.run.skills.intakeServo * 14 + this.run.skills.vacuumMomentum * 16) * feverMovementBoost;
       const speed = Math.hypot(this.playerVelocity.x, this.playerVelocity.y);
       if (speed > maxSpeed) {
         this.playerVelocity.x = this.playerVelocity.x / speed * maxSpeed;
@@ -551,11 +558,14 @@ export class CloudHarvestGame {
         } else this.onToast("피버 종료 — 다시 게이지를 채우세요!");
       }
     }
-    const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.blackHole * 80
-      + (this.run.feverActive ? this.run.skills.cycloneCore * 120 : 0);
+    const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.pressureChamber * 18
+      + this.run.skills.blackHole * 80 + this.run.skills.eventHorizon * 140
+      + (this.run.feverActive ? this.run.skills.cycloneCore * 120 + this.run.skills.goldenVacuum * 80 : 0);
     const basePower = 36 + this.state.levels.power * 15;
-    const skillPower = (1 + this.run.skills.overclock * 0.45) * (1 + this.run.skills.blackHole * .25);
-    const feverPower = this.run.feverActive ? (this.run.skills.goldenStorm ? 3.6 : 2.65) : 1;
+    const skillPower = (1 + this.run.skills.overclock * 0.45 + this.run.skills.pressureChamber * .2) * (1 + this.run.skills.blackHole * .25 + this.run.skills.eventHorizon * .35);
+    const feverPower = this.run.feverActive
+      ? (this.run.skills.goldenStorm ? 3.6 : 2.65) * (1 + this.run.skills.feverInjector * .15 + this.run.skills.sunStorm * .4 + this.run.skills.goldenVacuum * .25)
+      : 1;
     const overloadPower = this.overload > 0 ? 0.22 : 1;
     const suctionPower = basePower * skillPower * feverPower * overloadPower;
     const cargoFull = this.getCargoCount() >= this.getCargoCapacity();
@@ -745,7 +755,8 @@ export class CloudHarvestGame {
   private updateDrones(dt: number): void {
     this.droneBeams = [];
     const stormDroneBonus = this.run.feverActive ? this.run.skills.stormDrones * 2 : 0;
-    const count = this.state.levels.drone + this.run.skills.twinDrone + this.run.skills.droneFleet * 3 + stormDroneBonus;
+    const count = this.state.levels.drone + this.run.skills.twinDrone + this.run.skills.droneFleet * 3
+      + this.run.skills.nanoSwarm * 5 + this.run.skills.swarmMatrix * 2 + stormDroneBonus;
     if (count <= 0 || this.clouds.length === 0) return;
     for (let index = 0; index < Math.min(6, count); index += 1) {
       const angle = this.droneAngle + index * (Math.PI * 2 / Math.min(6, count));
@@ -761,7 +772,8 @@ export class CloudHarvestGame {
       if (!target) continue;
       if (this.run.feverActive && this.run.skills.stormDrones) this.droneBeams.push({ x, y, targetX: target.x, targetY: target.y });
       const stormDronePower = this.run.feverActive && this.run.skills.stormDrones ? 3 : 1;
-      target.health -= dt * (7 + count * 3 + this.run.skills.droneFleet * 12) * stormDronePower;
+      const droneSystemsPower = 1 + this.run.skills.droneAI * .24 + this.run.skills.nanoSwarm * .5;
+      target.health -= dt * (7 + count * 3 + this.run.skills.droneFleet * 12) * stormDronePower * droneSystemsPower;
       target.hurtFlash = 0.6;
       if (target.health <= 0) this.collectCloud(target);
       if (Math.random() < dt * 12) this.particles.push({ x, y, vx: (target.x - x) * 1.4, vy: (target.y - y) * 1.4, life: .26, maxLife: .26, size: 2, color: "#6ff6e2" });
@@ -791,25 +803,28 @@ export class CloudHarvestGame {
     this.clouds = this.clouds.filter((item) => item.id !== cloud.id);
     const definition = CLOUDS[cloud.kind];
     this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
-    this.comboTimer = 3.4;
+    this.comboTimer = 3.4 + this.run.skills.comboCapacitor * .35 + this.run.skills.vacuumMomentum * .22;
     this.state.bestCombo = Math.max(this.state.bestCombo, this.combo);
     const comboMultiplier = 1 + Math.min(1.8, Math.floor(this.combo / 3) * .17);
     const permanentValue = (1 + this.state.levels.value * .24)
       * (1 + this.state.research.refining * .05)
       * FLIGHT_ROUTES[this.run.routeId].valueMultiplier
       * (1 + this.run.skills.yieldBoost * .1)
-      * (this.run.feverActive && this.run.skills.goldenStorm ? 1.5 : 1);
-    const runValue = 1 + this.run.skills.profitRain * .4;
+      * (this.run.feverActive && this.run.skills.goldenStorm ? 1.5 : 1)
+      * (this.run.feverActive ? 1 + this.run.skills.jackpotPulse * .15 + this.run.skills.sunStorm * .25 + this.run.skills.goldenVacuum * .2 : 1);
+    const runValue = 1 + this.run.skills.profitRain * .4 + this.run.skills.salvageProtocol * .08;
     const insulationValue = cloud.kind === "electric" && this.state.levels.insulation > 0 ? 1.5 : 1;
     const densityValue = cloud.dense ? 3 : 1;
-    const earned = Math.round(definition.value * comboMultiplier * permanentValue * runValue * insulationValue * densityValue);
+    const altitudeValue = 1 + this.state.rank * .18;
+    const earned = Math.round(definition.value * comboMultiplier * permanentValue * runValue * insulationValue * densityValue * altitudeValue);
     this.run.cargo[cloud.kind] += 1;
     this.run.cargoValue[cloud.kind] += earned;
     this.state.harvested += 1;
     const baseXp = cloud.kind === "cumulus" ? 2 : cloud.kind === "rain" ? 5 : 9;
     const xp = cloud.dense ? baseXp * 2 : baseXp;
     this.run.xp += xp;
-    const feverGain = (12 + Math.min(10, this.combo)) * (1 + this.run.skills.feverDrive * .35);
+    const feverGain = (12 + Math.min(10, this.combo))
+      * (1 + this.run.skills.feverDrive * .35 + this.run.skills.comboCapacitor * .12 + this.run.skills.feverInjector * .2);
     if (!this.run.feverActive) this.run.fever = Math.min(100, this.run.fever + feverGain);
     if (this.run.fever >= 100 && !this.run.feverActive) this.startFever();
 
@@ -850,11 +865,13 @@ export class CloudHarvestGame {
 
     const chainStacks = this.run.skills.chainBurst;
     if (chainStacks > 0) {
-      const chainRadius = 105 + chainStacks * 35 + this.run.skills.blackHole * 120 + this.run.skills.cascadeGrid * 95;
+      const chainRadius = 105 + chainStacks * 35 + this.run.skills.relayBurst * 42 + this.run.skills.blackHole * 120
+        + this.run.skills.cascadeGrid * 95 + this.run.skills.chainReactor * 145;
       for (const nearby of this.clouds) {
         const distance = Math.hypot(nearby.x - cloud.x, nearby.y - cloud.y);
         if (distance < chainRadius) {
-          nearby.health -= 11 + chainStacks * 12 + this.run.skills.blackHole * 25 + this.run.skills.cascadeGrid * 38;
+          nearby.health -= 11 + chainStacks * 12 + this.run.skills.relayBurst * 15 + this.run.skills.blackHole * 25
+            + this.run.skills.cascadeGrid * 38 + this.run.skills.chainReactor * 65;
           nearby.hurtFlash = 1;
           const dx = nearby.x - cloud.x;
           const dy = nearby.y - cloud.y;
@@ -879,7 +896,7 @@ export class CloudHarvestGame {
     cloud.hurtFlash = 1;
     this.cascadeCount = Math.max(1, this.cascadeCount);
     this.cascadeTimer = .72;
-    const tempo = Math.max(.028, .068 - Math.min(5, depth) * .005 - this.run.skills.cascadeGrid * .014);
+    const tempo = Math.max(.022, .068 - Math.min(5, depth) * .005 - this.run.skills.cascadeGrid * .014 - this.run.skills.chainReactor * .01);
     const tailDelay = this.cascadeQueue.reduce((latest, item) => Math.max(latest, item.delay), 0);
     this.cascadeQueue.push({ cloudId: cloud.id, delay: tailDelay + tempo + Math.random() * .012, depth });
   }
@@ -939,6 +956,7 @@ export class CloudHarvestGame {
       this.run.pendingPicks += 1;
       gained += 1;
     }
+    if (gained > 0) this.commit();
     this.onRunChange(this.getRunState());
     if (gained > 0) this.onToast(`LEVEL ${this.run.level} — 장비 데이터 ${this.run.pendingPicks}개 저장`, "success");
   }
@@ -1000,7 +1018,8 @@ export class CloudHarvestGame {
 
   private startFever(): void {
     this.run.feverActive = true;
-    this.run.feverSeconds = 7 + this.run.skills.feverDrive * 2.5 + this.run.skills.goldenStorm * 3 + this.run.skills.feverReserve * .8;
+    this.run.feverSeconds = 7 + this.run.skills.feverDrive * 2.5 + this.run.skills.stormCatalyst * 1.5
+      + this.run.skills.goldenStorm * 3 + this.run.skills.sunStorm * 4 + this.run.skills.feverReserve * .8;
     this.shake = 1.2;
     this.impactFlash = .85;
     this.comboPunch = 1;
@@ -1037,7 +1056,8 @@ export class CloudHarvestGame {
       if (side === 1) { x = this.width - radius - 4; y = 350 + Math.random() * Math.max(55, this.height - 520); }
       if (side === 2) { y = 180 + radius; x = 85 + Math.random() * Math.max(100, this.width - 540); }
     }
-    const health = definition.health * scale * (dense ? 1.65 : 1);
+    const altitudeResistance = 1 + this.state.rank * .2;
+    const health = definition.health * scale * (dense ? 1.65 : 1) * altitudeResistance;
     this.clouds.push({ id: ++this.cloudId, kind, x, y, vx: (Math.random() - .5) * 8, vy: (Math.random() - .5) * 6, radius, phase: Math.random() * Math.PI * 2, charged: false, age: initial ? .6 + Math.random() * 4.4 : 0, health, maxHealth: health, hurtFlash: 0, dense, front: false });
   }
 
@@ -1364,8 +1384,9 @@ export class CloudHarvestGame {
     const healthRatio = Math.max(0, cloud.health / cloud.maxHealth);
     const damageRatio = Math.max(.42, healthRatio);
     const pulse = cloud.hurtFlash > 0 ? 1 + Math.sin(time * 45) * .055 : 1;
-    const suctionRadius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.blackHole * 80
-      + (this.run.feverActive ? this.run.skills.cycloneCore * 120 : 0);
+    const suctionRadius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.pressureChamber * 18
+      + this.run.skills.blackHole * 80 + this.run.skills.eventHorizon * 140
+      + (this.run.feverActive ? this.run.skills.cycloneCore * 120 + this.run.skills.goldenVacuum * 80 : 0);
     const toPlayerX = this.player.x - cloud.x;
     const toPlayerY = this.player.y - cloud.y;
     const playerDistance = Math.hypot(toPlayerX, toPlayerY);
@@ -1507,7 +1528,9 @@ export class CloudHarvestGame {
 
   private drawSuctionField(ctx: CanvasRenderingContext2D, time: number): void {
     const cycloneActive = this.run.feverActive && this.run.skills.cycloneCore > 0;
-    const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.blackHole * 80 + (cycloneActive ? 120 : 0);
+    const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.pressureChamber * 18
+      + this.run.skills.blackHole * 80 + this.run.skills.eventHorizon * 140 + (cycloneActive ? 120 : 0)
+      + (this.run.feverActive ? this.run.skills.goldenVacuum * 80 : 0);
     const gradient = ctx.createRadialGradient(this.player.x, this.player.y, 20, this.player.x, this.player.y, radius);
     gradient.addColorStop(0, this.run.feverActive ? "rgba(255,244,111,.28)" : "rgba(255,255,255,.2)"); gradient.addColorStop(1, "rgba(255,255,255,0)");
     const aimAngle = this.getAimAngle();
@@ -1725,7 +1748,8 @@ export class CloudHarvestGame {
 
   private drawDrones(ctx: CanvasRenderingContext2D): void {
     const stormDroneBonus = this.run.feverActive ? this.run.skills.stormDrones * 2 : 0;
-    const count = Math.min(6, this.state.levels.drone + this.run.skills.twinDrone + this.run.skills.droneFleet * 3 + stormDroneBonus);
+    const count = Math.min(12, this.state.levels.drone + this.run.skills.twinDrone + this.run.skills.droneFleet * 3
+      + this.run.skills.nanoSwarm * 5 + this.run.skills.swarmMatrix * 2 + stormDroneBonus);
     for (let i = 0; i < count; i += 1) {
       const angle = this.droneAngle + i * Math.PI * 2 / count;
       const x = this.player.x + Math.cos(angle) * 70; const y = this.player.y + Math.sin(angle) * 50;
@@ -1747,18 +1771,21 @@ export class CloudHarvestGame {
   }
 
   private getCargoCapacity(): number {
-    return 28 + this.state.rank * 8 + this.state.levels.radius * 4 + this.state.research.logistics * 4 + FLIGHT_ROUTES[this.run.routeId].capacityBonus + this.run.skills.cargoBay * 6;
+    return 28 + this.state.rank * 8 + this.state.levels.radius * 4 + this.state.research.logistics * 4
+      + FLIGHT_ROUTES[this.run.routeId].capacityBonus + this.run.skills.salvageProtocol * 8 + this.run.skills.cargoBay * 6
+      + (this.run.feverActive ? this.run.skills.cargoCyclone * 24 : 0);
   }
 
   private getMaxClouds(): number {
-    return 22 + this.state.rank * 7 + (this.run.flight - 1) * 6 + this.state.levels.radius * 3 + this.run.skills.wideIntake * 4 + this.run.skills.blackHole * 8
-      + (this.run.feverActive ? this.run.skills.cycloneCore * 6 : 0);
+    return 22 + this.state.rank * 7 + (this.run.flight - 1) * 6 + this.state.levels.radius * 3 + this.run.skills.wideIntake * 4
+      + this.run.skills.massInduction * 6 + this.run.skills.blackHole * 8 + this.run.skills.eventHorizon * 12
+      + (this.run.feverActive ? this.run.skills.cycloneCore * 6 + this.run.skills.cargoCyclone * 14 : 0);
   }
 
   private getMinimumClouds(): number {
     const maxClouds = this.getMaxClouds();
     const ratio = this.run.feverActive ? .78 : .55;
-    const feverReserve = this.run.feverActive ? 3 : 0;
+    const feverReserve = this.run.feverActive ? 3 + this.run.skills.stormCatalyst * 2 + this.run.skills.cargoCyclone * 8 : 0;
     return Math.min(maxClouds, Math.max(12, Math.ceil(maxClouds * ratio) + feverReserve));
   }
 
@@ -1771,12 +1798,39 @@ export class CloudHarvestGame {
     const flightPressure = this.run.flight - 1;
     const permanentInduction = Math.max(.58, 1 - this.state.levels.radius * .05);
     const cycloneInduction = this.run.feverActive ? this.run.skills.cycloneCore * .45 : 0;
-    const runInduction = Math.max(.4, 1 - this.run.skills.wideIntake * .08 - this.run.skills.blackHole * .15 - cycloneInduction);
+    const runInduction = Math.max(.28, 1 - this.run.skills.wideIntake * .08 - this.run.skills.massInduction * .06
+      - this.run.skills.blackHole * .15 - this.run.skills.eventHorizon * .12 - cycloneInduction);
     return Math.max(.11, (0.78 - this.state.rank * .08) * FLIGHT_ROUTES[this.run.routeId].spawnInterval * (1 - flightPressure * .14) * permanentInduction * runInduction);
   }
 
   private emitAll(): void { this.onStateChange(this.getState()); this.onRunChange(this.getRunState()); }
-  private commit(): void { localStorage.setItem(SAVE_KEY, JSON.stringify(this.state)); this.onStateChange(this.getState()); }
+
+  private syncCareerProgress(): void {
+    this.state.career = {
+      day: this.run.day,
+      level: this.run.level,
+      xp: this.run.xp,
+      xpNext: this.run.xpNext,
+      pendingPicks: this.run.pendingPicks,
+      skills: structuredClone(this.run.skills),
+    };
+  }
+
+  private restoreCareerProgress(): void {
+    const career = this.state.career;
+    this.run.day = career.day;
+    this.run.level = career.level;
+    this.run.xp = career.xp;
+    this.run.xpNext = career.xpNext;
+    this.run.pendingPicks = career.pendingPicks;
+    this.run.skills = { ...this.run.skills, ...structuredClone(career.skills) };
+  }
+
+  private commit(): void {
+    this.syncCareerProgress();
+    localStorage.setItem(SAVE_KEY, JSON.stringify(this.state));
+    this.onStateChange(this.getState());
+  }
   private loadState(): GameState {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
@@ -1787,6 +1841,11 @@ export class CloudHarvestGame {
         ...parsed,
         levels: { ...INITIAL_STATE.levels, ...parsed.levels },
         research: { ...INITIAL_STATE.research, ...parsed.research },
+        career: {
+          ...structuredClone(INITIAL_STATE.career),
+          ...parsed.career,
+          skills: { ...INITIAL_STATE.career.skills, ...parsed.career?.skills },
+        },
       };
     } catch { return structuredClone(INITIAL_STATE); }
   }

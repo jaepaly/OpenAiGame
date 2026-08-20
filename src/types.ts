@@ -77,13 +77,26 @@ export interface GameState {
   research: Record<ResearchId, number>;
   bestCombo: number;
   sound: boolean;
+  career: CareerProgress;
 }
 
-export type CoreRunSkillId = "overclock" | "wideIntake" | "chainBurst" | "profitRain" | "feverDrive" | "twinDrone";
-export type EvolutionSkillId = "blackHole" | "goldenStorm" | "droneFleet";
+export type CoreRunSkillId =
+  | "overclock" | "intakeServo" | "wideIntake" | "pressureChamber" | "massInduction" | "vacuumMomentum"
+  | "profitRain" | "comboCapacitor" | "feverDrive" | "feverInjector" | "stormCatalyst" | "jackpotPulse"
+  | "twinDrone" | "droneAI" | "chainBurst" | "relayBurst" | "salvageProtocol" | "swarmMatrix";
+export type EvolutionSkillId = "blackHole" | "eventHorizon" | "goldenStorm" | "sunStorm" | "droneFleet" | "nanoSwarm";
 export type OverdriveSkillId = "cargoBay" | "yieldBoost" | "denseRadar" | "feverReserve";
-export type SynergySkillId = "cycloneCore" | "cascadeGrid" | "stormDrones";
+export type SynergySkillId = "cycloneCore" | "cascadeGrid" | "stormDrones" | "goldenVacuum" | "chainReactor" | "cargoCyclone";
 export type RunSkillId = CoreRunSkillId | EvolutionSkillId | OverdriveSkillId | SynergySkillId;
+
+export interface CareerProgress {
+  day: number;
+  level: number;
+  xp: number;
+  xpNext: number;
+  pendingPicks: number;
+  skills: Record<RunSkillId, number>;
+}
 
 export interface RunSkillDefinition {
   id: RunSkillId;

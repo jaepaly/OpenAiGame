@@ -63,7 +63,7 @@ app.innerHTML = `
             <button id="garageCloseButton" aria-label="정비소 닫기">×</button>
           </header>
           <div class="upgrade-list" id="upgradeList"></div>
-          <div class="garage-tip">NOTE // 일일 특성 트리는 다음 날 초기화되지만, 정비소 장비는 계속 유지됩니다.</div>
+          <div class="garage-tip">NOTE // 정비소 장비와 장기 스킬트리는 날짜가 바뀌어도 모두 유지됩니다.</div>
         </div>
       </section>
 
@@ -104,11 +104,11 @@ app.innerHTML = `
         </div>
       </section>
 
-      <section class="levelup-overlay" id="levelUpOverlay" aria-label="일일 특성 트리">
+      <section class="levelup-overlay" id="levelUpOverlay" aria-label="장기 성장 특성 트리">
         <div class="levelup-panel skill-tree-panel">
-          <span class="levelup-kicker">DAILY SYSTEM BLUEPRINT // OPEN GRID</span>
-          <h2 id="levelUpTitle">오늘의 비행 설계도</h2>
-          <p id="levelUpDescription">연결된 노드를 따라 하루의 수확 장치를 직접 조립하세요.</p>
+          <span class="levelup-kicker">CAREER SYSTEM BLUEPRINT // 34 NODE GRID</span>
+          <h2 id="levelUpTitle">회사의 장기 성장 설계도</h2>
+          <p id="levelUpDescription">연결된 노드를 따라 영구 유지되는 수확 장치를 조립하세요.</p>
           <div class="skill-point-bank"><span>AVAILABLE POINTS</span><strong id="skillPointCount">0</strong><small>남겨둔 포인트는 다음 귀환까지 유지됩니다.</small></div>
           <div class="skill-choices skill-tree-network-shell" id="skillChoices"></div>
           <button class="skill-tree-close" id="skillTreeCloseButton">포인트를 남기고 기지로 돌아가기</button>
@@ -190,22 +190,40 @@ if (import.meta.env.DEV) {
 }
 
 const SKILL_NODE_LAYOUT: Record<RunSkillId, { x: number; y: number; branch: "vacuum" | "fever" | "automation" | "hybrid" }> = {
-  overclock: { x: 135, y: 150, branch: "vacuum" },
-  wideIntake: { x: 82, y: 330, branch: "vacuum" },
-  blackHole: { x: 46, y: 650, branch: "vacuum" },
-  denseRadar: { x: 46, y: 830, branch: "vacuum" },
+  overclock: { x: 50, y: 150, branch: "vacuum" },
+  intakeServo: { x: 50, y: 320, branch: "vacuum" },
+  wideIntake: { x: 50, y: 490, branch: "vacuum" },
+  pressureChamber: { x: 50, y: 660, branch: "vacuum" },
+  massInduction: { x: 50, y: 830, branch: "vacuum" },
+  blackHole: { x: 50, y: 1000, branch: "vacuum" },
+  eventHorizon: { x: 50, y: 1170, branch: "vacuum" },
+  vacuumMomentum: { x: 50, y: 1340, branch: "vacuum" },
+  denseRadar: { x: 50, y: 1510, branch: "vacuum" },
   profitRain: { x: 445, y: 150, branch: "fever" },
-  feverDrive: { x: 445, y: 330, branch: "fever" },
-  goldenStorm: { x: 445, y: 650, branch: "fever" },
-  yieldBoost: { x: 335, y: 830, branch: "fever" },
-  feverReserve: { x: 555, y: 830, branch: "fever" },
-  twinDrone: { x: 755, y: 150, branch: "automation" },
-  chainBurst: { x: 808, y: 330, branch: "automation" },
-  droneFleet: { x: 844, y: 650, branch: "automation" },
-  cargoBay: { x: 844, y: 830, branch: "automation" },
-  cycloneCore: { x: 245, y: 475, branch: "hybrid" },
-  cascadeGrid: { x: 445, y: 475, branch: "hybrid" },
-  stormDrones: { x: 645, y: 475, branch: "hybrid" },
+  comboCapacitor: { x: 445, y: 320, branch: "fever" },
+  feverDrive: { x: 445, y: 490, branch: "fever" },
+  feverInjector: { x: 445, y: 660, branch: "fever" },
+  stormCatalyst: { x: 445, y: 830, branch: "fever" },
+  goldenStorm: { x: 445, y: 1000, branch: "fever" },
+  sunStorm: { x: 445, y: 1170, branch: "fever" },
+  jackpotPulse: { x: 445, y: 1340, branch: "fever" },
+  yieldBoost: { x: 340, y: 1510, branch: "fever" },
+  feverReserve: { x: 550, y: 1510, branch: "fever" },
+  twinDrone: { x: 840, y: 150, branch: "automation" },
+  droneAI: { x: 840, y: 320, branch: "automation" },
+  chainBurst: { x: 840, y: 490, branch: "automation" },
+  relayBurst: { x: 840, y: 660, branch: "automation" },
+  salvageProtocol: { x: 840, y: 830, branch: "automation" },
+  droneFleet: { x: 840, y: 1000, branch: "automation" },
+  nanoSwarm: { x: 840, y: 1170, branch: "automation" },
+  swarmMatrix: { x: 840, y: 1340, branch: "automation" },
+  cargoBay: { x: 840, y: 1510, branch: "automation" },
+  cycloneCore: { x: 150, y: 1720, branch: "hybrid" },
+  stormDrones: { x: 445, y: 1720, branch: "hybrid" },
+  cascadeGrid: { x: 740, y: 1720, branch: "hybrid" },
+  goldenVacuum: { x: 150, y: 1900, branch: "hybrid" },
+  cargoCyclone: { x: 445, y: 1900, branch: "hybrid" },
+  chainReactor: { x: 740, y: 1900, branch: "hybrid" },
 };
 
 function renderRunState(state: RunState): void {
@@ -264,10 +282,10 @@ function showFactory(state: RunState): void {
 function showLevelUp(pendingPicks: number): void {
   const state = game.getRunState();
   skillPointCount.textContent = String(pendingPicks);
-  levelUpTitle.textContent = pendingPicks > 0 ? `설계 포인트 ${pendingPicks}개를 연결하세요` : "오늘의 비행 설계도";
+  levelUpTitle.textContent = pendingPicks > 0 ? `설계 포인트 ${pendingPicks}개를 연결하세요` : "회사의 장기 성장 설계도";
   levelUpDescription.textContent = pendingPicks > 0
     ? "중앙 코어에서 열린 노드를 따라가세요. 한 계열을 관통하거나 여러 장치를 섞어도 됩니다."
-    : "현재 조립된 노드망입니다. 다음 레벨의 포인트는 비행을 멈추지 않고 저장됩니다.";
+    : "현재 조립된 영구 노드망입니다. 다음 레벨의 포인트는 비행을 멈추지 않고 저장됩니다.";
   skillTreeCloseButton.textContent = pendingPicks > 0 ? `포인트 ${pendingPicks}개를 남기고 기지로 돌아가기` : "기지로 돌아가기";
   const roots = new Set<RunSkillId>(["overclock", "profitRain", "twinDrone"]);
   const center = { x: 540, y: 83 };
@@ -288,8 +306,8 @@ function showLevelUp(pendingPicks: number): void {
     <div class="skill-tree-scroll-hint">SCROLL BLUEPRINT · CONNECT ADJACENT SYSTEMS</div>
     <div class="skill-tree-network">
       <div class="skill-tree-grid-glow"></div>
-      <svg class="skill-tree-links" viewBox="0 0 1080 1010" aria-hidden="true">${connectors}</svg>
-      <div class="skill-tree-core"><small>DAY ${state.day} CORE</small><strong>${pendingPicks}</strong><span>POINTS</span></div>
+      <svg class="skill-tree-links" viewBox="0 0 1080 2070" aria-hidden="true">${connectors}</svg>
+      <div class="skill-tree-core"><small>CAREER GROWTH CORE</small><strong>${pendingPicks}</strong><span>POINTS</span></div>
       ${(Object.keys(SKILL_NODE_LAYOUT) as RunSkillId[]).map((id) => {
         const skill = RUN_SKILLS[id];
         const layout = SKILL_NODE_LAYOUT[id];
@@ -364,10 +382,10 @@ function renderState(state: GameState): void {
 
   const next = RANKS[state.rank + 1];
   if (!next) {
-    promotionTitle.textContent = "최고 고도 달성";
-    promotionDescription.textContent = "전기구름까지 수확하는 전국 규모의 기업이 되었습니다.";
-    promotionRequirements.innerHTML = `<span class="done">✓ 프로토타입 완주</span>`;
-    promoteButton.textContent = "준비 중인 성층권";
+    promotionTitle.textContent = "전리층 산업권 달성";
+    promotionDescription.textContent = "고도 승급은 완료됐지만 장비·연구·스킬 성장은 계속됩니다.";
+    promotionRequirements.innerHTML = `<span class="done">✓ 최고 항로 개방 · 무한 성장 진행 중</span>`;
+    promoteButton.textContent = "장기 성장 계속";
     promoteButton.disabled = true;
   } else {
     promotionTitle.textContent = next.name;
@@ -419,7 +437,7 @@ contractList.addEventListener("click", (event) => {
     const completedFlight = dayComplete ? 3 : run.flight - 1;
     receiptKicker.textContent = `DAY ${run.day} // FLIGHT ${completedFlight}/3 COMPLETE`;
     receiptDescription.textContent = dayComplete
-      ? "세 번의 출격으로 오늘의 빌드가 완성되었습니다. 영구 연구를 선택하면 다음 날이 시작됩니다."
+      ? "세 번의 출격을 마쳤습니다. 연구를 선택해도 레벨·포인트·스킬망은 그대로 다음 날까지 이어집니다."
       : `레벨 ${run.level}과 선택한 장비를 유지한 채 FLIGHT ${run.flight}/3으로 이어집니다.`;
     dayResearch.classList.toggle("show", dayComplete);
     baseGarageButton.disabled = dayComplete;
@@ -430,7 +448,7 @@ contractList.addEventListener("click", (event) => {
         <button class="research-card" data-research="${research.id}" style="--research-color:${research.color}">
           <span>${research.code}</span><small>RESEARCH LV.${state.research[research.id]}</small>
           <strong>${research.name}</strong><p>${research.description}</p>
-          <b>${research.effect}</b><em>이 연구를 계승</em>
+          <b>${research.effect}</b><em>회사 연구에 영구 적용</em>
         </button>
       `).join("");
     }
@@ -443,8 +461,8 @@ researchList.addEventListener("click", (event) => {
   dayResearch.classList.remove("show");
   baseGarageButton.disabled = false;
   launchButton.disabled = false;
-  receiptKicker.textContent = `DAY ${run.day} READY // BUILD RESET`;
-  receiptDescription.textContent = "영구 연구는 회사에 남았습니다. 새로운 비행 빌드를 설계할 시간입니다.";
+  receiptKicker.textContent = `DAY ${run.day} READY // CAREER CONTINUES`;
+  receiptDescription.textContent = "연구와 기존 스킬망이 모두 유지됩니다. 더 깊은 시스템을 연결할 시간입니다.";
 });
 baseGarageButton.addEventListener("click", () => {
   factoryOverlay.classList.remove("show");
