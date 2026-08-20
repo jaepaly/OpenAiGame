@@ -1,5 +1,5 @@
 import "./styles.css";
-import { CLOUDS, FLIGHT_ROUTES, PROCESSING_CONTRACTS, RANKS, RESEARCH_PROJECTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, upgradeCost } from "./config";
+import { CLOUDS, FLIGHT_ROUTES, PROCESSING_CONTRACTS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, upgradeCost } from "./config";
 import { CloudHarvestGame } from "./game";
 import type { ContractId, FlightRouteId, GameState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
@@ -109,9 +109,9 @@ app.innerHTML = `
           <span class="levelup-kicker">CAREER SYSTEM BLUEPRINT // 34 NODE GRID</span>
           <h2 id="levelUpTitle">회사의 장기 성장 설계도</h2>
           <p id="levelUpDescription">연결된 노드를 따라 영구 유지되는 수확 장치를 조립하세요.</p>
-          <div class="skill-point-bank"><span>AVAILABLE POINTS</span><strong id="skillPointCount">0</strong><small>남겨둔 포인트는 다음 귀환까지 유지됩니다.</small></div>
+          <div class="skill-point-bank"><span>CLOUD STOCKPILE</span><strong id="skillPointCount">☁ 0 · 🌧 0 · ⚡ 0</strong><small>정산한 구름을 보관하고 노드 해금에 직접 사용합니다.</small></div>
           <div class="skill-choices skill-tree-network-shell" id="skillChoices"></div>
-          <button class="skill-tree-close" id="skillTreeCloseButton">포인트를 남기고 기지로 돌아가기</button>
+          <button class="skill-tree-close" id="skillTreeCloseButton">기지로 돌아가기</button>
         </div>
       </section>
     </section>
@@ -226,12 +226,29 @@ const SKILL_NODE_LAYOUT: Record<RunSkillId, { x: number; y: number; branch: "vac
   chainReactor: { x: 740, y: 1900, branch: "hybrid" },
 };
 
+function skillCostLabel(id: RunSkillId): string {
+  const cost = RUN_SKILL_COSTS[id];
+  return (["cumulus", "rain", "electric"] as const)
+    .filter((kind) => (cost[kind] ?? 0) > 0)
+    .map((kind) => `${kind === "cumulus" ? "☁" : kind === "rain" ? "🌧" : "⚡"} ${cost[kind]}`)
+    .join(" · ");
+}
+
+function canAffordSkill(id: RunSkillId, state: { materials: GameState["materials"] }): boolean {
+  return (Object.entries(RUN_SKILL_COSTS[id]) as [keyof GameState["materials"], number][])
+    .every(([kind, amount]) => state.materials[kind] >= amount);
+}
+
 function renderRunState(state: RunState): void {
-  runLevel.textContent = state.pendingPicks > 0 ? `LV.${state.level} +${state.pendingPicks}` : `LV.${state.level}`;
-  runLevel.classList.toggle("ready", state.pendingPicks > 0);
+  runLevel.textContent = `LV.${state.level}`;
+  runLevel.classList.remove("ready");
   const treeCode = skillTreeButton.querySelector<HTMLElement>("b");
-  if (treeCode) treeCode.textContent = state.pendingPicks > 0 ? `TREE +${state.pendingPicks}` : "TREE";
-  skillTreeButton.classList.toggle("ready", state.pendingPicks > 0);
+  const affordableSkill = (Object.keys(RUN_SKILLS) as RunSkillId[]).some((id) => {
+    const requirementsMet = RUN_SKILLS[id].requirements?.every((requirement) => state.skills[requirement] >= 1) ?? true;
+    return state.skills[id] < 1 && requirementsMet && canAffordSkill(id, state);
+  });
+  if (treeCode) treeCode.textContent = affordableSkill ? "TREE!" : "TREE";
+  skillTreeButton.classList.toggle("ready", affordableSkill);
   xpFill.style.width = `${Math.min(100, state.xp / state.xpNext * 100)}%`;
   xpText.textContent = `${Math.floor(state.xp)} / ${state.xpNext}`;
   feverFill.style.width = `${Math.min(100, state.fever)}%`;
@@ -279,14 +296,15 @@ function showFactory(state: RunState): void {
   factoryOverlay.classList.add("show");
 }
 
-function showLevelUp(pendingPicks: number): void {
+function showLevelUp(_pendingPicks: number): void {
   const state = game.getRunState();
-  skillPointCount.textContent = String(pendingPicks);
-  levelUpTitle.textContent = pendingPicks > 0 ? `설계 포인트 ${pendingPicks}개를 연결하세요` : "회사의 장기 성장 설계도";
-  levelUpDescription.textContent = pendingPicks > 0
-    ? "중앙 코어에서 열린 노드를 따라가세요. 한 계열을 관통하거나 여러 장치를 섞어도 됩니다."
-    : "현재 조립된 영구 노드망입니다. 다음 레벨의 포인트는 비행을 멈추지 않고 저장됩니다.";
-  skillTreeCloseButton.textContent = pendingPicks > 0 ? `포인트 ${pendingPicks}개를 남기고 기지로 돌아가기` : "기지로 돌아가기";
+  const companyState = game.getState();
+  const stock = companyState.materials;
+  const totalStock = stock.cumulus + stock.rain + stock.electric;
+  skillPointCount.textContent = `☁ ${stock.cumulus} · 🌧 ${stock.rain} · ⚡ ${stock.electric}`;
+  levelUpTitle.textContent = "보관한 구름으로 시스템을 해금하세요";
+  levelUpDescription.textContent = "초반에는 흰 구름, 중반에는 비구름, 후반 궁극 시스템에는 전기구름이 필요합니다.";
+  skillTreeCloseButton.textContent = "기지로 돌아가기";
   const roots = new Set<RunSkillId>(["overclock", "profitRain", "twinDrone"]);
   const center = { x: 540, y: 83 };
   const nodeCenter = (id: RunSkillId) => ({ x: SKILL_NODE_LAYOUT[id].x + 95, y: SKILL_NODE_LAYOUT[id].y + 65 });
@@ -294,7 +312,7 @@ function showLevelUp(pendingPicks: number): void {
     const skill = RUN_SKILLS[id];
     const target = nodeCenter(id);
     const sources = roots.has(id) ? [center] : (skill.requirements ?? []).map(nodeCenter);
-    const active = roots.has(id) || (skill.requirements?.every((requirement) => state.skills[requirement] >= RUN_SKILLS[requirement].maxStacks) ?? false);
+    const active = roots.has(id) || (skill.requirements?.every((requirement) => state.skills[requirement] >= 1) ?? false);
     return sources.map((source) => `<line class="skill-link ${active ? "active" : ""}" x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" style="--link-color:${skill.color}" />`);
   }).join("");
   const investedNodes = (Object.keys(state.skills) as RunSkillId[]).filter((id) => state.skills[id] > 0).length;
@@ -307,21 +325,18 @@ function showLevelUp(pendingPicks: number): void {
     <div class="skill-tree-network">
       <div class="skill-tree-grid-glow"></div>
       <svg class="skill-tree-links" viewBox="0 0 1080 2070" aria-hidden="true">${connectors}</svg>
-      <div class="skill-tree-core"><small>CAREER GROWTH CORE</small><strong>${pendingPicks}</strong><span>POINTS</span></div>
+      <div class="skill-tree-core"><small>CAREER CLOUD RESERVE</small><strong>${totalStock}</strong><span>CLOUDS</span></div>
       ${(Object.keys(SKILL_NODE_LAYOUT) as RunSkillId[]).map((id) => {
         const skill = RUN_SKILLS[id];
         const layout = SKILL_NODE_LAYOUT[id];
         const stack = state.skills[id];
-        const finite = Number.isFinite(skill.maxStacks);
-        const maxed = finite && stack >= skill.maxStacks;
-        const unlocked = skill.requirements?.every((requirement) => state.skills[requirement] >= RUN_SKILLS[requirement].maxStacks) ?? true;
+        const maxed = stack >= 1;
+        const unlocked = skill.requirements?.every((requirement) => state.skills[requirement] >= 1) ?? true;
         const available = game.canChooseSkill(id);
         const requirement = skill.requirements?.map((requirementId) => RUN_SKILLS[requirementId].name).join(" + ") ?? "중앙 코어";
-        const tier = skill.category === "evolution" ? "BREAKTHROUGH" : skill.category === "overdrive" ? "INFINITE" : skill.category === "synergy" ? "CROSS SYNERGY" : "SYSTEM";
-        const action = maxed ? "MASTERED" : !unlocked ? `${requirement} 필요` : pendingPicks <= 0 ? "POINT 대기" : skill.category === "evolution" ? "궁극기 연결" : skill.category === "synergy" ? "교차 시스템 연결" : "1 POINT 투자";
-        const pips = finite
-          ? Array.from({ length: skill.maxStacks }, (_, index) => `<i class="${index < stack ? "on" : ""}"></i>`).join("")
-          : `<i class="infinite">∞</i><b>+${stack}</b>`;
+        const tier = skill.category === "evolution" ? "BREAKTHROUGH" : skill.category === "overdrive" ? "ADVANCED SYSTEM" : skill.category === "synergy" ? "CROSS SYNERGY" : "SYSTEM";
+        const action = maxed ? "UNLOCKED" : !unlocked ? `${requirement} 필요` : !canAffordSkill(id, companyState) ? `${skillCostLabel(id)} 필요` : `${skillCostLabel(id)}로 해금`;
+        const pips = `<i class="${maxed ? "on" : ""}"></i>`;
         return `<button class="skill-node network-node ${skill.category} branch-${layout.branch} ${stack > 0 ? "invested" : ""} ${maxed ? "maxed" : ""} ${!unlocked ? "locked" : ""}" data-skill="${id}" style="--skill-color:${skill.color};left:${layout.x}px;top:${layout.y}px" ${available ? "" : "disabled"} title="${skill.description}">
           <span class="skill-node-icon" data-icon="${skill.icon}">${skill.icon}</span>
           <span class="skill-node-copy"><small>${tier}</small><strong>${skill.name}</strong><p>${skill.description}</p></span>
@@ -437,7 +452,7 @@ contractList.addEventListener("click", (event) => {
     const completedFlight = dayComplete ? 3 : run.flight - 1;
     receiptKicker.textContent = `DAY ${run.day} // FLIGHT ${completedFlight}/3 COMPLETE`;
     receiptDescription.textContent = dayComplete
-      ? "세 번의 출격을 마쳤습니다. 연구를 선택해도 레벨·포인트·스킬망은 그대로 다음 날까지 이어집니다."
+      ? "세 번의 출격을 마쳤습니다. 연구를 선택해도 레벨·구름 재고·스킬망은 그대로 다음 날까지 이어집니다."
       : `레벨 ${run.level}과 선택한 장비를 유지한 채 FLIGHT ${run.flight}/3으로 이어집니다.`;
     dayResearch.classList.toggle("show", dayComplete);
     baseGarageButton.disabled = dayComplete;

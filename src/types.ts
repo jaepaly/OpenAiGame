@@ -77,6 +77,7 @@ export interface GameState {
   research: Record<ResearchId, number>;
   bestCombo: number;
   sound: boolean;
+  materials: Record<CloudKind, number>;
   career: CareerProgress;
 }
 
@@ -109,6 +110,8 @@ export interface RunSkillDefinition {
   requirements?: RunSkillId[];
 }
 
+export type RunSkillCost = Partial<Record<CloudKind, number>>;
+
 export interface SkillTreeBranch {
   id: "vacuum" | "fever" | "automation";
   code: string;
@@ -134,6 +137,7 @@ export interface RunState {
   cargoValue: Record<CloudKind, number>;
   cargoBonus: number;
   cargoCapacity: number;
+  materials: Record<CloudKind, number>;
   routeId: FlightRouteId;
   skills: Record<RunSkillId, number>;
 }

@@ -1,4 +1,4 @@
-import { CLOUDS, FLIGHT_ROUTES, INITIAL_STATE, PROCESSING_CONTRACTS, RANKS, RESEARCH_PROJECTS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
+import { CLOUDS, FLIGHT_ROUTES, INITIAL_STATE, PROCESSING_CONTRACTS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
 import type { Cloud, CloudFormationKind, CloudKind, ContractId, FlightRouteId, FloatingText, GameState, Particle, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
@@ -28,6 +28,7 @@ const freshRunState = (day = 1): RunState => ({
   cargoValue: { cumulus: 0, rain: 0, electric: 0 },
   cargoBonus: 0,
   cargoCapacity: 28,
+  materials: { cumulus: 0, rain: 0, electric: 0 },
   routeId: "tailwind",
   skills: {
     overclock: 0, intakeServo: 0, wideIntake: 0, pressureChamber: 0, massInduction: 0, vacuumMomentum: 0,
@@ -130,6 +131,7 @@ export class CloudHarvestGame {
   getRunState(): RunState {
     const state = structuredClone(this.run);
     state.cargoCapacity = this.getCargoCapacity();
+    state.materials = structuredClone(this.state.materials);
     return state;
   }
 
@@ -144,6 +146,8 @@ export class CloudHarvestGame {
     return Math.round((Object.keys(this.run.cargoValue) as CloudKind[])
       .reduce((total, kind) => total + this.run.cargoValue[kind] * contract.multipliers[kind], this.run.cargoBonus));
   }
+
+  getSkillCost(id: RunSkillId) { return { ...RUN_SKILL_COSTS[id] }; }
 
   requestReturn(): boolean {
     if (this.atFactory || this.returning) return false;
@@ -175,6 +179,9 @@ export class CloudHarvestGame {
     const payout = this.getContractPayout(id);
     this.state.money += payout;
     this.state.totalEarned += payout;
+    (Object.keys(this.run.cargo) as CloudKind[]).forEach((kind) => {
+      this.state.materials[kind] += this.run.cargo[kind];
+    });
     const finalFlight = this.run.flight >= 3;
     this.run.cargo = { cumulus: 0, rain: 0, electric: 0 };
     this.run.cargoValue = { cumulus: 0, rain: 0, electric: 0 };
@@ -270,25 +277,26 @@ export class CloudHarvestGame {
 
   chooseSkill(id: RunSkillId): boolean {
     if (!this.pausedForLevel || !this.canChooseSkill(id)) return false;
-    this.run.skills[id] += 1;
-    this.run.pendingPicks = Math.max(0, this.run.pendingPicks - 1);
+    (Object.entries(RUN_SKILL_COSTS[id]) as [CloudKind, number][]).forEach(([kind, amount]) => {
+      this.state.materials[kind] -= amount;
+    });
+    this.run.skills[id] = 1;
     this.commit();
     this.burst(this.player.x, this.player.y, RUN_SKILLS[id].color, 36, 210);
     this.playChord();
     this.onRunChange(this.getRunState());
-    if (this.run.pendingPicks > 0) {
-      window.setTimeout(() => this.presentLevelUp(), 140);
-      return false;
-    }
-    this.onToast(`${RUN_SKILLS[id].name} 장착 완료 — 다음 출격 준비!`, "success");
+    this.onToast(`${RUN_SKILLS[id].name} 영구 해금!`, "success");
     window.setTimeout(() => this.presentLevelUp(), 140);
-    return false;
+    return true;
   }
 
   canChooseSkill(id: RunSkillId): boolean {
     const skill = RUN_SKILLS[id];
-    if (!skill || this.run.pendingPicks <= 0 || this.run.skills[id] >= skill.maxStacks) return false;
-    return skill.requirements?.every((requirement) => this.run.skills[requirement] >= RUN_SKILLS[requirement].maxStacks) ?? true;
+    if (!skill || !this.atFactory || !this.pausedForLevel || this.run.skills[id] >= 1) return false;
+    const requirementsMet = skill.requirements?.every((requirement) => this.run.skills[requirement] >= 1) ?? true;
+    if (!requirementsMet) return false;
+    return (Object.entries(RUN_SKILL_COSTS[id]) as [CloudKind, number][])
+      .every(([kind, amount]) => this.state.materials[kind] >= amount);
   }
 
   openSkillTree(): boolean {
@@ -553,9 +561,7 @@ export class CloudHarvestGame {
       if (this.run.feverSeconds <= 0) {
         this.run.feverActive = false;
         this.run.fever = 0;
-        if (this.run.pendingPicks > 0) {
-          this.onToast(`피버 종료 — 장비 데이터 ${this.run.pendingPicks}개 기지 전송`, "success");
-        } else this.onToast("피버 종료 — 다시 게이지를 채우세요!");
+        this.onToast("피버 종료 — 다시 게이지를 채우세요!");
       }
     }
     const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.pressureChamber * 18
@@ -706,10 +712,6 @@ export class CloudHarvestGame {
       if (this.returnTimer >= 2.25) {
         this.returning = false;
         this.onFactoryOpen(this.getRunState());
-        if (this.run.pendingPicks > 0) {
-          this.pausedForLevel = true;
-          window.setTimeout(() => this.presentLevelUp(), 240);
-        }
       }
       return;
     }
@@ -953,19 +955,18 @@ export class CloudHarvestGame {
       this.run.xp -= this.run.xpNext;
       this.run.level += 1;
       this.run.xpNext = Math.round(6 + (this.run.level - 1) * 4.5);
-      this.run.pendingPicks += 1;
       gained += 1;
     }
     if (gained > 0) this.commit();
     this.onRunChange(this.getRunState());
-    if (gained > 0) this.onToast(`LEVEL ${this.run.level} — 장비 데이터 ${this.run.pendingPicks}개 저장`, "success");
+    if (gained > 0) this.onToast(`COMPANY LEVEL ${this.run.level} — 성장 효율 상승`, "success");
   }
 
   private presentLevelUp(): void {
     if (!this.atFactory) return;
     this.pausedForLevel = true;
     this.onRunChange(this.getRunState());
-    this.onLevelUp(this.run.pendingPicks);
+    this.onLevelUp(0);
   }
 
   private triggerPressureSurge(x: number, y: number): void {
@@ -1811,7 +1812,7 @@ export class CloudHarvestGame {
       level: this.run.level,
       xp: this.run.xp,
       xpNext: this.run.xpNext,
-      pendingPicks: this.run.pendingPicks,
+      pendingPicks: 0,
       skills: structuredClone(this.run.skills),
     };
   }
@@ -1822,8 +1823,11 @@ export class CloudHarvestGame {
     this.run.level = career.level;
     this.run.xp = career.xp;
     this.run.xpNext = career.xpNext;
-    this.run.pendingPicks = career.pendingPicks;
+    this.run.pendingPicks = 0;
     this.run.skills = { ...this.run.skills, ...structuredClone(career.skills) };
+    (Object.keys(this.run.skills) as RunSkillId[]).forEach((id) => {
+      this.run.skills[id] = this.run.skills[id] > 0 ? 1 : 0;
+    });
   }
 
   private commit(): void {
@@ -1841,6 +1845,7 @@ export class CloudHarvestGame {
         ...parsed,
         levels: { ...INITIAL_STATE.levels, ...parsed.levels },
         research: { ...INITIAL_STATE.research, ...parsed.research },
+        materials: { ...INITIAL_STATE.materials, ...parsed.materials },
         career: {
           ...structuredClone(INITIAL_STATE.career),
           ...parsed.career,
