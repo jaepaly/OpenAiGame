@@ -64,6 +64,9 @@ export class CloudHarvestGame {
   private pausedForLevel = false;
   private player = { x: 480, y: 380, targetX: 480, targetY: 380 };
   private pointer = { x: 480, y: 380, active: false, visible: false };
+  private playerVelocity = { x: 0, y: 0 };
+  private keys = new Set<string>();
+  private touchDirect = false;
   private overload = 0;
   private shockToastCooldown = 0;
   private combo = 0;
@@ -148,6 +151,10 @@ export class CloudHarvestGame {
     this.returning = true;
     this.returnTimer = 0;
     this.pointer.active = false;
+    this.pointer.visible = false;
+    this.touchDirect = false;
+    this.keys.clear();
+    this.playerVelocity = { x: 0, y: 0 };
     this.clearCascade();
     this.player.targetX = this.width * .5;
     this.player.targetY = this.height * .53;
@@ -190,6 +197,11 @@ export class CloudHarvestGame {
     this.launching = true;
     this.launchTimer = 0;
     this.pausedForLevel = false;
+    this.pointer.active = false;
+    this.pointer.visible = false;
+    this.touchDirect = false;
+    this.keys.clear();
+    this.playerVelocity = { x: 0, y: 0 };
     this.clouds = [];
     this.formationId = 0;
     this.particles = [];
@@ -218,6 +230,10 @@ export class CloudHarvestGame {
     const nextDay = this.run.day + 1;
     this.run = freshRunState(nextDay);
     this.dayComplete = false;
+    this.pointer = { x: this.width * .7, y: this.height * .55, active: false, visible: false };
+    this.touchDirect = false;
+    this.keys.clear();
+    this.playerVelocity = { x: 0, y: 0 };
     this.commit();
     this.onRunChange(this.getRunState());
     this.onToast(`${RESEARCH_PROJECTS[id].name} 연구 완료 — DAY ${nextDay} 준비`, "success");
@@ -313,6 +329,10 @@ export class CloudHarvestGame {
     localStorage.removeItem(SAVE_KEY);
     this.state = structuredClone(INITIAL_STATE);
     this.run = freshRunState();
+    this.pointer = { x: this.width * .7, y: this.height * .55, active: false, visible: false };
+    this.touchDirect = false;
+    this.keys.clear();
+    this.playerVelocity = { x: 0, y: 0 };
     this.pausedForLevel = false;
     this.atFactory = false;
     this.returning = false;
@@ -343,8 +363,11 @@ export class CloudHarvestGame {
     this.canvas.addEventListener("pointerdown", (event) => {
       const p = point(event);
       this.pointer = { x: p.x, y: p.y, active: true, visible: true };
-      this.player.targetX = p.x;
-      this.player.targetY = p.y;
+      this.touchDirect = event.pointerType === "touch" || event.pointerType === "pen";
+      if (this.touchDirect) {
+        this.player.targetX = p.x;
+        this.player.targetY = p.y;
+      }
       this.canvas.setPointerCapture(event.pointerId);
       this.ensureAudio();
     });
@@ -353,13 +376,96 @@ export class CloudHarvestGame {
       this.pointer.x = p.x;
       this.pointer.y = p.y;
       this.pointer.visible = true;
-      this.player.targetX = p.x;
-      this.player.targetY = p.y;
+      if (this.touchDirect) {
+        this.player.targetX = p.x;
+        this.player.targetY = p.y;
+      }
     });
-    const release = () => { this.pointer.active = false; };
+    const release = (event: PointerEvent) => {
+      this.pointer.active = false;
+      this.touchDirect = false;
+      if (event.pointerType !== "mouse") this.pointer.visible = false;
+    };
     this.canvas.addEventListener("pointerup", release);
     this.canvas.addEventListener("pointercancel", release);
     this.canvas.addEventListener("pointerleave", () => { if (!this.pointer.active) this.pointer.visible = false; });
+
+    const controlCodes = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight", "Space"]);
+    window.addEventListener("keydown", (event) => {
+      if (!controlCodes.has(event.code) || this.atFactory || this.pausedForLevel) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("button, input, textarea, select")) return;
+      event.preventDefault();
+      this.keys.add(event.code);
+      if (event.code === "Space") this.ensureAudio();
+    });
+    window.addEventListener("keyup", (event) => this.keys.delete(event.code));
+    window.addEventListener("blur", () => this.keys.clear());
+  }
+
+  private isSuctionActive(): boolean {
+    return this.pointer.active || this.keys.has("Space");
+  }
+
+  private getAimAngle(): number {
+    if (!this.pointer.visible) return 0;
+    return Math.atan2(this.pointer.y - this.player.y, this.pointer.x - this.player.x);
+  }
+
+  private getSuctionHalfAngle(): number {
+    if (this.run.feverActive || this.touchDirect) return Math.PI;
+    return Math.min(1.22, .62 + this.run.skills.wideIntake * .1 + this.run.skills.cycloneCore * .14);
+  }
+
+  private isCloudInSuctionArc(cloud: Cloud, radius: number): boolean {
+    const dx = cloud.x - this.player.x;
+    const dy = cloud.y - this.player.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance > radius + cloud.radius) return false;
+    const halfAngle = this.getSuctionHalfAngle();
+    if (halfAngle >= Math.PI) return true;
+    const cloudAngle = Math.atan2(dy, dx);
+    const angleDelta = Math.atan2(Math.sin(cloudAngle - this.getAimAngle()), Math.cos(cloudAngle - this.getAimAngle()));
+    return Math.abs(angleDelta) <= halfAngle;
+  }
+
+  private updatePlayerMovement(dt: number): void {
+    if (this.touchDirect) {
+      const follow = 1 - Math.exp(-dt * 9);
+      this.player.x += (this.player.targetX - this.player.x) * follow;
+      this.player.y += (this.player.targetY - this.player.y) * follow;
+      this.playerVelocity.x = 0;
+      this.playerVelocity.y = 0;
+    } else {
+      const inputX = Number(this.keys.has("KeyD") || this.keys.has("ArrowRight")) - Number(this.keys.has("KeyA") || this.keys.has("ArrowLeft"));
+      const inputY = Number(this.keys.has("KeyS") || this.keys.has("ArrowDown")) - Number(this.keys.has("KeyW") || this.keys.has("ArrowUp"));
+      const inputLength = Math.hypot(inputX, inputY) || 1;
+      const acceleration = 1050;
+      if (inputX || inputY) {
+        this.playerVelocity.x += inputX / inputLength * acceleration * dt;
+        this.playerVelocity.y += inputY / inputLength * acceleration * dt;
+      } else {
+        const drag = Math.exp(-dt * 8);
+        this.playerVelocity.x *= drag;
+        this.playerVelocity.y *= drag;
+      }
+      const maxSpeed = 270 + this.run.skills.overclock * 14;
+      const speed = Math.hypot(this.playerVelocity.x, this.playerVelocity.y);
+      if (speed > maxSpeed) {
+        this.playerVelocity.x = this.playerVelocity.x / speed * maxSpeed;
+        this.playerVelocity.y = this.playerVelocity.y / speed * maxSpeed;
+      }
+      this.player.x += this.playerVelocity.x * dt;
+      this.player.y += this.playerVelocity.y * dt;
+      this.player.targetX = this.player.x;
+      this.player.targetY = this.player.y;
+    }
+    const previousX = this.player.x;
+    const previousY = this.player.y;
+    this.player.x = Math.max(55, Math.min(this.width - 55, this.player.x));
+    this.player.y = Math.max(100, Math.min(this.height - 150, this.player.y));
+    if (this.player.x !== previousX) this.playerVelocity.x = 0;
+    if (this.player.y !== previousY) this.playerVelocity.y = 0;
   }
 
   private resize(): void {
@@ -408,11 +514,9 @@ export class CloudHarvestGame {
       this.spawnTimer = this.getCloudSpawnInterval() * (formed ? 1.8 : 1);
     }
 
-    const follow = 1 - Math.exp(-dt * 9);
     this.player.targetX = Math.max(55, Math.min(this.width - 55, this.player.targetX));
     this.player.targetY = Math.max(100, Math.min(this.height - 150, this.player.targetY));
-    this.player.x += (this.player.targetX - this.player.x) * follow;
-    this.player.y += (this.player.targetY - this.player.y) * follow;
+    this.updatePlayerMovement(dt);
     this.overload = Math.max(0, this.overload - dt);
     this.shockToastCooldown = Math.max(0, this.shockToastCooldown - dt);
     this.comboTimer -= dt;
@@ -461,11 +565,11 @@ export class CloudHarvestGame {
       cloud.vx += Math.sin(cloud.phase + cloud.age * 0.6) * dt * 3;
       cloud.vy += Math.cos(cloud.phase + cloud.age * 0.48) * dt * 2;
 
-      if (this.pointer.active && !cargoFull && !this.queuedCascadeIds.has(cloud.id)) {
+      if (this.isSuctionActive() && !cargoFull && !this.queuedCascadeIds.has(cloud.id)) {
         const dx = this.player.x - cloud.x;
         const dy = this.player.y - cloud.y;
         const distance = Math.hypot(dx, dy) || 1;
-        if (distance < radius + cloud.radius) {
+        if (this.isCloudInSuctionArc(cloud, radius)) {
           const definition = CLOUDS[cloud.kind];
           const proximity = Math.max(0.18, 1 - distance / (radius + cloud.radius));
           const damage = suctionPower * (0.55 + proximity) * dt;
@@ -1040,7 +1144,7 @@ export class CloudHarvestGame {
     this.drawSky(ctx, time);
     this.drawIsland(ctx);
     this.drawFormationLinks(ctx, time);
-    if (this.pointer.active) this.drawSuctionField(ctx, time);
+    if (this.isSuctionActive()) this.drawSuctionField(ctx, time);
     this.drawCascadeLinks(ctx, time);
     for (const cloud of this.clouds) this.drawCloud(ctx, cloud, time);
     this.drawStormDroneBeams(ctx, time);
@@ -1054,6 +1158,7 @@ export class CloudHarvestGame {
     ctx.globalAlpha = 1;
     this.drawDrones(ctx);
     this.drawPlayer(ctx, time);
+    if (this.pointer.visible && !this.touchDirect) this.drawAimReticle(ctx, time);
     for (const particle of this.particles) {
       ctx.globalAlpha = Math.min(1, particle.life / particle.maxLife);
       const speed = Math.hypot(particle.vx, particle.vy);
@@ -1261,7 +1366,7 @@ export class CloudHarvestGame {
     const toPlayerX = this.player.x - cloud.x;
     const toPlayerY = this.player.y - cloud.y;
     const playerDistance = Math.hypot(toPlayerX, toPlayerY);
-    const beingSucked = this.pointer.active && playerDistance < suctionRadius + cloud.radius;
+    const beingSucked = this.isSuctionActive() && this.isCloudInSuctionArc(cloud, suctionRadius);
     const proximity = beingSucked ? Math.max(0, 1 - playerDistance / (suctionRadius + cloud.radius)) : 0;
     const stretch = beingSucked ? 1 + proximity * .55 + (1 - healthRatio) * .75 : 1;
     const squeeze = beingSucked ? Math.max(.42, 1 - proximity * .24 - (1 - healthRatio) * .34) : 1;
@@ -1402,10 +1507,30 @@ export class CloudHarvestGame {
     const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.blackHole * 80 + (cycloneActive ? 120 : 0);
     const gradient = ctx.createRadialGradient(this.player.x, this.player.y, 20, this.player.x, this.player.y, radius);
     gradient.addColorStop(0, this.run.feverActive ? "rgba(255,244,111,.28)" : "rgba(255,255,255,.2)"); gradient.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(this.player.x, this.player.y, radius, 0, Math.PI * 2); ctx.fill();
+    const aimAngle = this.getAimAngle();
+    const halfAngle = this.getSuctionHalfAngle();
+    const fullCircle = halfAngle >= Math.PI;
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    if (fullCircle) ctx.arc(this.player.x, this.player.y, radius, 0, Math.PI * 2);
+    else {
+      ctx.moveTo(this.player.x, this.player.y);
+      ctx.arc(this.player.x, this.player.y, radius, aimAngle - halfAngle, aimAngle + halfAngle);
+      ctx.closePath();
+    }
+    ctx.fill();
     ctx.strokeStyle = this.overload > 0 ? "rgba(255,215,95,.75)" : this.run.feverActive ? "rgba(255,245,112,.82)" : "rgba(255,255,255,.55)";
     ctx.lineWidth = this.run.feverActive ? 5 : 3; ctx.setLineDash([12, 12]); ctx.lineDashOffset = -time * (this.run.feverActive ? 90 : 48);
-    ctx.beginPath(); ctx.arc(this.player.x, this.player.y, radius * (.88 + Math.sin(time * 6) * .03), 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    const pulseRadius = radius * (.88 + Math.sin(time * 6) * .03);
+    ctx.beginPath();
+    ctx.arc(this.player.x, this.player.y, pulseRadius, fullCircle ? 0 : aimAngle - halfAngle, fullCircle ? Math.PI * 2 : aimAngle + halfAngle);
+    if (!fullCircle) {
+      ctx.moveTo(this.player.x, this.player.y);
+      ctx.lineTo(this.player.x + Math.cos(aimAngle - halfAngle) * pulseRadius, this.player.y + Math.sin(aimAngle - halfAngle) * pulseRadius);
+      ctx.moveTo(this.player.x, this.player.y);
+      ctx.lineTo(this.player.x + Math.cos(aimAngle + halfAngle) * pulseRadius, this.player.y + Math.sin(aimAngle + halfAngle) * pulseRadius);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
     if (cycloneActive) {
       ctx.save(); ctx.translate(this.player.x, this.player.y); ctx.rotate(time * 2.4);
       ctx.strokeStyle = "rgba(115,232,255,.76)"; ctx.lineWidth = 3; ctx.shadowColor = "#73e8ff"; ctx.shadowBlur = 10;
@@ -1425,6 +1550,25 @@ export class CloudHarvestGame {
     }
   }
 
+  private drawAimReticle(ctx: CanvasRenderingContext2D, time: number): void {
+    const pulse = 1 + Math.sin(time * 7) * .08;
+    ctx.save();
+    ctx.translate(this.pointer.x, this.pointer.y);
+    ctx.strokeStyle = this.isSuctionActive() ? "rgba(255,239,105,.95)" : "rgba(255,255,255,.82)";
+    ctx.fillStyle = "rgba(22,66,87,.35)";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(0, 0, 13 * pulse, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    for (let tick = 0; tick < 4; tick += 1) {
+      const angle = tick * Math.PI / 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * 18, Math.sin(angle) * 18);
+      ctx.lineTo(Math.cos(angle) * 25, Math.sin(angle) * 25);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
   private drawPlayer(ctx: CanvasRenderingContext2D, time: number): void {
     const powerLevel = this.state.levels.power;
     const radiusLevel = this.state.levels.radius;
@@ -1432,7 +1576,10 @@ export class CloudHarvestGame {
     const insulationLevel = this.state.levels.insulation;
     const totalParts = powerLevel + radiusLevel + valueLevel + this.state.levels.drone + insulationLevel;
     const shipScale = 1 + Math.min(.25, totalParts * .018);
-    ctx.save(); ctx.translate(this.player.x, this.player.y + Math.sin(time * 4) * (this.atFactory ? .6 : 3)); ctx.scale(shipScale, shipScale);
+    ctx.save();
+    ctx.translate(this.player.x, this.player.y + Math.sin(time * 4) * (this.atFactory ? .6 : 3));
+    if (!this.atFactory && !this.returning && !this.launching && this.pointer.visible) ctx.rotate(this.getAimAngle());
+    ctx.scale(shipScale, shipScale);
     if (this.run.feverActive) { ctx.shadowColor = "#fff36f"; ctx.shadowBlur = 34; }
 
     ctx.fillStyle = "rgba(24,65,86,.2)"; ctx.beginPath(); ctx.ellipse(0, 34, 57, 13, 0, 0, Math.PI * 2); ctx.fill();
@@ -1444,7 +1591,7 @@ export class CloudHarvestGame {
     }
 
     const cinematicBoost = (this.returning && !this.atFactory) || this.launching;
-    if (this.pointer.active || cinematicBoost) {
+    if (this.isSuctionActive() || Math.hypot(this.playerVelocity.x, this.playerVelocity.y) > 30 || cinematicBoost) {
       const exhaustColor = this.run.feverActive || cinematicBoost ? "#fff36f" : "#8ff5ff";
       ctx.fillStyle = exhaustColor;
       const exhaustCount = cinematicBoost ? 8 : 3 + Math.min(3, powerLevel);

@@ -38,7 +38,7 @@ app.innerHTML = `
         <div class="route-status"><small id="dayFlight">DAY 1 · FLIGHT 1/3</small><b id="routeName">순풍 회랑</b></div>
       </div>
 
-      <div class="tutorial" id="tutorial"><b>구름 가까이에서 누르고 유지!</b><span>흡입 범위 안의 구름을 분해해 수확하세요</span></div>
+      <div class="tutorial" id="tutorial"><b>WASD 이동 · 마우스 조준</b><span>좌클릭 또는 Space로 흡입 · 터치는 누르고 이동</span></div>
       <div class="cloud-legend" id="cloudLegend"></div>
       <div class="toast" id="toast" aria-live="polite"></div>
 
