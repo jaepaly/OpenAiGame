@@ -9,7 +9,7 @@ if (!app) throw new Error("#app 요소를 찾을 수 없습니다.");
 app.innerHTML = `
   <main class="game-shell">
     <section class="game-stage">
-      <canvas id="gameCanvas" aria-label="구름 수확 게임 화면"></canvas>
+      <canvas id="gameCanvas" tabindex="0" aria-label="구름 수확 게임 화면"></canvas>
 
       <header class="game-hud-top">
         <div class="brand">
@@ -87,20 +87,22 @@ app.innerHTML = `
               <h4>오늘의 연구 성과를 하나 선택하세요</h4>
               <div class="research-list" id="researchList"></div>
             </section>
-            <div class="base-actions">
-              <button id="baseGarageButton"><b>MK</b><span>정비소 방문</span></button>
-              <button id="skillTreeButton"><b>TREE</b><span>특성 트리</span></button>
-              <button class="launch-button" id="launchButton"><b>TAKE OFF</b><span>다음 비행 출격</span></button>
-            </div>
           </section>
         </div>
       </section>
+
+      <nav class="base-hub" id="baseHub" aria-label="구름 수확 기지 시설">
+        <div class="base-hub-status"><small>DOCKING COMPLETE</small><strong id="baseHubStatus">화물 정산 완료 · 다음 작전을 준비하세요</strong></div>
+        <button class="base-facility workshop" id="baseGarageButton"><b>MK</b><span>정비 베이</span><small>영구 장비 강화</small></button>
+        <button class="base-facility blueprint" id="skillTreeButton"><b>TREE</b><span>설계 터미널</span><small>구름 재료로 특성 해금</small></button>
+        <button class="base-facility launch" id="launchButton"><b>TAKE OFF</b><span>출격 게이트</span><small>다음 항로 선택</small></button>
+      </nav>
 
       <section class="route-overlay" id="routeOverlay" aria-label="오늘의 비행 항로 선택">
         <div class="route-panel">
           <header><span>NEXT SORTIE // ROUTE SELECT</span><h2>오늘의 항로를 선택하세요</h2><p>항로마다 이번 비행의 위험도와 수익 구조가 달라집니다.</p></header>
           <div class="route-list" id="routeList"></div>
-          <button class="route-back" id="routeBackButton">← 정산 결과로 돌아가기</button>
+          <button class="route-back" id="routeBackButton">← 기지 격납고로 돌아가기</button>
         </div>
       </section>
 
@@ -109,7 +111,7 @@ app.innerHTML = `
           <span class="levelup-kicker">CAREER SYSTEM BLUEPRINT // 34 NODE GRID</span>
           <h2 id="levelUpTitle">회사의 장기 성장 설계도</h2>
           <p id="levelUpDescription">연결된 노드를 따라 영구 유지되는 수확 장치를 조립하세요.</p>
-          <div class="skill-point-bank"><span>CLOUD STOCKPILE</span><strong id="skillPointCount">☁ 0 · 🌧 0 · ⚡ 0 · ❄ 0 · ☀ 0 · ✦ 0</strong><small>정산한 구름을 보관하고 노드 해금에 직접 사용합니다.</small></div>
+          <div class="skill-point-bank"><span>CLOUD STOCKPILE</span><strong id="skillPointCount">☁ 0 · 🌧 0 · ⚡ 0 · ❄ 0 · ☀ 0 · ✦ 0</strong><small>상위 구름 1개는 바로 아래 단계 구름 4개 가치로 자동 대체됩니다.</small></div>
           <div class="skill-choices skill-tree-network-shell" id="skillChoices"></div>
           <button class="skill-tree-close" id="skillTreeCloseButton">기지로 돌아가기</button>
         </div>
@@ -172,6 +174,8 @@ const researchList = required<HTMLElement>("#researchList");
 const baseGarageButton = required<HTMLButtonElement>("#baseGarageButton");
 const launchButton = required<HTMLButtonElement>("#launchButton");
 const skillTreeButton = required<HTMLButtonElement>("#skillTreeButton");
+const baseHub = required<HTMLElement>("#baseHub");
+const baseHubStatus = required<HTMLElement>("#baseHubStatus");
 const routeOverlay = required<HTMLElement>("#routeOverlay");
 const routeList = required<HTMLElement>("#routeList");
 const routeBackButton = required<HTMLButtonElement>("#routeBackButton");
@@ -182,6 +186,11 @@ const showToast = (message: string, tone: "normal" | "success" | "warning" = "no
   toast.textContent = message;
   toast.className = `toast show ${tone}`;
   toastTimer = window.setTimeout(() => { toast.className = "toast"; }, 2200);
+};
+
+const CLOUD_ORDER = Object.keys(CLOUDS) as (keyof GameState["materials"])[];
+const CLOUD_CODES: Record<keyof GameState["materials"], string> = {
+  cumulus: "CUM", rain: "RAN", electric: "ELC", ice: "ICE", solar: "SOL", aurora: "AUR",
 };
 
 const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast);
@@ -207,7 +216,7 @@ const SKILL_NODE_LAYOUT: Record<RunSkillId, { x: number; y: number; branch: "vac
   goldenStorm: { x: 445, y: 1000, branch: "fever" },
   sunStorm: { x: 445, y: 1170, branch: "fever" },
   jackpotPulse: { x: 445, y: 1340, branch: "fever" },
-  yieldBoost: { x: 340, y: 1510, branch: "fever" },
+  yieldBoost: { x: 300, y: 1510, branch: "fever" },
   feverReserve: { x: 550, y: 1510, branch: "fever" },
   twinDrone: { x: 840, y: 150, branch: "automation" },
   droneAI: { x: 840, y: 320, branch: "automation" },
@@ -226,11 +235,6 @@ const SKILL_NODE_LAYOUT: Record<RunSkillId, { x: number; y: number; branch: "vac
   chainReactor: { x: 740, y: 1900, branch: "hybrid" },
 };
 
-const CLOUD_ORDER = Object.keys(CLOUDS) as (keyof GameState["materials"])[];
-const CLOUD_CODES: Record<keyof GameState["materials"], string> = {
-  cumulus: "CUM", rain: "RAN", electric: "ELC", ice: "ICE", solar: "SOL", aurora: "AUR",
-};
-
 function skillCostLabel(id: RunSkillId): string {
   const cost = RUN_SKILL_COSTS[id];
   return CLOUD_ORDER
@@ -239,9 +243,22 @@ function skillCostLabel(id: RunSkillId): string {
     .join(" · ");
 }
 
-function canAffordSkill(id: RunSkillId, state: { materials: GameState["materials"] }): boolean {
-  return (Object.entries(RUN_SKILL_COSTS[id]) as [keyof GameState["materials"], number][])
-    .every(([kind, amount]) => state.materials[kind] >= amount);
+function canAffordSkill(id: RunSkillId, _state: { materials: GameState["materials"] }): boolean {
+  const available = { ..._state.materials };
+  const cost = RUN_SKILL_COSTS[id];
+  for (let targetIndex = CLOUD_ORDER.length - 1; targetIndex >= 0; targetIndex -= 1) {
+    const target = CLOUD_ORDER[targetIndex];
+    let remaining = cost[target] ?? 0;
+    for (let sourceIndex = targetIndex; sourceIndex < CLOUD_ORDER.length && remaining > 0; sourceIndex += 1) {
+      const source = CLOUD_ORDER[sourceIndex];
+      const exchangeValue = 4 ** (sourceIndex - targetIndex);
+      const used = Math.min(available[source], Math.ceil(remaining / exchangeValue));
+      available[source] -= used;
+      remaining -= used * exchangeValue;
+    }
+    if (remaining > 0) return false;
+  }
+  return true;
 }
 
 function renderRunState(state: RunState): void {
@@ -276,6 +293,7 @@ function renderRunState(state: RunState): void {
 
 function showFactory(state: RunState): void {
   document.body.classList.remove("returning");
+  baseHub.classList.remove("show");
   factoryPanel.classList.remove("settled");
   factoryReceipt.classList.remove("show");
   factoryManifest.innerHTML = (Object.values(CLOUDS)).map((cloud) => `
@@ -314,7 +332,7 @@ function showLevelUp(_pendingPicks: number): void {
   skillTreeCloseButton.textContent = "기지로 돌아가기";
   const roots = new Set<RunSkillId>(["overclock", "profitRain", "twinDrone"]);
   const center = { x: 540, y: 83 };
-  const nodeCenter = (id: RunSkillId) => ({ x: SKILL_NODE_LAYOUT[id].x + 95, y: SKILL_NODE_LAYOUT[id].y + 65 });
+  const nodeCenter = (id: RunSkillId) => ({ x: SKILL_NODE_LAYOUT[id].x + 115, y: SKILL_NODE_LAYOUT[id].y + 75 });
   const connectors = (Object.keys(SKILL_NODE_LAYOUT) as RunSkillId[]).flatMap((id) => {
     const skill = RUN_SKILLS[id];
     const target = nodeCenter(id);
@@ -344,10 +362,11 @@ function showLevelUp(_pendingPicks: number): void {
         const tier = skill.category === "evolution" ? "BREAKTHROUGH" : skill.category === "overdrive" ? "ADVANCED SYSTEM" : skill.category === "synergy" ? "CROSS SYNERGY" : "SYSTEM";
         const action = maxed ? "UNLOCKED" : !unlocked ? `${requirement} 필요` : !canAffordSkill(id, companyState) ? `${skillCostLabel(id)} 필요` : `${skillCostLabel(id)}로 해금`;
         const pips = `<i class="${maxed ? "on" : ""}"></i>`;
-        return `<button class="skill-node network-node ${skill.category} branch-${layout.branch} ${stack > 0 ? "invested" : ""} ${maxed ? "maxed" : ""} ${!unlocked ? "locked" : ""}" data-skill="${id}" style="--skill-color:${skill.color};left:${layout.x}px;top:${layout.y}px" ${available ? "" : "disabled"} title="${skill.description}">
+        return `<button class="skill-node network-node ${skill.category} branch-${layout.branch} ${stack > 0 ? "invested" : ""} ${maxed ? "maxed" : ""} ${!unlocked ? "locked" : ""}" data-skill="${id}" style="--skill-color:${skill.color};left:${layout.x}px;top:${layout.y}px" ${available ? "" : "disabled"}>
           <span class="skill-node-icon" data-icon="${skill.icon}">${skill.icon}</span>
           <span class="skill-node-copy"><small>${tier}</small><strong>${skill.name}</strong><p>${skill.description}</p></span>
           <span class="skill-node-pips">${pips}</span><b>${action}</b>
+          <span class="skill-tooltip"><small>${tier}</small><strong>${skill.name}</strong><p>${skill.description}</p><b>비용 ${skillCostLabel(id)}</b><em>${requirement === "중앙 코어" ? "시작 노드" : `선행: ${requirement}`}</em></span>
         </button>`;
       }).join("")}
     </div>`;
@@ -357,7 +376,7 @@ function showLevelUp(_pendingPicks: number): void {
 function equipmentEffect(id: UpgradeId, level: number): string {
   switch (id) {
     case "power": return `흡입력 ${36 + level * 15}`;
-    case "radius": return `흡입 ${112 + level * 18}px · 구름 +${level * 3}`;
+    case "radius": return `${112 + level * 18}px · 유입 +${level * 3}`;
     case "value": return `판매 보너스 +${level * 24}%`;
     case "drone": return level === 0 ? "드론 미배치" : `지원 드론 ${level}대`;
     case "insulation": return level === 0 ? "보호 장치 없음" : `절연 출력 ${level}단계`;
@@ -434,7 +453,6 @@ soundButton.addEventListener("click", () => game.toggleSound());
 garageButton.addEventListener("click", () => garageOverlay.classList.add("show"));
 const closeGarage = () => {
   garageOverlay.classList.remove("show");
-  if (game.isAtFactory() && factoryPanel.classList.contains("settled")) factoryOverlay.classList.add("show");
 };
 garageCloseButton.addEventListener("click", closeGarage);
 garageOverlay.addEventListener("click", (event) => {
@@ -450,10 +468,9 @@ contractList.addEventListener("click", (event) => {
   if (!button) return;
   const payout = game.settleCargo(button.dataset.contract as ContractId);
   if (payout > 0) {
-    factoryPanel.classList.add("settled");
-    factoryReceipt.classList.add("show");
     receiptContract.textContent = `${button.querySelector(".contract-copy b")?.textContent ?? "가공 계약"} 납품 완료`;
     receiptPayout.textContent = `◈ ${payout.toLocaleString()}`;
+    baseHubStatus.textContent = `${receiptContract.textContent} · ◈ ${payout.toLocaleString()} 확보`;
     const run = game.getRunState();
     const dayComplete = game.isDayComplete();
     const completedFlight = dayComplete ? 3 : run.flight - 1;
@@ -462,9 +479,9 @@ contractList.addEventListener("click", (event) => {
       ? "세 번의 출격을 마쳤습니다. 연구를 선택해도 레벨·구름 재고·스킬망은 그대로 다음 날까지 이어집니다."
       : `레벨 ${run.level}과 선택한 장비를 유지한 채 FLIGHT ${run.flight}/3으로 이어집니다.`;
     dayResearch.classList.toggle("show", dayComplete);
-    baseGarageButton.disabled = dayComplete;
-    launchButton.disabled = dayComplete;
     if (dayComplete) {
+      factoryPanel.classList.add("settled");
+      factoryReceipt.classList.add("show");
       const state = game.getState();
       researchList.innerHTML = Object.values(RESEARCH_PROJECTS).map((research) => `
         <button class="research-card" data-research="${research.id}" style="--research-color:${research.color}">
@@ -473,6 +490,9 @@ contractList.addEventListener("click", (event) => {
           <b>${research.effect}</b><em>회사 연구에 영구 적용</em>
         </button>
       `).join("");
+    } else {
+      factoryOverlay.classList.remove("show");
+      baseHub.classList.add("show");
     }
   }
 });
@@ -481,10 +501,11 @@ researchList.addEventListener("click", (event) => {
   if (!button || !game.completeDay(button.dataset.research as ResearchId)) return;
   const run = game.getRunState();
   dayResearch.classList.remove("show");
-  baseGarageButton.disabled = false;
-  launchButton.disabled = false;
   receiptKicker.textContent = `DAY ${run.day} READY // CAREER CONTINUES`;
   receiptDescription.textContent = "연구와 기존 스킬망이 모두 유지됩니다. 더 깊은 시스템을 연결할 시간입니다.";
+  factoryOverlay.classList.remove("show");
+  baseHubStatus.textContent = `DAY ${run.day} 연구 완료 · 모든 장기 성장 유지`;
+  baseHub.classList.add("show");
 });
 baseGarageButton.addEventListener("click", () => {
   factoryOverlay.classList.remove("show");
@@ -492,12 +513,14 @@ baseGarageButton.addEventListener("click", () => {
 });
 launchButton.addEventListener("click", () => {
   routeList.innerHTML = Object.values(FLIGHT_ROUTES).map((route) => `
-    <button class="route-card" data-route="${route.id}" style="--route-color:${route.color}">
+    <button class="route-card route-${route.id}" data-route="${route.id}" style="--route-color:${route.color}">
+      <span class="route-visual">${route.id === "tailwind" ? "≋" : route.id === "pressureMine" ? "◆" : "⚠"}</span>
       <span class="route-code">${route.code}</span>
       <small>FLIGHT PLAN</small>
       <strong>${route.name}</strong>
       <p>${route.description}</p>
       <b>${route.effect}</b>
+      <span class="route-identity">${route.id === "tailwind" ? "MATERIAL FARM · LONG COMBO" : route.id === "pressureMine" ? "DRONE MINING · HIGH VALUE" : "FEVER RUSH · FRONT JACKPOT"}</span>
       <em>이 항로로 출격</em>
     </button>
   `).join("");
@@ -508,6 +531,7 @@ routeList.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-route]");
   if (!button || !game.launchFlight(button.dataset.route as FlightRouteId)) return;
   routeOverlay.classList.remove("show");
+  baseHub.classList.remove("show");
   factoryOverlay.classList.remove("show");
   factoryPanel.classList.remove("settled");
   factoryReceipt.classList.remove("show");

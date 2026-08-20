@@ -6,6 +6,9 @@ type RunListener = (state: RunState) => void;
 type LevelListener = (pendingPicks: number) => void;
 type FactoryListener = (state: RunState) => void;
 type ToastListener = (message: string, tone?: "normal" | "success" | "warning") => void;
+type HarvestDrone = { x: number; y: number; vx: number; vy: number; targetId?: number; phase: number };
+
+const CLOUD_ORDER: CloudKind[] = ["cumulus", "rain", "electric", "ice", "solar", "aurora"];
 type Shockwave = { x: number; y: number; radius: number; life: number; maxLife: number; color: string };
 type CascadeHarvest = { cloudId: number; delay: number; depth: number };
 type DroneBeam = { x: number; y: number; targetX: number; targetY: number };
@@ -98,7 +101,7 @@ export class CloudHarvestGame {
   private launching = false;
   private launchTimer = 0;
   private dayComplete = false;
-  private droneAngle = 0;
+  private harvestDrones: HarvestDrone[] = [];
   private runEmitTimer = 0;
   private audioContext?: AudioContext;
 
@@ -220,12 +223,14 @@ export class CloudHarvestGame {
     this.texts = [];
     this.shockwaves = [];
     this.droneBeams = [];
+    this.harvestDrones = [];
     this.formationCooldown = 2.8;
     this.clearCascade();
     this.goldenFront = false;
     this.goldenFrontClaimed = false;
     const flightFrontDelay = this.run.flight === 3 ? 3.5 : this.run.flight === 2 ? .72 : 1;
     this.frontTimer = FLIGHT_ROUTES[routeId].frontDelay * flightFrontDelay;
+    this.run.fever = Math.max(this.run.fever, FLIGHT_ROUTES[routeId].startingFever);
     this.player.x = this.width * .5;
     this.player.y = this.height * .61;
     this.player.targetX = this.width * .5;
@@ -279,9 +284,9 @@ export class CloudHarvestGame {
 
   chooseSkill(id: RunSkillId): boolean {
     if (!this.pausedForLevel || !this.canChooseSkill(id)) return false;
-    (Object.entries(RUN_SKILL_COSTS[id]) as [CloudKind, number][]).forEach(([kind, amount]) => {
-      this.state.materials[kind] -= amount;
-    });
+    const payment = this.planSkillPayment(id);
+    if (!payment) return false;
+    CLOUD_ORDER.forEach((kind) => { this.state.materials[kind] -= payment[kind]; });
     this.run.skills[id] = 1;
     this.commit();
     this.burst(this.player.x, this.player.y, RUN_SKILLS[id].color, 36, 210);
@@ -297,8 +302,29 @@ export class CloudHarvestGame {
     if (!skill || !this.atFactory || !this.pausedForLevel || this.run.skills[id] >= 1) return false;
     const requirementsMet = skill.requirements?.every((requirement) => this.run.skills[requirement] >= 1) ?? true;
     if (!requirementsMet) return false;
-    return (Object.entries(RUN_SKILL_COSTS[id]) as [CloudKind, number][])
-      .every(([kind, amount]) => this.state.materials[kind] >= amount);
+    return Boolean(this.planSkillPayment(id));
+  }
+
+  canAffordSkillCost(id: RunSkillId): boolean { return Boolean(this.planSkillPayment(id)); }
+
+  private planSkillPayment(id: RunSkillId): Record<CloudKind, number> | null {
+    const available = { ...this.state.materials };
+    const payment: Record<CloudKind, number> = { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 };
+    const cost = RUN_SKILL_COSTS[id];
+    for (let targetIndex = CLOUD_ORDER.length - 1; targetIndex >= 0; targetIndex -= 1) {
+      const target = CLOUD_ORDER[targetIndex];
+      let remaining = cost[target] ?? 0;
+      for (let sourceIndex = targetIndex; sourceIndex < CLOUD_ORDER.length && remaining > 0; sourceIndex += 1) {
+        const source = CLOUD_ORDER[sourceIndex];
+        const exchangeValue = 4 ** (sourceIndex - targetIndex);
+        const used = Math.min(available[source], Math.ceil(remaining / exchangeValue));
+        available[source] -= used;
+        payment[source] += used;
+        remaining -= used * exchangeValue;
+      }
+      if (remaining > 0) return null;
+    }
+    return payment;
   }
 
   openSkillTree(): boolean {
@@ -363,6 +389,7 @@ export class CloudHarvestGame {
     this.formationId = 0;
     this.combo = 0;
     this.droneBeams = [];
+    this.harvestDrones = [];
     this.formationCooldown = 4;
     this.clearCascade();
     for (let i = 0; i < Math.min(18, this.getMaxClouds()); i += 1) this.spawnCloud(true);
@@ -379,6 +406,7 @@ export class CloudHarvestGame {
     };
     this.canvas.addEventListener("pointerdown", (event) => {
       const p = point(event);
+      this.canvas.focus({ preventScroll: true });
       this.pointer = { x: p.x, y: p.y, active: true, visible: true };
       this.touchDirect = event.pointerType === "touch" || event.pointerType === "pen";
       if (this.touchDirect) {
@@ -390,6 +418,7 @@ export class CloudHarvestGame {
     });
     this.canvas.addEventListener("pointermove", (event) => {
       const p = point(event);
+      this.canvas.focus({ preventScroll: true });
       this.pointer.x = p.x;
       this.pointer.y = p.y;
       this.pointer.visible = true;
@@ -578,8 +607,6 @@ export class CloudHarvestGame {
       if (!this.clouds.some((cloud) => cloud.front)) this.startCloudFront();
       else this.frontTimer = 5;
     }
-    this.droneAngle += dt * 2.2;
-
     if (this.run.feverActive) {
       this.run.feverSeconds -= dt;
       if (this.run.feverSeconds <= 0) {
@@ -781,28 +808,65 @@ export class CloudHarvestGame {
   private updateDrones(dt: number): void {
     this.droneBeams = [];
     const stormDroneBonus = this.run.feverActive ? this.run.skills.stormDrones * 2 : 0;
-    const count = this.state.levels.drone + this.run.skills.twinDrone + this.run.skills.droneFleet * 3
+    const totalCount = this.state.levels.drone + this.run.skills.twinDrone + this.run.skills.droneFleet * 3
       + this.run.skills.nanoSwarm * 5 + this.run.skills.swarmMatrix * 2 + stormDroneBonus;
-    if (count <= 0 || this.clouds.length === 0) return;
-    for (let index = 0; index < Math.min(6, count); index += 1) {
-      const angle = this.droneAngle + index * (Math.PI * 2 / Math.min(6, count));
-      const x = this.player.x + Math.cos(angle) * 70;
-      const y = this.player.y + Math.sin(angle) * 50;
-      let target: Cloud | undefined;
-      let nearest = 230;
-      for (const cloud of this.clouds) {
-        if (this.queuedCascadeIds.has(cloud.id)) continue;
-        const distance = Math.hypot(cloud.x - x, cloud.y - y);
-        if (distance < nearest) { nearest = distance; target = cloud; }
+    const count = Math.min(12, totalCount);
+    while (this.harvestDrones.length < count) {
+      const phase = this.harvestDrones.length * 1.9;
+      this.harvestDrones.push({ x: this.player.x + Math.cos(phase) * 55, y: this.player.y + Math.sin(phase) * 40, vx: 0, vy: 0, phase });
+    }
+    if (this.harvestDrones.length > count) this.harvestDrones.length = count;
+    if (count <= 0) return;
+    const cargoFull = this.getCargoCount() >= this.getCargoCapacity();
+
+    for (const drone of this.harvestDrones) {
+      let target = cargoFull ? undefined : this.clouds.find((cloud) => cloud.id === drone.targetId && !this.queuedCascadeIds.has(cloud.id));
+      if (!target && !cargoFull) {
+        let nearest = Number.POSITIVE_INFINITY;
+        for (const cloud of this.clouds) {
+          if (this.queuedCascadeIds.has(cloud.id)) continue;
+          const distance = Math.hypot(cloud.x - drone.x, cloud.y - drone.y);
+          if (distance < nearest) { nearest = distance; target = cloud; }
+        }
+        drone.targetId = target?.id;
       }
-      if (!target) continue;
-      if (this.run.feverActive && this.run.skills.stormDrones) this.droneBeams.push({ x, y, targetX: target.x, targetY: target.y });
-      const stormDronePower = this.run.feverActive && this.run.skills.stormDrones ? 3 : 1;
-      const droneSystemsPower = 1 + this.run.skills.droneAI * .24 + this.run.skills.nanoSwarm * .5;
-      target.health -= dt * (7 + count * 3 + this.run.skills.droneFleet * 12) * stormDronePower * droneSystemsPower;
-      target.hurtFlash = 0.6;
-      if (target.health <= 0) this.collectCloud(target);
-      if (Math.random() < dt * 12) this.particles.push({ x, y, vx: (target.x - x) * 1.4, vy: (target.y - y) * 1.4, life: .26, maxLife: .26, size: 2, color: "#6ff6e2" });
+
+      if (!target) {
+        const homeX = this.player.x + Math.cos(drone.phase) * 90;
+        const homeY = this.player.y + Math.sin(drone.phase) * 60;
+        drone.vx += (homeX - drone.x) * dt * 3;
+        drone.vy += (homeY - drone.y) * dt * 3;
+      } else {
+        const dx = target.x - drone.x;
+        const dy = target.y - drone.y;
+        const distance = Math.max(1, Math.hypot(dx, dy));
+        const pursuitSpeed = 185 + this.run.skills.droneAI * 45 + this.run.skills.nanoSwarm * 30;
+        if (distance > 88) {
+          drone.vx += dx / distance * pursuitSpeed * dt * 4.5;
+          drone.vy += dy / distance * pursuitSpeed * dt * 4.5;
+        } else {
+          drone.vx *= Math.exp(-dt * 7);
+          drone.vy *= Math.exp(-dt * 7);
+          this.droneBeams.push({ x: drone.x, y: drone.y, targetX: target.x, targetY: target.y });
+          const stormPower = this.run.feverActive && this.run.skills.stormDrones ? 3 : 1;
+          const systemsPower = (1 + this.run.skills.droneAI * .34 + this.run.skills.nanoSwarm * .55) * FLIGHT_ROUTES[this.run.routeId].dronePower;
+          target.health -= dt * (12 + totalCount * 2.4 + this.run.skills.droneFleet * 14) * stormPower * systemsPower;
+          target.hurtFlash = .7;
+          if (Math.random() < dt * 18) this.particles.push({ x: drone.x, y: drone.y, vx: dx * 1.8, vy: dy * 1.8, life: .24, maxLife: .24, size: 2.5, color: "#6ff6e2" });
+          if (target.health <= 0) {
+            this.texts.push({ x: target.x, y: target.y - 24, text: "DRONE HARVEST!", color: "#8fffe9", life: .8 });
+            this.collectCloud(target);
+            drone.targetId = undefined;
+          }
+        }
+      }
+      const speed = Math.hypot(drone.vx, drone.vy);
+      const maxSpeed = 280;
+      if (speed > maxSpeed) { drone.vx = drone.vx / speed * maxSpeed; drone.vy = drone.vy / speed * maxSpeed; }
+      drone.x = Math.max(24, Math.min(this.width - 24, drone.x + drone.vx * dt));
+      drone.y = Math.max(115, Math.min(this.height - 135, drone.y + drone.vy * dt));
+      drone.vx *= Math.exp(-dt * 2.8);
+      drone.vy *= Math.exp(-dt * 2.8);
     }
   }
 
@@ -829,7 +893,7 @@ export class CloudHarvestGame {
     this.clouds = this.clouds.filter((item) => item.id !== cloud.id);
     const definition = CLOUDS[cloud.kind];
     this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
-    this.comboTimer = 3.4 + this.run.skills.comboCapacitor * .35 + this.run.skills.vacuumMomentum * .22;
+    this.comboTimer = 3.4 + FLIGHT_ROUTES[this.run.routeId].comboWindowBonus + this.run.skills.comboCapacitor * .35 + this.run.skills.vacuumMomentum * .22;
     this.state.bestCombo = Math.max(this.state.bestCombo, this.combo);
     const comboMultiplier = 1 + Math.min(1.8, Math.floor(this.combo / 3) * .17);
     const permanentValue = (1 + this.state.levels.value * .24)
@@ -1063,6 +1127,11 @@ export class CloudHarvestGame {
       cursor += rank.weights[candidate];
       if (roll <= cursor) { kind = candidate; break; }
     }
+    const lowTierBias = FLIGHT_ROUTES[this.run.routeId].lowTierBias;
+    if (this.state.rank > 0 && Math.random() < lowTierBias) {
+      const highestFallback = Math.max(0, this.state.rank - 1);
+      kind = CLOUD_ORDER[Math.floor(Math.random() * (highestFallback + 1))];
+    }
     const definition = CLOUDS[kind];
     const dense = Math.random() < .085 + this.state.rank * .018 + (this.run.flight - 1) * .035 + FLIGHT_ROUTES[this.run.routeId].denseBonus + this.run.skills.denseRadar * .03 + this.state.research.forecasting * .015;
     const radius = (definition.radius[0] + Math.random() * (definition.radius[1] - definition.radius[0])) * (dense ? 1.16 : 1);
@@ -1265,12 +1334,26 @@ export class CloudHarvestGame {
     for (let x = -this.width; x < this.width * 2; x += 90) { ctx.beginPath(); ctx.moveTo(this.width / 2, floorTop); ctx.lineTo(x, this.height); ctx.stroke(); }
     for (let y = floorTop + 30; y < this.height; y += 42) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(this.width, y); ctx.stroke(); }
 
-    const tanks = [{ x: 72, color: "#dff8ff", code: "CUM" }, { x: 154, color: "#7695ad", code: "RAN" }, { x: this.width - 154, color: "#8275cf", code: "ELC" }];
+    const tanks = [
+      { x: 54, color: "#dff8ff", code: "CUM" }, { x: 112, color: "#7695ad", code: "RAN" }, { x: 170, color: "#8275cf", code: "ELC" },
+      { x: this.width - 170, color: "#b9f3ff", code: "ICE" }, { x: this.width - 112, color: "#ffd86a", code: "SOL" }, { x: this.width - 54, color: "#8fffd2", code: "AUR" },
+    ];
     for (const tank of tanks) {
-      ctx.fillStyle = "#173c4a"; ctx.beginPath(); ctx.roundRect(tank.x - 31, 178, 62, 190, 21); ctx.fill();
+      ctx.fillStyle = "#173c4a"; ctx.beginPath(); ctx.roundRect(tank.x - 23, 192, 46, 176, 16); ctx.fill();
       ctx.strokeStyle = tank.color; ctx.lineWidth = 3; ctx.stroke();
-      ctx.fillStyle = tank.color; ctx.globalAlpha = .72; ctx.fillRect(tank.x - 25, 283, 50, 71); ctx.globalAlpha = 1;
-      ctx.fillStyle = "#dffaff"; ctx.textAlign = "center"; ctx.font = "900 12px Outfit, sans-serif"; ctx.fillText(tank.code, tank.x, 214);
+      ctx.fillStyle = tank.color; ctx.globalAlpha = .72; ctx.fillRect(tank.x - 18, 292, 36, 62); ctx.globalAlpha = 1;
+      ctx.fillStyle = "#dffaff"; ctx.textAlign = "center"; ctx.font = "900 9px Outfit, sans-serif"; ctx.fillText(tank.code, tank.x, 218);
+    }
+    const facilities = [
+      { x: this.width * .15, w: 230, color: "#65c8d7", code: "MK", name: "WORKSHOP" },
+      { x: this.width * .5, w: 250, color: "#b69cff", code: "TREE", name: "BLUEPRINT TERMINAL" },
+      { x: this.width * .85, w: 230, color: "#fff36f", code: "GO", name: "LAUNCH GATE" },
+    ];
+    for (const facility of facilities) {
+      ctx.fillStyle = "rgba(8,30,42,.78)"; ctx.beginPath(); ctx.roundRect(facility.x - facility.w / 2, floorTop + 35, facility.w, 105, 18); ctx.fill();
+      ctx.strokeStyle = facility.color; ctx.lineWidth = 3; ctx.stroke();
+      ctx.fillStyle = facility.color; ctx.font = "900 13px Outfit, sans-serif"; ctx.fillText(facility.code, facility.x, floorTop + 70);
+      ctx.fillStyle = "#dffaff"; ctx.font = "900 11px Outfit, sans-serif"; ctx.fillText(facility.name, facility.x, floorTop + 96);
     }
     ctx.fillStyle = "rgba(3,18,26,.5)"; ctx.beginPath(); ctx.ellipse(this.width * .5, this.height * .68, 150, 44, 0, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = "#fff36f"; ctx.lineWidth = 5; ctx.setLineDash([18, 12]); ctx.lineDashOffset = -time * 28;
@@ -1331,11 +1414,15 @@ export class CloudHarvestGame {
   }
 
   private drawSky(ctx: CanvasRenderingContext2D, time: number): void {
-    const gradients = this.run.feverActive
-      ? ["#7e73f2", "#64dfe3", "#fff0a8"]
-      : this.state.rank === 2 ? ["#606fbd", "#a9cce5", "#f5ddb1"]
-        : this.state.rank === 1 ? ["#4fa7c6", "#b8e0e9", "#e9e3bd"]
-          : ["#75d7f5", "#dff8ff", "#fff4c9"];
+    const rankSkies = [
+      ["#75d7f5", "#dff8ff", "#fff4c9"],
+      ["#3996bb", "#86c8dc", "#e5e5c5"],
+      ["#4d579f", "#829ac9", "#e6c6aa"],
+      ["#153f70", "#4e83a8", "#c8f5f2"],
+      ["#5c327f", "#e47372", "#ffd271"],
+      ["#07152f", "#173c65", "#3d7390"],
+    ];
+    const gradients = this.run.feverActive ? ["#7e73f2", "#64dfe3", "#fff0a8"] : rankSkies[this.state.rank];
     const gradient = ctx.createLinearGradient(0, 0, 0, this.height);
     gradient.addColorStop(0, gradients[0]); gradient.addColorStop(.7, gradients[1]); gradient.addColorStop(1, gradients[2]);
     ctx.fillStyle = gradient; ctx.fillRect(0, 0, this.width, this.height);
@@ -1356,6 +1443,27 @@ export class CloudHarvestGame {
       ctx.beginPath(); ctx.arc(x, y, 2 + i % 3, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
+    if (!this.run.feverActive && this.state.rank === 3) {
+      ctx.strokeStyle = "rgba(194,249,255,.42)"; ctx.lineWidth = 2;
+      for (let crystal = 0; crystal < 16; crystal += 1) {
+        const x = (crystal * 113 + time * 28) % (this.width + 100) - 50;
+        const y = 120 + (crystal * 79) % Math.max(130, this.height - 280);
+        ctx.beginPath(); ctx.moveTo(x - 11, y); ctx.lineTo(x, y - 18); ctx.lineTo(x + 11, y); ctx.lineTo(x, y + 18); ctx.closePath(); ctx.stroke();
+      }
+    }
+    if (!this.run.feverActive && this.state.rank === 4) {
+      const sun = ctx.createRadialGradient(this.width * .78, this.height * .22, 8, this.width * .78, this.height * .22, 130);
+      sun.addColorStop(0, "rgba(255,255,210,.98)"); sun.addColorStop(.18, "rgba(255,231,103,.72)"); sun.addColorStop(1, "rgba(255,153,74,0)");
+      ctx.fillStyle = sun; ctx.fillRect(0, 0, this.width, this.height);
+    }
+    if (!this.run.feverActive && this.state.rank >= 5) {
+      ctx.globalCompositeOperation = "lighter"; ctx.lineWidth = 18; ctx.lineCap = "round";
+      ["rgba(99,255,198,.18)", "rgba(147,115,255,.17)", "rgba(83,208,255,.15)"].forEach((color, ribbon) => {
+        ctx.strokeStyle = color; ctx.beginPath(); ctx.moveTo(-80, 145 + ribbon * 62);
+        ctx.bezierCurveTo(this.width * .28, 40 + Math.sin(time + ribbon) * 35, this.width * .62, 330 + Math.cos(time * .7 + ribbon) * 55, this.width + 80, 95 + ribbon * 70); ctx.stroke();
+      });
+      ctx.globalCompositeOperation = "source-over";
+    }
     if (this.state.rank >= 1 && !this.run.feverActive) {
       ctx.strokeStyle = this.state.rank === 2 ? "rgba(191,210,255,.22)" : "rgba(255,255,255,.2)";
       ctx.lineWidth = this.state.rank === 2 ? 2 : 1.5;
@@ -1394,14 +1502,25 @@ export class CloudHarvestGame {
 
   private drawIsland(ctx: CanvasRenderingContext2D): void {
     const y = this.height - 68;
-    ctx.fillStyle = "#7fce64";
-    ctx.beginPath(); ctx.ellipse(this.width * .48, y, this.width * .52, 72, 0, Math.PI, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#73b754"; ctx.fillRect(0, y, this.width, this.height - y);
-    const buildings = Math.min(8, 2 + Math.floor(this.state.totalEarned / 100));
-    for (let i = 0; i < buildings; i += 1) {
-      const bx = 38 + i * 58; const bh = 23 + i % 3 * 11;
-      ctx.fillStyle = ["#fff0b8", "#ffb5a7", "#bde0fe"][i % 3]; ctx.fillRect(bx, y - bh, 36, bh);
-      ctx.fillStyle = "#594f62"; ctx.beginPath(); ctx.moveTo(bx - 4, y - bh); ctx.lineTo(bx + 18, y - bh - 15); ctx.lineTo(bx + 40, y - bh); ctx.fill();
+    if (this.state.rank <= 1) {
+      ctx.fillStyle = this.state.rank === 0 ? "#7fce64" : "#6b9f72";
+      ctx.beginPath(); ctx.ellipse(this.width * .48, y, this.width * .52, 72, 0, Math.PI, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = this.state.rank === 0 ? "#73b754" : "#557f68"; ctx.fillRect(0, y, this.width, this.height - y);
+      const buildings = Math.min(8, 2 + Math.floor(this.state.totalEarned / 100));
+      for (let i = 0; i < buildings; i += 1) {
+        const bx = 38 + i * 58; const bh = 23 + i % 3 * 11;
+        ctx.fillStyle = ["#fff0b8", "#ffb5a7", "#bde0fe"][i % 3]; ctx.fillRect(bx, y - bh, 36, bh);
+        ctx.fillStyle = "#594f62"; ctx.beginPath(); ctx.moveTo(bx - 4, y - bh); ctx.lineTo(bx + 18, y - bh - 15); ctx.lineTo(bx + 40, y - bh); ctx.fill();
+      }
+    } else if (this.state.rank === 2) {
+      ctx.fillStyle = "#263b60"; ctx.beginPath(); ctx.moveTo(0, y + 18); ctx.lineTo(this.width * .18, y - 48); ctx.lineTo(this.width * .34, y + 4); ctx.lineTo(this.width * .56, y - 78); ctx.lineTo(this.width * .77, y); ctx.lineTo(this.width, y - 38); ctx.lineTo(this.width, this.height); ctx.lineTo(0, this.height); ctx.closePath(); ctx.fill();
+    } else if (this.state.rank === 3) {
+      ctx.fillStyle = "#8bcbd8"; ctx.beginPath(); ctx.moveTo(0, y + 5); ctx.lineTo(this.width * .14, y - 25); ctx.lineTo(this.width * .3, y + 2); ctx.lineTo(this.width * .5, y - 46); ctx.lineTo(this.width * .72, y - 8); ctx.lineTo(this.width, y - 34); ctx.lineTo(this.width, this.height); ctx.lineTo(0, this.height); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(235,255,255,.75)"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, y + 5); ctx.lineTo(this.width * .14, y - 25); ctx.lineTo(this.width * .3, y + 2); ctx.lineTo(this.width * .5, y - 46); ctx.lineTo(this.width * .72, y - 8); ctx.lineTo(this.width, y - 34); ctx.stroke();
+    } else {
+      const earth = ctx.createRadialGradient(this.width * .5, this.height + 210, 100, this.width * .5, this.height + 210, this.width * .72);
+      earth.addColorStop(.58, this.state.rank === 4 ? "#397ead" : "#214f80"); earth.addColorStop(.72, "#8bd6e4"); earth.addColorStop(.75, "rgba(202,249,255,.8)"); earth.addColorStop(.79, "rgba(130,210,255,.12)"); earth.addColorStop(1, "rgba(30,77,120,0)");
+      ctx.fillStyle = earth; ctx.fillRect(0, this.height * .5, this.width, this.height * .5);
     }
   }
 
@@ -1584,7 +1703,9 @@ export class CloudHarvestGame {
       + this.run.skills.blackHole * 80 + this.run.skills.eventHorizon * 140 + (cycloneActive ? 120 : 0)
       + (this.run.feverActive ? this.run.skills.goldenVacuum * 80 : 0);
     const gradient = ctx.createRadialGradient(this.player.x, this.player.y, 20, this.player.x, this.player.y, radius);
-    gradient.addColorStop(0, this.run.feverActive ? "rgba(255,244,111,.28)" : "rgba(255,255,255,.2)"); gradient.addColorStop(1, "rgba(255,255,255,0)");
+    gradient.addColorStop(0, this.run.feverActive ? "rgba(255,224,70,.34)" : "rgba(23,111,153,.3)");
+    gradient.addColorStop(.62, this.run.feverActive ? "rgba(255,168,64,.14)" : "rgba(31,145,176,.15)");
+    gradient.addColorStop(1, this.run.feverActive ? "rgba(255,185,55,0)" : "rgba(18,91,133,0)");
     const aimAngle = this.getAimAngle();
     const halfAngle = this.getSuctionHalfAngle();
     const fullCircle = halfAngle >= Math.PI;
@@ -1597,8 +1718,8 @@ export class CloudHarvestGame {
       ctx.closePath();
     }
     ctx.fill();
-    ctx.strokeStyle = this.overload > 0 ? "rgba(255,215,95,.75)" : this.run.feverActive ? "rgba(255,245,112,.82)" : "rgba(255,255,255,.55)";
-    ctx.lineWidth = this.run.feverActive ? 5 : 3; ctx.setLineDash([12, 12]); ctx.lineDashOffset = -time * (this.run.feverActive ? 90 : 48);
+    ctx.strokeStyle = this.overload > 0 ? "rgba(255,111,74,.92)" : this.run.feverActive ? "rgba(255,190,52,.95)" : "rgba(16,91,137,.9)";
+    ctx.lineWidth = this.run.feverActive ? 6 : 4; ctx.setLineDash([12, 9]); ctx.lineDashOffset = -time * (this.run.feverActive ? 90 : 48);
     const pulseRadius = radius * (.88 + Math.sin(time * 6) * .03);
     ctx.beginPath();
     ctx.arc(this.player.x, this.player.y, pulseRadius, fullCircle ? 0 : aimAngle - halfAngle, fullCircle ? Math.PI * 2 : aimAngle + halfAngle);
@@ -1714,7 +1835,6 @@ export class CloudHarvestGame {
     ctx.strokeStyle = this.run.feverActive ? "#fff36f" : "#8de6ed"; ctx.lineWidth = 3 + Math.min(4, radiusLevel);
     ctx.beginPath(); ctx.ellipse(35 + nozzleLength, 0, 5 + radiusLevel, 13 + radiusLevel * 1.2, 0, 0, Math.PI * 2); ctx.stroke();
 
-    ctx.strokeStyle = "#315c73"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-18, 23); ctx.lineTo(-25, 36); ctx.moveTo(18, 23); ctx.lineTo(25, 36); ctx.stroke();
     ctx.restore();
   }
 
@@ -1797,14 +1917,18 @@ export class CloudHarvestGame {
   }
 
   private drawDrones(ctx: CanvasRenderingContext2D): void {
-    const stormDroneBonus = this.run.feverActive ? this.run.skills.stormDrones * 2 : 0;
-    const count = Math.min(12, this.state.levels.drone + this.run.skills.twinDrone + this.run.skills.droneFleet * 3
-      + this.run.skills.nanoSwarm * 5 + this.run.skills.swarmMatrix * 2 + stormDroneBonus);
-    for (let i = 0; i < count; i += 1) {
-      const angle = this.droneAngle + i * Math.PI * 2 / count;
-      const x = this.player.x + Math.cos(angle) * 70; const y = this.player.y + Math.sin(angle) * 50;
-      ctx.fillStyle = "#efffff"; ctx.beginPath(); ctx.ellipse(x, y, 13, 8, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#4ec4bd"; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+    for (const drone of this.harvestDrones) {
+      const angle = Math.atan2(drone.vy, drone.vx || 1);
+      ctx.save(); ctx.translate(drone.x, drone.y); ctx.rotate(angle);
+      ctx.shadowColor = "#62f2d8"; ctx.shadowBlur = 13;
+      ctx.fillStyle = "#efffff"; ctx.beginPath(); ctx.moveTo(17, 0); ctx.lineTo(-9, -10); ctx.lineTo(-14, 0); ctx.lineTo(-9, 10); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#2c7188"; ctx.beginPath(); ctx.ellipse(-2, 0, 9, 6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#70ffe0"; ctx.beginPath(); ctx.arc(4, 0, 3.5, 0, Math.PI * 2); ctx.fill();
+      if (Math.hypot(drone.vx, drone.vy) > 45) {
+        ctx.strokeStyle = "rgba(112,255,224,.72)"; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(-14, -4); ctx.lineTo(-25, -4); ctx.moveTo(-14, 4); ctx.lineTo(-25, 4); ctx.stroke();
+      }
+      ctx.restore();
     }
   }
 

@@ -21,21 +21,21 @@ export const RESEARCH_PROJECTS: Record<ResearchId, ResearchDefinition> = {
 export const FLIGHT_ROUTES: Record<FlightRouteId, FlightRouteDefinition> = {
   tailwind: {
     id: "tailwind", code: "WND", name: "순풍 회랑", color: "#6fe3ca",
-    description: "넓고 안정적인 항로입니다. 화물칸을 늘리고 구름이 빠르게 유입됩니다.",
-    effect: "화물 +8 · 구름 유입 35%↑", capacityBonus: 8, denseBonus: 0,
-    spawnInterval: .65, valueMultiplier: 1, frontDelay: 14, frontBonus: 1,
+    description: "저고도 구름 무리가 끊임없이 밀려오는 콤보 항로입니다. 부족한 초급 재료를 다시 모으기 좋습니다.",
+    effect: "화물 +16 · 유입 48%↑ · 하위 구름↑ · 콤보 +0.9초", capacityBonus: 16, denseBonus: 0,
+    spawnInterval: .52, valueMultiplier: 1, frontDelay: 14, frontBonus: 1, comboWindowBonus: .9, dronePower: 1, startingFever: 0, lowTierBias: .26,
   },
   pressureMine: {
     id: "pressureMine", code: "DNS", name: "고기압 광맥", color: "#ffd15e",
-    description: "고밀도 구름이 뭉치는 수익형 항로입니다. 어렵지만 단가가 높습니다.",
-    effect: "고밀도 +13% · 가치 15%↑", capacityBonus: 0, denseBonus: .13,
-    spawnInterval: 1, valueMultiplier: 1.15, frontDelay: 14, frontBonus: 1,
+    description: "단단한 고밀도 구름을 드론 편대로 절단하는 채굴 항로입니다. 느리지만 한 덩어리의 가치가 큽니다.",
+    effect: "고밀도 +22% · 가치 28%↑ · 드론 화력 60%↑", capacityBonus: 0, denseBonus: .22,
+    spawnInterval: 1.08, valueMultiplier: 1.28, frontDelay: 14, frontBonus: 1, comboWindowBonus: 0, dronePower: 1.6, startingFever: 0, lowTierBias: 0,
   },
   frontline: {
     id: "frontline", code: "FRT", name: "전선 추적로", color: "#a98bff",
-    description: "구름 전선을 쫓는 고위험 항로입니다. 전선 보너스를 자주 노릴 수 있습니다.",
-    effect: "전선 조기 출현 · 보너스 50%↑", capacityBonus: 0, denseBonus: .04,
-    spawnInterval: .92, valueMultiplier: 1.05, frontDelay: 6, frontBonus: 1.5,
+    description: "피버 상태로 출발해 연속 전선을 추격하는 폭발형 항로입니다. 짧은 시간에 화면 전체를 쓸어 담습니다.",
+    effect: "시작 피버 40% · 전선 2.3배 · 초고속 재등장", capacityBonus: 0, denseBonus: .05,
+    spawnInterval: .88, valueMultiplier: 1.08, frontDelay: 3.5, frontBonus: 2.3, comboWindowBonus: .25, dronePower: 1.15, startingFever: 40, lowTierBias: 0,
   },
 };
 
@@ -162,7 +162,7 @@ export const UPGRADES: UpgradeDefinition[] = [
   {
     id: "radius",
     name: "확장 흡입구",
-    description: "흡입 범위와 기압 유도 출력을 높여 구름을 더 빠르고 많이 불러옵니다.",
+    description: "흡입 범위와 구름 유입량을 함께 늘립니다.",
     icon: "INT",
     baseCost: 22,
     maxLevel: 20,

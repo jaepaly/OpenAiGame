@@ -164,6 +164,10 @@ export interface FlightRouteDefinition {
   valueMultiplier: number;
   frontDelay: number;
   frontBonus: number;
+  comboWindowBonus: number;
+  dronePower: number;
+  startingFever: number;
+  lowTierBias: number;
 }
 
 export interface ProcessingContract {
