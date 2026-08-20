@@ -440,7 +440,8 @@ export class CloudHarvestGame {
       const inputX = Number(this.keys.has("KeyD") || this.keys.has("ArrowRight")) - Number(this.keys.has("KeyA") || this.keys.has("ArrowLeft"));
       const inputY = Number(this.keys.has("KeyS") || this.keys.has("ArrowDown")) - Number(this.keys.has("KeyW") || this.keys.has("ArrowUp"));
       const inputLength = Math.hypot(inputX, inputY) || 1;
-      const acceleration = 1050;
+      const feverMovementBoost = this.run.feverActive ? 1.55 : 1;
+      const acceleration = 1250 * (this.run.feverActive ? 1.35 : 1);
       if (inputX || inputY) {
         this.playerVelocity.x += inputX / inputLength * acceleration * dt;
         this.playerVelocity.y += inputY / inputLength * acceleration * dt;
@@ -449,7 +450,7 @@ export class CloudHarvestGame {
         this.playerVelocity.x *= drag;
         this.playerVelocity.y *= drag;
       }
-      const maxSpeed = 270 + this.run.skills.overclock * 14;
+      const maxSpeed = (315 + this.run.skills.overclock * 18) * feverMovementBoost;
       const speed = Math.hypot(this.playerVelocity.x, this.playerVelocity.y);
       if (speed > maxSpeed) {
         this.playerVelocity.x = this.playerVelocity.x / speed * maxSpeed;
@@ -1594,11 +1595,14 @@ export class CloudHarvestGame {
     if (this.isSuctionActive() || Math.hypot(this.playerVelocity.x, this.playerVelocity.y) > 30 || cinematicBoost) {
       const exhaustColor = this.run.feverActive || cinematicBoost ? "#fff36f" : "#8ff5ff";
       ctx.fillStyle = exhaustColor;
-      const exhaustCount = cinematicBoost ? 8 : 3 + Math.min(3, powerLevel);
+      const feverBoost = this.run.feverActive && !cinematicBoost;
+      const exhaustCount = cinematicBoost ? 8 : feverBoost ? 7 + Math.min(3, powerLevel) : 3 + Math.min(3, powerLevel);
       for (let i = 0; i < exhaustCount; i += 1) {
-        const trail = 16 + ((time * (cinematicBoost ? 330 : 170) + i * 19) % (cinematicBoost ? 88 : 34));
+        const trailSpeed = cinematicBoost ? 330 : feverBoost ? 285 : 170;
+        const trailLength = cinematicBoost ? 88 : feverBoost ? 68 : 34;
+        const trail = 16 + ((time * trailSpeed + i * 19) % trailLength);
         ctx.globalAlpha = .8 - i * .08;
-        ctx.beginPath(); ctx.ellipse(-54 - trail, (i - exhaustCount / 2) * 4, (cinematicBoost ? 20 : 12) + powerLevel * 1.5, cinematicBoost ? 4 : 3, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(-54 - trail, (i - exhaustCount / 2) * 4, (cinematicBoost ? 20 : feverBoost ? 17 : 12) + powerLevel * 1.5, cinematicBoost ? 4 : feverBoost ? 3.5 : 3, 0, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
     }
