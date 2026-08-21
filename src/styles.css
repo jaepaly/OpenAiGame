@@ -50,16 +50,6 @@ body { min-width: 320px; background: #92ddf7; }
 .mini-stat span { color: #3da3bc; font-size: 16px; font-weight: 900; }
 .mini-stat strong { font: 900 20px "Outfit",sans-serif; white-space: nowrap; }
 .coin-stat span { color: #e3a322; font-size: 23px; }
-.fuel-stat { position: relative; min-width: 118px; padding: 5px 12px 8px; flex-direction: column; gap: 0; overflow: hidden; }
-.fuel-stat span { color: #288ca6; font: 900 9px "Outfit",sans-serif; letter-spacing: .12em; }
-.fuel-stat strong { font-size: 16px; line-height: 1.15; }
-.fuel-stat i { width: 100%; height: 7px; margin-top: 3px; overflow: hidden; background: #c9dde1; border-radius: 99px; }
-.fuel-stat i em { display: block; width: 100%; height: 100%; background: linear-gradient(90deg,#40cfc2,#86ef8f); border-radius: inherit; transition: width .18s linear,background .2s ease; }
-.fuel-low .fuel-stat { border-color: #ffd15e; box-shadow: 0 5px 0 rgba(170,111,34,.2),0 0 22px rgba(255,209,94,.32); }
-.fuel-low .fuel-stat i em { background: linear-gradient(90deg,#ff9b55,#ffd15e); }
-.fuel-critical .fuel-stat { animation: fuel-critical .46s ease-in-out infinite alternate; }
-.fuel-critical .fuel-stat i em { background: #ef5f55; }
-@keyframes fuel-critical { to { transform: translateY(-2px) scale(1.035); box-shadow: 0 7px 0 rgba(144,45,41,.18),0 0 30px rgba(239,95,85,.5); } }
 .combo-stat { min-width: 94px; flex-direction: column; gap: 0; }
 .combo-stat span { color: #e89730; font-size: 9px; letter-spacing: .1em; }
 .combo-stat strong { line-height: 1; }
@@ -125,6 +115,15 @@ body { min-width: 320px; background: #92ddf7; }
 .toast.show { opacity: 1; transform: translate(-50%,0) scale(1); }
 .toast.success { background: rgba(16,139,109,.94); }
 .toast.warning { background: rgba(211,106,48,.94); }
+.fuel-warning { position: absolute; z-index: 8; left: 50%; top: 49%; width: min(560px,calc(100% - 36px)); padding: 16px 22px 15px; color: white; background: linear-gradient(145deg,rgba(112,48,31,.94),rgba(74,28,33,.96)); border: 3px solid #ffd15e; border-radius: 19px; box-shadow: 0 8px 0 rgba(73,35,28,.38),0 0 34px rgba(255,128,71,.36); text-align: center; opacity: 0; pointer-events: none; transform: translate(-50%,-50%) scale(.92); transition: opacity .18s ease,transform .18s ease; }
+.fuel-warning.show { opacity: 1; transform: translate(-50%,-50%) scale(1); animation: fuel-warning-blink .72s ease-in-out infinite alternate; }
+.fuel-warning small { display: block; color: #ffe26f; font: 900 12px "Outfit",sans-serif; letter-spacing: .15em; }
+.fuel-warning strong { display: block; margin-top: 5px; font-size: 20px; }
+.fuel-warning span { display: block; margin-top: 5px; color: #ffd8b4; font-size: 13px; font-weight: 900; }
+.fuel-warning.critical { background: linear-gradient(145deg,rgba(155,42,35,.97),rgba(75,20,28,.98)); border-color: #fff36f; animation-duration: .42s; }
+.fuel-warning.critical strong { color: #fff36f; }
+body.base-open .fuel-warning, body.garage-open .fuel-warning, .returning .fuel-warning, .launching .fuel-warning { opacity: 0 !important; animation: none; }
+@keyframes fuel-warning-blink { to { opacity: .58; filter: brightness(1.15); box-shadow: 0 8px 0 rgba(73,35,28,.28),0 0 46px rgba(255,97,71,.58); } }
 
 .processing-overlay { position: absolute; z-index: 31; inset: 0; padding: 24px; display: grid; place-items: center; color: #eaffff; background: rgba(6,24,34,.76); opacity: 0; pointer-events: none; backdrop-filter: blur(0); transition: .22s ease; }
 .processing-overlay.show { opacity: 1; pointer-events: auto; backdrop-filter: blur(9px); }
@@ -623,6 +622,10 @@ body.base-open .garage-button { opacity: 0 !important; pointer-events: none !imp
   .upgrade-icon { width: 29px; height: 29px; font-size: 17px; }
   .upgrade-copy b { font-size: 8px; }
   .toast { top: 168px; font-size: 12px; }
+  .fuel-warning { top: 51%; width: calc(100% - 20px); padding: 12px 14px; border-radius: 15px; }
+  .fuel-warning small { font-size: 9px; }
+  .fuel-warning strong { font-size: 15px; }
+  .fuel-warning span { font-size: 11px; }
   .garage-button { left: 10px; bottom: 10px; width: 72px; height: 72px; border-radius: 21px; }
   .garage-button span { font-size: 24px; }
   .garage-panel { padding: 18px 12px 22px; }

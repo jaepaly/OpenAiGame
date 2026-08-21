@@ -1693,6 +1693,7 @@ export class CloudHarvestGame {
     }
     ctx.globalAlpha = 1;
     ctx.restore();
+    this.drawPlayerFuelBar(ctx, time, zoom);
     this.drawImpactOverlay(ctx, time);
     ctx.restore();
     if (this.returning) this.drawReturnTransition(ctx);
@@ -2254,6 +2255,44 @@ export class CloudHarvestGame {
     ctx.strokeStyle = this.run.feverActive ? "#fff36f" : "#8de6ed"; ctx.lineWidth = 3 + Math.min(4, radiusLevel);
     ctx.beginPath(); ctx.ellipse(35 + nozzleLength, 0, 5 + radiusLevel, 13 + radiusLevel * 1.2, 0, 0, Math.PI * 2); ctx.stroke();
 
+    ctx.restore();
+  }
+
+  private drawPlayerFuelBar(ctx: CanvasRenderingContext2D, time: number, zoom: number): void {
+    if (this.atFactory || this.returning || this.launching) return;
+    const ratio = Math.max(0, Math.min(1, this.run.fuel / Math.max(1, this.getFuelCapacity())));
+    const critical = ratio <= .15;
+    const low = ratio <= .35;
+    const barWidth = Math.min(124, Math.max(96, this.width * .1));
+    const barHeight = 11;
+    const playerX = this.player.x * zoom;
+    const bob = Math.sin(time * 4) * 3 * zoom;
+    const playerY = this.player.y * zoom + bob;
+    const barX = playerX - barWidth * .5;
+    const barY = playerY + Math.max(29, 39 * zoom);
+    const color = critical ? "#ff6258" : low ? "#ffd15e" : "#63e3bd";
+    const pulse = low ? .72 + (Math.sin(time * (critical ? 15 : 9)) + 1) * .14 : 1;
+
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    if (low) { ctx.shadowColor = color; ctx.shadowBlur = critical ? 22 : 14; }
+    ctx.fillStyle = "rgba(9,35,48,.9)";
+    ctx.beginPath(); ctx.roundRect(barX - 6, barY - 19, barWidth + 12, 38, 12); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = low ? color : "#dffaff";
+    ctx.font = "900 11px Outfit, sans-serif";
+    ctx.fillText(`${critical ? "! " : ""}FUEL  ${Math.ceil(this.run.fuel)} / ${Math.round(this.getFuelCapacity())}`, playerX, barY - 10);
+    ctx.fillStyle = "rgba(198,225,229,.26)";
+    ctx.beginPath(); ctx.roundRect(barX, barY, barWidth, barHeight, 6); ctx.fill();
+    if (ratio > 0) {
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.roundRect(barX, barY, Math.max(4, barWidth * ratio), barHeight, 6); ctx.fill();
+    }
+    ctx.strokeStyle = low ? color : "rgba(228,255,252,.72)";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(barX, barY, barWidth, barHeight, 6); ctx.stroke();
     ctx.restore();
   }
 

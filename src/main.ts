@@ -25,7 +25,6 @@ app.innerHTML = `
         <div class="resource-hud">
           <div class="mini-stat coin-stat"><span>◈</span><strong id="money">0</strong></div>
           <div class="mini-stat cargo-stat"><span>▣</span><strong id="harvested">0</strong></div>
-          <div class="mini-stat fuel-stat"><span>FUEL</span><strong id="fuelValue">100%</strong><i><em id="fuelFill"></em></i></div>
           <div class="mini-stat combo-stat"><span>COMBO</span><strong id="combo">0</strong></div>
           <button class="icon-button" id="soundButton" aria-label="소리 켜기 또는 끄기">🔊</button>
           <button class="icon-button reset-button" id="resetButton" aria-label="새 회사 시작">↻</button>
@@ -42,6 +41,11 @@ app.innerHTML = `
       <div class="tutorial" id="tutorial"><b>WASD 이동 · 마우스 조준</b><span>이동과 흡입은 연료를 소모합니다 · 0% 전에 RTB로 귀환</span></div>
       <div class="cloud-legend" id="cloudLegend"></div>
       <div class="toast" id="toast" aria-live="polite"></div>
+      <div class="fuel-warning" id="fuelWarning">
+        <small id="fuelWarningKicker">LOW FUEL</small>
+        <strong>연료가 0이 되면 화물을 전부 버리고 비상 귀환합니다</strong>
+        <span id="fuelWarningValue">연료 35%</span>
+      </div>
 
       <aside class="promotion-card">
         <div class="promotion-icon">↥</div>
@@ -145,9 +149,10 @@ function required<T extends Element>(selector: string): T {
 const canvas = required<HTMLCanvasElement>("#gameCanvas");
 const money = required<HTMLElement>("#money");
 const harvested = required<HTMLElement>("#harvested");
-const fuelValue = required<HTMLElement>("#fuelValue");
-const fuelFill = required<HTMLElement>("#fuelFill");
 const combo = required<HTMLElement>("#combo");
+const fuelWarning = required<HTMLElement>("#fuelWarning");
+const fuelWarningKicker = required<HTMLElement>("#fuelWarningKicker");
+const fuelWarningValue = required<HTMLElement>("#fuelWarningValue");
 const altitude = required<HTMLElement>("#altitude");
 const rankName = required<HTMLElement>("#rankName");
 const promotionTitle = required<HTMLElement>("#promotionTitle");
@@ -312,13 +317,16 @@ function renderRunState(state: RunState): void {
   const cargoCount = (Object.values(state.cargo) as number[]).reduce((total, amount) => total + amount, 0);
   const fuelRatio = Math.max(0, Math.min(1, state.fuel / Math.max(1, state.fuelCapacity)));
   harvested.textContent = cargoCount.toLocaleString();
-  fuelValue.textContent = `${Math.ceil(state.fuel)} / ${Math.round(state.fuelCapacity)}`;
-  fuelFill.style.width = `${fuelRatio * 100}%`;
   cargoValue.textContent = `화물 ${cargoCount} · 연료 ${Math.ceil(fuelRatio * 100)}%`;
   returnButton.disabled = state.emergencyReturn;
   garageButton.disabled = cargoCount > 0;
   document.body.classList.toggle("fuel-low", fuelRatio <= .35);
   document.body.classList.toggle("fuel-critical", fuelRatio <= .15);
+  const showFuelWarning = fuelRatio <= .35 && state.fuel > 0 && !state.emergencyReturn;
+  fuelWarning.classList.toggle("show", showFuelWarning);
+  fuelWarning.classList.toggle("critical", fuelRatio <= .15);
+  fuelWarningKicker.textContent = fuelRatio <= .15 ? "FUEL CRITICAL // EMERGENCY RETURN" : "LOW FUEL // RETURN NOW";
+  fuelWarningValue.textContent = `남은 연료 ${Math.ceil(state.fuel)} / ${Math.round(state.fuelCapacity)} · ${Math.ceil(fuelRatio * 100)}%`;
   document.body.classList.toggle("fever-active", state.feverActive);
   renderProcessing(state);
 }
