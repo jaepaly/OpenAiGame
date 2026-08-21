@@ -1,5 +1,5 @@
-import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
-import type { Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, Particle, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
+import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
+import type { Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, Particle, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
@@ -57,6 +57,7 @@ const freshRunState = (day = 1): RunState => ({
     auxTank: 0, aeroDrive: 0, ecoThrusters: 0, vacuumRecycler: 0,
     fuelCondenser: 0, comboGenerator: 0, recoveryReservoir: 0, stormFuel: 0,
   },
+  infiniteResearch: { speed: 0, power: 0, fuel: 0, drone: 0, yield: 0 },
   processing: freshProcessingState(),
   processingLines: 1,
   processingSpeed: 1,
@@ -176,6 +177,7 @@ export class CloudHarvestGame {
     state.fuelRecovered = this.run.fuelRecovered;
     state.fuelRecoveryLimit = this.getFuelRecoveryLimit();
     state.materials = structuredClone(this.state.materials);
+    state.infiniteResearch = structuredClone(this.state.infiniteResearch);
     state.processing = structuredClone(this.state.processing);
     state.processingLines = this.getProcessingLineCount();
     state.processingSpeed = this.getProcessingSpeed();
@@ -211,8 +213,37 @@ export class CloudHarvestGame {
 
   getSkillCost(id: RunSkillId) { return { ...RUN_SKILL_COSTS[id] }; }
 
+  areAllSkillsUnlocked(): boolean {
+    return (Object.keys(RUN_SKILLS) as RunSkillId[]).every((id) => this.state.career.skills[id] >= 1);
+  }
+
+  getInfiniteResearchCost(id: InfiniteResearchId): number {
+    return INFINITE_RESEARCH[id] ? infiniteResearchCost(id, this.state.infiniteResearch[id]) : Number.POSITIVE_INFINITY;
+  }
+
+  canBuyInfiniteResearch(id: InfiniteResearchId): boolean {
+    if (!INFINITE_RESEARCH[id] || !this.atFactory || !this.pausedForLevel || !this.areAllSkillsUnlocked()) return false;
+    return Boolean(this.planCloudMassPayment(this.getInfiniteResearchCost(id)));
+  }
+
+  buyInfiniteResearch(id: InfiniteResearchId): boolean {
+    if (!this.canBuyInfiniteResearch(id)) return false;
+    const cost = this.getInfiniteResearchCost(id);
+    const payment = this.planCloudMassPayment(cost);
+    if (!payment) return false;
+    CLOUD_ORDER.forEach((kind) => { this.state.materials[kind] -= payment[kind]; });
+    this.state.infiniteResearch[id] += 1;
+    this.run.infiniteResearch[id] = this.state.infiniteResearch[id];
+    this.burst(this.player.x, this.player.y, INFINITE_RESEARCH[id].color, 46, 240);
+    this.playChord();
+    this.commit();
+    this.onRunChange(this.getRunState());
+    this.onToast(`∞ ${INFINITE_RESEARCH[id].name} Lv.${this.state.infiniteResearch[id]} · 구름 질량 ${cost.toLocaleString()} 투입`, "success");
+    return true;
+  }
+
   requestReturn(): boolean {
-    if (this.atFactory || this.returning) return false;
+    if (this.atFactory || this.returning || this.launching) return false;
     this.run.emergencyReturn = false;
     this.returning = true;
     this.returnTimer = 0;
@@ -559,6 +590,21 @@ export class CloudHarvestGame {
     return payment;
   }
 
+  private planCloudMassPayment(cost: number): Record<CloudKind, number> | null {
+    const available = { ...this.state.materials };
+    const payment = emptyCloudStock();
+    let remaining = cost;
+    for (let sourceIndex = 0; sourceIndex < CLOUD_ORDER.length && remaining > 0; sourceIndex += 1) {
+      const source = CLOUD_ORDER[sourceIndex];
+      const exchangeValue = 4 ** sourceIndex;
+      const used = Math.min(available[source], Math.ceil(remaining / exchangeValue));
+      available[source] -= used;
+      payment[source] += used;
+      remaining -= used * exchangeValue;
+    }
+    return remaining > 0 ? null : payment;
+  }
+
   openSkillTree(): boolean {
     if (!this.atFactory) return false;
     this.pausedForLevel = true;
@@ -689,8 +735,14 @@ export class CloudHarvestGame {
       const target = event.target as HTMLElement | null;
       if (target?.closest("button, input, textarea, select")) return;
       event.preventDefault();
+      if (event.code === "Space") {
+        if (!event.repeat && !this.launching && !this.returning) {
+          this.ensureAudio();
+          this.requestReturn();
+        }
+        return;
+      }
       this.keys.add(event.code);
-      if (event.code === "Space") this.ensureAudio();
     });
     window.addEventListener("keyup", (event) => this.keys.delete(event.code));
     window.addEventListener("blur", () => this.keys.clear());
@@ -698,7 +750,7 @@ export class CloudHarvestGame {
 
   private isSuctionActive(): boolean {
     return this.run.fuel > 0 && !this.atFactory && !this.returning && !this.launching
-      && (this.pointer.active || this.keys.has("Space"));
+      && this.pointer.active;
   }
 
   private getAimAngle(): number {
@@ -767,7 +819,8 @@ export class CloudHarvestGame {
         this.playerVelocity.x *= drag;
         this.playerVelocity.y *= drag;
       }
-      const skillSpeedMultiplier = 1 + this.run.skills.intakeServo * .22 + this.run.skills.vacuumMomentum * .28 + this.run.skills.aeroDrive * .18;
+      const infiniteSpeedMultiplier = 1 + this.state.infiniteResearch.speed * .025;
+      const skillSpeedMultiplier = (1 + this.run.skills.intakeServo * .22 + this.run.skills.vacuumMomentum * .28 + this.run.skills.aeroDrive * .18) * infiniteSpeedMultiplier;
       const maxSpeed = (315 + this.run.skills.overclock * 18) * skillSpeedMultiplier * feverMovementBoost;
       const speed = Math.hypot(this.playerVelocity.x, this.playerVelocity.y);
       if (speed > maxSpeed) {
@@ -896,7 +949,8 @@ export class CloudHarvestGame {
       ? (this.run.skills.goldenStorm ? 3.6 : 2.65) * (1 + this.run.skills.feverInjector * .15 + this.run.skills.sunStorm * .4 + this.run.skills.goldenVacuum * .25)
       : 1;
     const overloadPower = this.overload > 0 ? 0.22 : 1;
-    const suctionPower = basePower * skillPower * feverPower * overloadPower;
+    const infinitePower = 1 + this.state.infiniteResearch.power * .04;
+    const suctionPower = basePower * skillPower * feverPower * overloadPower * infinitePower;
     const collected: Cloud[] = [];
 
     for (const cloud of this.clouds) {
@@ -1154,7 +1208,8 @@ export class CloudHarvestGame {
           drone.vy *= Math.exp(-dt * 7);
           this.droneBeams.push({ x: drone.x, y: drone.y, targetX: target.x, targetY: target.y });
           const stormPower = this.run.feverActive && this.run.skills.stormDrones ? 3 : 1;
-          const systemsPower = (1 + this.run.skills.droneAI * .34 + this.run.skills.nanoSwarm * .55) * FLIGHT_ROUTES[this.run.routeId].dronePower;
+          const infiniteDronePower = 1 + this.state.infiniteResearch.drone * .04;
+          const systemsPower = (1 + this.run.skills.droneAI * .34 + this.run.skills.nanoSwarm * .55) * FLIGHT_ROUTES[this.run.routeId].dronePower * infiniteDronePower;
           target.health -= dt * (12 + totalCount * 2.4 + this.run.skills.droneFleet * 14) * stormPower * systemsPower;
           target.hurtFlash = .7;
           if (Math.random() < dt * 18) this.particles.push({ x: drone.x, y: drone.y, vx: dx * 1.8, vy: dy * 1.8, life: .24, maxLife: .24, size: 2.5, color: "#6ff6e2" });
@@ -1206,6 +1261,7 @@ export class CloudHarvestGame {
     const comboMultiplier = 1 + Math.min(1.8, Math.floor(this.combo / 3) * .17);
     const permanentValue = (1 + this.state.levels.value * .24)
       * (1 + this.state.research.refining * .05)
+      * (1 + this.state.infiniteResearch.yield * .03)
       * FLIGHT_ROUTES[this.run.routeId].valueMultiplier
       * (1 + this.run.skills.yieldBoost * .1)
       * (this.run.feverActive && this.run.skills.goldenStorm ? 1.5 : 1)
@@ -2501,7 +2557,7 @@ export class CloudHarvestGame {
   }
 
   private getFuelCapacity(): number {
-    return 9 + this.run.skills.auxTank * 3 + this.run.skills.recoveryReservoir * 3;
+    return 9 + this.run.skills.auxTank * 3 + this.run.skills.recoveryReservoir * 3 + this.state.infiniteResearch.fuel * .75;
   }
 
   private getMaxClouds(): number {
@@ -2590,6 +2646,7 @@ export class CloudHarvestGame {
     this.run.xpNext = career.xpNext;
     this.run.pendingPicks = 0;
     this.run.skills = { ...this.run.skills, ...structuredClone(career.skills) };
+    this.run.infiniteResearch = { ...this.run.infiniteResearch, ...structuredClone(this.state.infiniteResearch) };
     (Object.keys(this.run.skills) as RunSkillId[]).forEach((id) => {
       this.run.skills[id] = this.run.skills[id] > 0 ? 1 : 0;
     });
@@ -2623,6 +2680,7 @@ export class CloudHarvestGame {
           lastUpdatedAt: parsed.processing?.lastUpdatedAt ?? Date.now(),
         },
         growthMission: { ...INITIAL_STATE.growthMission, ...parsed.growthMission },
+        infiniteResearch: { ...INITIAL_STATE.infiniteResearch, ...parsed.infiniteResearch },
         career: {
           ...structuredClone(INITIAL_STATE.career),
           ...parsed.career,

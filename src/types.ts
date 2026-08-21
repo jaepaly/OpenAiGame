@@ -3,6 +3,7 @@ export type CloudFormationKind = "ring" | "stream" | "cluster";
 export type ContractId = "water" | "climate" | "energy" | "cryogenic" | "stellar" | "spectrum";
 export type FlightRouteId = "tailwind" | "pressureMine" | "frontline";
 export type ResearchId = "logistics" | "refining" | "forecasting";
+export type InfiniteResearchId = "speed" | "power" | "fuel" | "drone" | "yield";
 
 export interface CloudDefinition {
   kind: CloudKind;
@@ -132,6 +133,7 @@ export interface GameState {
   materials: Record<CloudKind, number>;
   processing: ProcessingState;
   career: CareerProgress;
+  infiniteResearch: Record<InfiniteResearchId, number>;
   growthMission: GrowthMissionProgress;
 }
 
@@ -200,10 +202,23 @@ export interface RunState {
   routeId: FlightRouteId;
   mapRank: number;
   skills: Record<RunSkillId, number>;
+  infiniteResearch: Record<InfiniteResearchId, number>;
   processing: ProcessingState;
   processingLines: number;
   processingSpeed: number;
   processingBatchCapacity: number;
+}
+
+export interface InfiniteResearchDefinition {
+  id: InfiniteResearchId;
+  code: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  baseCost: number;
+  costScale: number;
+  effectPerLevel: string;
 }
 
 export interface ResearchDefinition {

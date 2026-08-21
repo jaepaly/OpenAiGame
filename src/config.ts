@@ -1,4 +1,4 @@
-import type { CloudDefinition, CloudKind, FlightRouteDefinition, FlightRouteId, GrowthMissionDefinition, ProcessingContract, ProcessingJob, RankDefinition, ResearchDefinition, ResearchId, RunSkillCost, RunSkillDefinition, RunSkillId, SkillTreeBranch, UpgradeDefinition } from "./types";
+import type { CloudDefinition, CloudKind, FlightRouteDefinition, FlightRouteId, GrowthMissionDefinition, InfiniteResearchDefinition, InfiniteResearchId, ProcessingContract, ProcessingJob, RankDefinition, ResearchDefinition, ResearchId, RunSkillCost, RunSkillDefinition, RunSkillId, SkillTreeBranch, UpgradeDefinition } from "./types";
 
 export const GROWTH_MISSIONS: GrowthMissionDefinition[] = [
   { id: "collect", code: "JOB 01", title: "첫 수확을 시작하세요", description: "뭉게구름 6개를 수확", target: 6, reward: { money: 4 }, rewardLabel: "◈ 4" },
@@ -318,6 +318,34 @@ export const SKILL_TREE_BRANCHES: SkillTreeBranch[] = [
   { id: "navigation", code: "NAV", name: "연료·항법", description: "새 고도의 연료 압박을 성장과 직접 수확으로 돌파합니다.", color: "#ffad72", nodes: ["auxTank", "aeroDrive", "ecoThrusters", "vacuumRecycler", "fuelCondenser", "comboGenerator", "recoveryReservoir", "stormFuel"] },
 ];
 
+export const INFINITE_RESEARCH: Record<InfiniteResearchId, InfiniteResearchDefinition> = {
+  speed: {
+    id: "speed", code: "SPD", name: "초광속 추진 연구", icon: "»", color: "#6fdcff", baseCost: 140, costScale: 1.48,
+    description: "비행 제어 알고리즘을 끝없이 개선해 최고 이동 속도를 높입니다.", effectPerLevel: "최고 속도 +2.5% / LEVEL",
+  },
+  power: {
+    id: "power", code: "VAC", name: "무한 진공 압축", icon: "◎", color: "#8fffe4", baseCost: 160, costScale: 1.5,
+    description: "흡입 터빈의 압력 한계를 반복 갱신해 모든 구름을 더 빠르게 터뜨립니다.", effectPerLevel: "흡입 출력 +4% / LEVEL",
+  },
+  fuel: {
+    id: "fuel", code: "FUL", name: "차원 연료 저장고", icon: "▰", color: "#ffb36f", baseCost: 200, costScale: 1.52,
+    description: "구름을 고밀도 연료 셀로 압축해 매 비행의 연료 총량을 늘립니다.", effectPerLevel: "연료 용량 +0.75 / LEVEL",
+  },
+  drone: {
+    id: "drone", code: "DRN", name: "자율 편대 학습", icon: "◇", color: "#b69cff", baseCost: 190, costScale: 1.5,
+    description: "수확 데이터를 편대 AI에 재학습시켜 모든 드론의 절단 출력을 높입니다.", effectPerLevel: "드론 출력 +4% / LEVEL",
+  },
+  yield: {
+    id: "yield", code: "YLD", name: "초임계 가치 증폭", icon: "◈", color: "#fff36f", baseCost: 240, costScale: 1.54,
+    description: "회수한 구름의 압축 순도를 무한히 높여 모든 화물의 가치를 증폭합니다.", effectPerLevel: "수확 가치 +3% / LEVEL",
+  },
+};
+
+export function infiniteResearchCost(id: InfiniteResearchId, level: number): number {
+  const research = INFINITE_RESEARCH[id];
+  return Math.min(Number.MAX_SAFE_INTEGER, Math.round(research.baseCost * Math.pow(research.costScale, level)));
+}
+
 export const INITIAL_STATE = {
   money: 0,
   totalEarned: 0,
@@ -335,6 +363,7 @@ export const INITIAL_STATE = {
     jobs: [] as ProcessingJob[], completedCoins: 0, totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now(),
   },
   growthMission: { step: 0, safeReturns: 0, contractsSigned: 0, shipmentsClaimed: 0, rainHarvested: 0 },
+  infiniteResearch: { speed: 0, power: 0, fuel: 0, drone: 0, yield: 0 },
   career: {
     day: 1, level: 1, xp: 0, xpNext: 6, pendingPicks: 0,
     skills: {

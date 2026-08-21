@@ -1,7 +1,7 @@
 import "./styles.css";
-import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, upgradeCost } from "./config";
+import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
 import { CloudHarvestGame } from "./game";
-import type { ContractId, GameState, GrowthMissionId, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
+import type { ContractId, GameState, GrowthMissionId, InfiniteResearchId, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app 요소를 찾을 수 없습니다.");
@@ -38,7 +38,7 @@ app.innerHTML = `
         <div class="route-status"><small id="dayFlight">DAY 1 · FLIGHT 1/3</small><b id="routeName">순풍 회랑</b></div>
       </div>
 
-      <div class="tutorial" id="tutorial"><b>WASD 이동 · 마우스 조준</b><span>이동과 흡입은 연료를 소모합니다 · 0% 전에 RTB로 귀환</span></div>
+      <div class="tutorial" id="tutorial"><b>WASD 이동 · 마우스 조준</b><span>좌클릭 흡입 · SPACE 기지 귀환 · 연료 0% 전 복귀</span></div>
       <aside class="growth-mission" id="growthMission" aria-live="polite">
         <span class="growth-mission-code" id="growthMissionCode">JOB 01</span>
         <div class="growth-mission-copy"><strong id="growthMissionTitle">첫 수확을 시작하세요</strong><small id="growthMissionDescription">뭉게구름 6개를 수확</small></div>
@@ -66,7 +66,7 @@ app.innerHTML = `
       </aside>
 
       <button class="garage-button" id="garageButton"><span>MK</span><b>정비소</b><small>영구 강화</small></button>
-      <button class="return-button" id="returnButton" disabled><span>RTB</span><b>기지 귀환</b><small id="cargoValue">예상 ◈0</small></button>
+      <button class="return-button" id="returnButton" disabled><span>RTB</span><b>SPACE · 기지 귀환</b><small id="cargoValue">예상 ◈0</small></button>
 
       <section class="garage-overlay" id="garageOverlay" aria-label="비행선 정비소">
         <div class="garage-panel">
@@ -148,7 +148,11 @@ app.innerHTML = `
           <span class="levelup-kicker">CAREER SYSTEM BLUEPRINT // 42 NODE GRID</span>
           <h2 id="levelUpTitle">회사의 장기 성장 설계도</h2>
           <p id="levelUpDescription">연결된 노드를 따라 영구 유지되는 수확 장치를 조립하세요.</p>
-          <div class="skill-point-bank"><span>CLOUD STOCKPILE</span><strong id="skillPointCount">☁ 0 · 🌧 0 · ⚡ 0 · ❄ 0 · ☀ 0 · ✦ 0</strong><small>상위 구름 1개는 바로 아래 단계 구름 4개 가치로 자동 대체됩니다.</small></div>
+          <nav class="skill-tree-tabs" id="skillTreeTabs" aria-label="장기 성장 연구 탭">
+            <button class="active" id="skillBlueprintTab" data-tree-tab="blueprint"><b>42</b><span>특성 설계도</span><small>유한 시스템망</small></button>
+            <button id="infiniteResearchTab" data-tree-tab="infinite" disabled><b>∞</b><span>무한 연구</span><small>특성 42개 해금 필요</small></button>
+          </nav>
+          <div class="skill-point-bank"><span id="skillPointLabel">CLOUD STOCKPILE</span><strong id="skillPointCount">☁ 0 · 🌧 0 · ⚡ 0 · ❄ 0 · ☀ 0 · ✦ 0</strong><small id="skillPointHint">상위 구름 1개는 바로 아래 단계 구름 4개 가치로 자동 대체됩니다.</small></div>
           <div class="skill-choices skill-tree-network-shell" id="skillChoices"></div>
           <button class="skill-tree-close" id="skillTreeCloseButton">기지로 돌아가기</button>
         </div>
@@ -212,6 +216,11 @@ const skillChoices = required<HTMLElement>("#skillChoices");
 const levelUpTitle = required<HTMLElement>("#levelUpTitle");
 const levelUpDescription = required<HTMLElement>("#levelUpDescription");
 const skillPointCount = required<HTMLElement>("#skillPointCount");
+const skillPointLabel = required<HTMLElement>("#skillPointLabel");
+const skillPointHint = required<HTMLElement>("#skillPointHint");
+const skillTreeTabs = required<HTMLElement>("#skillTreeTabs");
+const skillBlueprintTab = required<HTMLButtonElement>("#skillBlueprintTab");
+const infiniteResearchTab = required<HTMLButtonElement>("#infiniteResearchTab");
 const skillTreeCloseButton = required<HTMLButtonElement>("#skillTreeCloseButton");
 const skillHoverCard = required<HTMLElement>("#skillHoverCard");
 const garageButton = required<HTMLButtonElement>("#garageButton");
@@ -257,6 +266,8 @@ let processingOutputKey = "";
 let previousProcessingJobs: { id: number; line: number; kind: keyof GameState["materials"] }[] | null = null;
 let previousCompletedCoins: number | null = null;
 let renderedGrowthMissionStep: number | null = null;
+let activeSkillTreeTab: "blueprint" | "infinite" = "blueprint";
+let infiniteResearchUnlockedPreviously = false;
 
 const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast);
 if (import.meta.env.DEV) {
@@ -334,18 +345,44 @@ function canAffordSkill(id: RunSkillId, _state: { materials: GameState["material
   return true;
 }
 
+function cloudMass(materials: GameState["materials"]): number {
+  return CLOUD_ORDER.reduce((total, kind, index) => total + materials[kind] * 4 ** index, 0);
+}
+
+function allSkillsUnlocked(skills: RunState["skills"]): boolean {
+  return (Object.keys(RUN_SKILLS) as RunSkillId[]).every((id) => skills[id] >= 1);
+}
+
+function infiniteResearchEffect(id: InfiniteResearchId, level: number): string {
+  switch (id) {
+    case "speed": return `최고 속도 +${(level * 2.5).toFixed(1)}%`;
+    case "power": return `흡입 출력 +${level * 4}%`;
+    case "fuel": return `연료 용량 +${(level * .75).toFixed(2).replace(/\.00$/, "")}`;
+    case "drone": return `드론 출력 +${level * 4}%`;
+    case "yield": return `수확 가치 +${level * 3}%`;
+  }
+}
+
+function canAffordInfiniteResearch(id: InfiniteResearchId, state: RunState): boolean {
+  return cloudMass(state.materials) >= infiniteResearchCost(id, state.infiniteResearch[id]);
+}
+
 function renderRunState(state: RunState): void {
   runLevel.textContent = `LV.${state.level}`;
   runLevel.classList.remove("ready");
   const treeCode = skillTreeButton.querySelector<HTMLElement>("b");
-  const affordableSkill = (Object.keys(RUN_SKILLS) as RunSkillId[]).some((id) => {
+  const affordableFiniteSkill = (Object.keys(RUN_SKILLS) as RunSkillId[]).some((id) => {
     const requirementsMet = RUN_SKILLS[id].requirements?.every((requirement) => state.skills[requirement] >= 1) ?? true;
     return state.skills[id] < 1 && requirementsMet && canAffordSkill(id, state);
   });
-  if (treeCode) treeCode.textContent = affordableSkill
-    ? "TREE! · FACILITY 02"
+  const infiniteUnlocked = allSkillsUnlocked(state.skills);
+  const affordableInfiniteResearch = infiniteUnlocked
+    && (Object.keys(INFINITE_RESEARCH) as InfiniteResearchId[]).some((id) => canAffordInfiniteResearch(id, state));
+  const growthReady = affordableFiniteSkill || affordableInfiniteResearch;
+  if (treeCode) treeCode.textContent = growthReady
+    ? infiniteUnlocked ? "∞ TREE! · FACILITY 02" : "TREE! · FACILITY 02"
     : "TREE · FACILITY 02";
-  skillTreeButton.classList.toggle("ready", affordableSkill);
+  skillTreeButton.classList.toggle("ready", growthReady);
   xpFill.style.width = `${Math.min(100, state.xp / state.xpNext * 100)}%`;
   xpText.textContent = `${Math.floor(state.xp)} / ${state.xpNext}`;
   feverFill.style.width = `${Math.min(100, state.fever)}%`;
@@ -538,10 +575,66 @@ function showLevelUp(_pendingPicks: number): void {
   const companyState = game.getState();
   const stock = companyState.materials;
   const totalStock = (Object.values(stock) as number[]).reduce((total, amount) => total + amount, 0);
-  skillPointCount.textContent = CLOUD_ORDER.map((kind) => `${CLOUDS[kind].icon} ${stock[kind]}`).join(" · ");
+  const investedNodes = (Object.keys(state.skills) as RunSkillId[]).filter((id) => state.skills[id] > 0).length;
+  const finiteTreeComplete = allSkillsUnlocked(state.skills);
+  if (finiteTreeComplete && !infiniteResearchUnlockedPreviously) activeSkillTreeTab = "infinite";
+  if (!finiteTreeComplete) activeSkillTreeTab = "blueprint";
+  infiniteResearchUnlockedPreviously = finiteTreeComplete;
+  skillBlueprintTab.classList.toggle("active", activeSkillTreeTab === "blueprint");
+  infiniteResearchTab.classList.toggle("active", activeSkillTreeTab === "infinite");
+  infiniteResearchTab.disabled = !finiteTreeComplete;
+  const infiniteTabHint = infiniteResearchTab.querySelector<HTMLElement>("small");
+  if (infiniteTabHint) infiniteTabHint.textContent = finiteTreeComplete ? "반복 가능한 극후반 성장" : `특성 ${investedNodes} / ${Object.keys(RUN_SKILLS).length}`;
+  skillTreeTabs.classList.toggle("infinite-unlocked", finiteTreeComplete);
+  skillTreeCloseButton.textContent = "기지로 돌아가기";
+
+  if (activeSkillTreeTab === "infinite" && finiteTreeComplete) {
+    const mass = cloudMass(stock);
+    const totalInfiniteLevel = (Object.values(companyState.infiniteResearch) as number[]).reduce((total, level) => total + level, 0);
+    levelUpTitle.textContent = "구름을 태워 한계 너머로 성장하세요";
+    levelUpDescription.textContent = "완성된 특성망이 구름을 순수 질량으로 변환합니다. 연구 레벨과 비용에는 상한이 없습니다.";
+    skillPointLabel.textContent = "CONVERTIBLE CLOUD MASS";
+    skillPointCount.textContent = `총 질량 ${mass.toLocaleString()} · ${CLOUD_ORDER.map((kind) => `${CLOUDS[kind].icon}${stock[kind]}`).join(" ")}`;
+    skillPointHint.textContent = "질량 환산: ☁ 1 · 🌧 4 · ⚡ 16 · ❄ 64 · ☀ 256 · ✦ 1,024";
+    skillChoices.classList.add("infinite-research-shell");
+    skillChoices.innerHTML = `
+      <div class="infinite-research-stage">
+        <header class="infinite-research-core">
+          <div class="infinite-core-orbit"><i></i><i></i><i></i><strong>∞</strong></div>
+          <span>LIMIT BREAK LAB</span>
+          <h3>무한 연구 반응로</h3>
+          <p>모든 특성 시스템이 연결되었습니다. 남는 구름을 투입해 회사 성능을 끝없이 끌어올리세요.</p>
+          <b>TOTAL RESEARCH LEVEL ${totalInfiniteLevel.toLocaleString()}</b>
+        </header>
+        <div class="infinite-research-grid">
+          ${(Object.keys(INFINITE_RESEARCH) as InfiniteResearchId[]).map((id) => {
+            const research = INFINITE_RESEARCH[id];
+            const level = companyState.infiniteResearch[id];
+            const cost = infiniteResearchCost(id, level);
+            const available = game.canBuyInfiniteResearch(id);
+            const missing = Math.max(0, cost - mass);
+            return `<button class="infinite-research-card ${available ? "ready" : ""}" data-infinite-research="${id}" style="--research-color:${research.color}" ${available ? "" : "disabled"}>
+              <span class="infinite-card-code">${research.code}</span>
+              <span class="infinite-card-icon">${research.icon}</span>
+              <span class="infinite-card-level"><small>RESEARCH LEVEL</small><strong>${level.toLocaleString()}</strong></span>
+              <span class="infinite-card-copy"><strong>${research.name}</strong><p>${research.description}</p></span>
+              <span class="infinite-card-output"><small>CURRENT OUTPUT</small><b>${infiniteResearchEffect(id, level)}</b><em>${research.effectPerLevel}</em></span>
+              <span class="infinite-card-action">${available ? `구름 질량 ${cost.toLocaleString()} 투입 · LEVEL UP` : `질량 ${missing.toLocaleString()} 부족 · 다음 비용 ${cost.toLocaleString()}`}</span>
+            </button>`;
+          }).join("")}
+        </div>
+        <footer class="infinite-research-note"><b>NO LEVEL CAP</b><span>연구 비용은 단계마다 증가하지만 효과는 매 레벨 영구 누적됩니다.</span></footer>
+      </div>`;
+    levelUpOverlay.classList.add("show");
+    return;
+  }
+
   levelUpTitle.textContent = "보관한 구름으로 시스템을 해금하세요";
   levelUpDescription.textContent = "고도가 오를수록 빙정·태양·오로라구름이 열리고, 새로운 구름은 더 깊은 시스템의 재료가 됩니다.";
-  skillTreeCloseButton.textContent = "기지로 돌아가기";
+  skillPointLabel.textContent = "CLOUD STOCKPILE";
+  skillPointCount.textContent = CLOUD_ORDER.map((kind) => `${CLOUDS[kind].icon} ${stock[kind]}`).join(" · ");
+  skillPointHint.textContent = "상위 구름 1개는 바로 아래 단계 구름 4개 가치로 자동 대체됩니다.";
+  skillChoices.classList.remove("infinite-research-shell");
   const roots = new Set<RunSkillId>(["overclock", "profitRain", "twinDrone", "auxTank"]);
   const center = { x: 740, y: 83 };
   const nodeCenter = (id: RunSkillId) => ({ x: SKILL_NODE_LAYOUT[id].x + 115, y: SKILL_NODE_LAYOUT[id].y + 75 });
@@ -552,7 +645,6 @@ function showLevelUp(_pendingPicks: number): void {
     const active = roots.has(id) || (skill.requirements?.every((requirement) => state.skills[requirement] >= 1) ?? false);
     return sources.map((source) => `<line class="skill-link ${active ? "active" : ""}" x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" style="--link-color:${skill.color}" />`);
   }).join("");
-  const investedNodes = (Object.keys(state.skills) as RunSkillId[]).filter((id) => state.skills[id] > 0).length;
   skillChoices.innerHTML = `
     <div class="skill-tree-legend">
       ${SKILL_TREE_BRANCHES.map((branch) => `<span style="--branch-color:${branch.color}"><b>${branch.code}</b><em>${branch.name}</em></span>`).join("")}
@@ -871,8 +963,22 @@ routeList.addEventListener("click", (event) => {
   document.body.classList.add("launching");
   window.setTimeout(() => document.body.classList.remove("launching"), 1850);
 });
+skillTreeTabs.addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-tree-tab]");
+  if (!button || button.disabled) return;
+  activeSkillTreeTab = button.dataset.treeTab === "infinite" ? "infinite" : "blueprint";
+  skillHoverCard.classList.remove("show");
+  showLevelUp(0);
+});
 skillChoices.addEventListener("click", (event) => {
-  const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-skill]");
+  const target = event.target as HTMLElement;
+  const researchButton = target.closest<HTMLButtonElement>("[data-infinite-research]");
+  if (researchButton) {
+    const id = researchButton.dataset.infiniteResearch as InfiniteResearchId;
+    if (game.buyInfiniteResearch(id)) showLevelUp(0);
+    return;
+  }
+  const button = target.closest<HTMLButtonElement>("[data-skill]");
   if (!button) return;
   skillChoices.querySelectorAll<HTMLButtonElement>("button").forEach((choice) => { choice.disabled = true; });
   game.chooseSkill(button.dataset.skill as RunSkillId);
