@@ -38,7 +38,9 @@ const freshRunState = (day = 1): RunState => ({
   cargo: emptyCloudStock(),
   cargoValue: emptyCloudStock(),
   cargoBonus: 0,
-  cargoCapacity: 28,
+  fuel: 100,
+  fuelCapacity: 100,
+  emergencyReturn: false,
   materials: emptyCloudStock(),
   routeId: "tailwind",
   skills: {
@@ -118,6 +120,7 @@ export class CloudHarvestGame {
   private harvestDrones: HarvestDrone[] = [];
   private runEmitTimer = 0;
   private processingEmitTimer = 0;
+  private fuelWarningStage = 0;
   private audioContext?: AudioContext;
   private lastHarvestToneAt = 0;
   private discoveredCloudKinds = new Set<CloudKind>(["cumulus"]);
@@ -142,6 +145,8 @@ export class CloudHarvestGame {
     this.onToast = onToast;
     this.state = this.loadState();
     this.restoreCareerProgress();
+    this.run.fuelCapacity = this.getFuelCapacity();
+    this.run.fuel = this.run.fuelCapacity;
     const offlineSeconds = Math.min(60 * 60 * 4, Math.max(0, (Date.now() - this.state.processing.lastUpdatedAt) / 1000));
     this.advanceProcessing(offlineSeconds, false);
     this.state.processing.lastUpdatedAt = Date.now();
@@ -156,7 +161,8 @@ export class CloudHarvestGame {
   getState(): GameState { return structuredClone(this.state); }
   getRunState(): RunState {
     const state = structuredClone(this.run);
-    state.cargoCapacity = this.getCargoCapacity();
+    state.fuelCapacity = this.getFuelCapacity();
+    state.fuel = Math.min(state.fuel, state.fuelCapacity);
     state.materials = structuredClone(this.state.materials);
     state.processing = structuredClone(this.state.processing);
     state.processingLines = this.getProcessingLineCount();
@@ -195,10 +201,7 @@ export class CloudHarvestGame {
 
   requestReturn(): boolean {
     if (this.atFactory || this.returning) return false;
-    if (this.getCargoCount() <= 0) {
-      this.onToast("화물칸이 비어 있습니다.", "warning");
-      return false;
-    }
+    this.run.emergencyReturn = false;
     this.returning = true;
     this.returnTimer = 0;
     this.pointer.active = false;
@@ -211,6 +214,48 @@ export class CloudHarvestGame {
     this.player.targetY = this.getWorldHeight() * .53;
     this.onToast("관제탑 승인 — 기지 복귀 항로 진입", "success");
     return true;
+  }
+
+  private consumeFuel(amount: number): boolean {
+    if (amount <= 0 || this.atFactory || this.returning || this.launching) return false;
+    const equipmentEfficiency = Math.max(.32, 1 - this.state.levels.fuelSaver * .0425);
+    const feverEfficiency = this.run.feverActive && this.run.skills.cargoCyclone ? .72 : 1;
+    const efficiency = equipmentEfficiency * feverEfficiency;
+    this.run.fuel = Math.max(0, this.run.fuel - amount * efficiency);
+    const ratio = this.run.fuel / Math.max(1, this.getFuelCapacity());
+    if (ratio <= .15 && this.fuelWarningStage < 2) {
+      this.fuelWarningStage = 2;
+      this.onToast("연료 15% — 지금 귀환하지 않으면 화물을 모두 잃습니다!", "warning");
+      this.playTone(135, .18);
+    } else if (ratio <= .35 && this.fuelWarningStage < 1) {
+      this.fuelWarningStage = 1;
+      this.onToast("연료 35% — 욕심낼지 귀환할지 결정하세요.", "warning");
+    }
+    if (this.run.fuel > 0) return false;
+    this.triggerEmergencyReturn();
+    return true;
+  }
+
+  private triggerEmergencyReturn(): void {
+    if (this.atFactory || this.returning) return;
+    const discarded = this.getCargoCount();
+    this.run.cargo = emptyCloudStock();
+    this.run.cargoValue = emptyCloudStock();
+    this.run.cargoBonus = 0;
+    this.run.emergencyReturn = true;
+    this.returning = true;
+    this.returnTimer = 0;
+    this.pointer.active = false;
+    this.pointer.visible = false;
+    this.touchDirect = false;
+    this.keys.clear();
+    this.playerVelocity = { x: 0, y: 0 };
+    this.clearCascade();
+    this.player.targetX = this.getWorldWidth() * .5;
+    this.player.targetY = this.getWorldHeight() * .53;
+    this.onRunChange(this.getRunState());
+    this.onToast(`연료 고갈! 수확한 구름 ${discarded}개 폐기 · 비상 견인 귀환`, "warning");
+    this.playTone(92, .36);
   }
 
   isAtFactory(): boolean { return this.atFactory; }
@@ -357,6 +402,10 @@ export class CloudHarvestGame {
   launchFlight(routeId: FlightRouteId): boolean {
     if (!this.atFactory || this.launching || this.returning || this.dayComplete) return false;
     this.run.routeId = routeId;
+    this.run.fuelCapacity = this.getFuelCapacity();
+    this.run.fuel = this.run.fuelCapacity;
+    this.run.emergencyReturn = false;
+    this.fuelWarningStage = 0;
     this.launching = true;
     this.launchTimer = 0;
     this.pausedForLevel = false;
@@ -616,7 +665,8 @@ export class CloudHarvestGame {
   }
 
   private isSuctionActive(): boolean {
-    return this.pointer.active || this.keys.has("Space");
+    return this.run.fuel > 0 && !this.atFactory && !this.returning && !this.launching
+      && (this.pointer.active || this.keys.has("Space"));
   }
 
   private getAimAngle(): number {
@@ -662,7 +712,9 @@ export class CloudHarvestGame {
     return Math.abs(angleDelta) <= halfAngle;
   }
 
-  private updatePlayerMovement(dt: number): void {
+  private updatePlayerMovement(dt: number): number {
+    const startX = this.player.x;
+    const startY = this.player.y;
     if (this.touchDirect) {
       const follow = 1 - Math.exp(-dt * 9);
       this.player.x += (this.player.targetX - this.player.x) * follow;
@@ -702,6 +754,8 @@ export class CloudHarvestGame {
     this.player.y = Math.max(100 / zoom, Math.min(this.getWorldHeight() - 150 / zoom, this.player.y));
     if (this.player.x !== previousX) this.playerVelocity.x = 0;
     if (this.player.y !== previousY) this.playerVelocity.y = 0;
+    const moved = Math.hypot(this.player.x - startX, this.player.y - startY);
+    return dt > 0 ? Math.min(1.4, moved / (315 * dt)) : 0;
   }
 
   private resize(): void {
@@ -762,8 +816,10 @@ export class CloudHarvestGame {
     const worldZoom = this.getWorldZoom();
     this.player.targetX = Math.max(55 / worldZoom, Math.min(this.getWorldWidth() - 55 / worldZoom, this.player.targetX));
     this.player.targetY = Math.max(100 / worldZoom, Math.min(this.getWorldHeight() - 150 / worldZoom, this.player.targetY));
-    this.updatePlayerMovement(dt);
+    const movementLoad = this.updatePlayerMovement(dt);
     this.updateAimDirection(dt);
+    const suctionLoad = this.isSuctionActive() ? .72 : 0;
+    if (this.consumeFuel((movementLoad * .32 + suctionLoad) * dt)) return;
     this.overload = Math.max(0, this.overload - dt);
     this.shockToastCooldown = Math.max(0, this.shockToastCooldown - dt);
     this.comboTimer -= dt;
@@ -806,7 +862,6 @@ export class CloudHarvestGame {
       : 1;
     const overloadPower = this.overload > 0 ? 0.22 : 1;
     const suctionPower = basePower * skillPower * feverPower * overloadPower;
-    const cargoFull = this.getCargoCount() >= this.getCargoCapacity();
     const collected: Cloud[] = [];
 
     for (const cloud of this.clouds) {
@@ -815,7 +870,7 @@ export class CloudHarvestGame {
       cloud.vx += Math.sin(cloud.phase + cloud.age * 0.6) * dt * 3;
       cloud.vy += Math.cos(cloud.phase + cloud.age * 0.48) * dt * 2;
 
-      if (this.isSuctionActive() && !cargoFull && !this.queuedCascadeIds.has(cloud.id)) {
+      if (this.isSuctionActive() && !this.queuedCascadeIds.has(cloud.id)) {
         const dx = this.player.x - cloud.x;
         const dy = this.player.y - cloud.y;
         const distance = Math.hypot(dx, dy) || 1;
@@ -851,6 +906,7 @@ export class CloudHarvestGame {
     }
 
     let harvestedThisFrame = this.updateDrones(dt);
+    if (this.droneBeams.length > 0 && this.consumeFuel(this.droneBeams.length * .035 * dt)) return;
     for (const cloud of collected) {
       if (!this.clouds.some((item) => item.id === cloud.id)) continue;
       this.collectCloud(cloud, 0, true);
@@ -990,6 +1046,8 @@ export class CloudHarvestGame {
 
     if (this.returnTimer >= 1.55 && !this.atFactory) {
       this.atFactory = true;
+      this.run.fuelCapacity = this.getFuelCapacity();
+      this.run.fuel = this.run.fuelCapacity;
       this.shake = 0;
       this.player.x = this.width * .5;
       this.player.y = this.height * .61;
@@ -1012,13 +1070,12 @@ export class CloudHarvestGame {
     }
     if (this.harvestDrones.length > count) this.harvestDrones.length = count;
     if (count <= 0) return false;
-    const cargoFull = this.getCargoCount() >= this.getCargoCapacity();
     const claimedTargets = new Set<number>();
 
     for (const drone of this.harvestDrones) {
       drone.phase += dt * (.7 + (drone.phase % 1) * .25);
-      let target = cargoFull ? undefined : this.clouds.find((cloud) => cloud.id === drone.targetId && !claimedTargets.has(cloud.id) && !this.queuedCascadeIds.has(cloud.id));
-      if (!target && !cargoFull) {
+      let target = this.clouds.find((cloud) => cloud.id === drone.targetId && !claimedTargets.has(cloud.id) && !this.queuedCascadeIds.has(cloud.id));
+      if (!target) {
         let nearest = Number.POSITIVE_INFINITY;
         for (const cloud of this.clouds) {
           if (claimedTargets.has(cloud.id) || this.queuedCascadeIds.has(cloud.id)) continue;
@@ -1095,7 +1152,6 @@ export class CloudHarvestGame {
   private collectCloud(cloud: Cloud, cascadeDepth = 0, deferSync = false): void {
     const cloudIndex = this.clouds.findIndex((item) => item.id === cloud.id);
     if (cloudIndex < 0) return;
-    if (this.getCargoCount() >= this.getCargoCapacity()) return;
     this.queuedCascadeIds.delete(cloud.id);
     this.clouds.splice(cloudIndex, 1);
     const definition = CLOUDS[cloud.kind];
@@ -1155,8 +1211,6 @@ export class CloudHarvestGame {
 
     if (this.combo % 5 === 0) this.triggerPressureSurge(cloud.x, cloud.y);
     if (cloud.front && !this.clouds.some((item) => item.front)) this.completeCloudFront(cloud.x, cloud.y);
-    if (this.getCargoCount() >= this.getCargoCapacity()) this.onToast("화물칸 가득 참 — 우하단 귀환 버튼을 누르세요.", "warning");
-
     if (cloud.formationCore && cloud.formationId !== undefined) this.collapseFormation(cloud, cascadeDepth);
 
     const chainStacks = this.run.skills.chainBurst;
@@ -1315,10 +1369,6 @@ export class CloudHarvestGame {
     let harvested = false;
     for (const item of due) {
       this.queuedCascadeIds.delete(item.cloudId);
-      if (this.getCargoCount() >= this.getCargoCapacity()) {
-        this.clearCascade(false);
-        break;
-      }
       const cloud = cloudById.get(item.cloudId);
       if (!cloud) continue;
       this.collectCloud(cloud, item.depth, true);
@@ -2332,10 +2382,9 @@ export class CloudHarvestGame {
     return (Object.values(this.run.cargo) as number[]).reduce((total, amount) => total + amount, 0);
   }
 
-  private getCargoCapacity(): number {
-    return 28 + this.state.rank * 8 + this.state.levels.radius * 4 + this.state.research.logistics * 4
-      + FLIGHT_ROUTES[this.run.routeId].capacityBonus + this.run.skills.salvageProtocol * 16 + this.run.skills.cargoBay * 28
-      + (this.run.feverActive ? this.run.skills.cargoCyclone * 24 : 0);
+  private getFuelCapacity(): number {
+    return 100 + this.state.rank * 6 + this.state.levels.fuelTank * 15 + this.state.research.logistics * 4
+      + FLIGHT_ROUTES[this.run.routeId].fuelBonus + this.run.skills.salvageProtocol * 20 + this.run.skills.cargoBay * 45;
   }
 
   private getMaxClouds(): number {

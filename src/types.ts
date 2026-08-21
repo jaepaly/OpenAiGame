@@ -68,7 +68,7 @@ export interface UpgradeDefinition {
   maxLevel: number;
 }
 
-export type UpgradeId = "power" | "radius" | "value" | "drone" | "insulation" | "conveyor" | "processingLine" | "hopper";
+export type UpgradeId = "power" | "radius" | "value" | "drone" | "insulation" | "conveyor" | "processingLine" | "hopper" | "fuelTank" | "fuelSaver";
 
 export interface ProcessingJob {
   id: number;
@@ -166,7 +166,9 @@ export interface RunState {
   cargo: Record<CloudKind, number>;
   cargoValue: Record<CloudKind, number>;
   cargoBonus: number;
-  cargoCapacity: number;
+  fuel: number;
+  fuelCapacity: number;
+  emergencyReturn: boolean;
   materials: Record<CloudKind, number>;
   routeId: FlightRouteId;
   skills: Record<RunSkillId, number>;
@@ -192,7 +194,7 @@ export interface FlightRouteDefinition {
   description: string;
   effect: string;
   color: string;
-  capacityBonus: number;
+  fuelBonus: number;
   denseBonus: number;
   spawnInterval: number;
   valueMultiplier: number;

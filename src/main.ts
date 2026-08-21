@@ -24,7 +24,8 @@ app.innerHTML = `
 
         <div class="resource-hud">
           <div class="mini-stat coin-stat"><span>◈</span><strong id="money">0</strong></div>
-          <div class="mini-stat cargo-stat"><span>▣</span><strong id="harvested">0/16</strong></div>
+          <div class="mini-stat cargo-stat"><span>▣</span><strong id="harvested">0</strong></div>
+          <div class="mini-stat fuel-stat"><span>FUEL</span><strong id="fuelValue">100%</strong><i><em id="fuelFill"></em></i></div>
           <div class="mini-stat combo-stat"><span>COMBO</span><strong id="combo">0</strong></div>
           <button class="icon-button" id="soundButton" aria-label="소리 켜기 또는 끄기">🔊</button>
           <button class="icon-button reset-button" id="resetButton" aria-label="새 회사 시작">↻</button>
@@ -38,15 +39,9 @@ app.innerHTML = `
         <div class="route-status"><small id="dayFlight">DAY 1 · FLIGHT 1/3</small><b id="routeName">순풍 회랑</b></div>
       </div>
 
-      <div class="tutorial" id="tutorial"><b>WASD 이동 · 마우스 조준</b><span>좌클릭 또는 Space로 흡입 · 터치는 누르고 이동</span></div>
+      <div class="tutorial" id="tutorial"><b>WASD 이동 · 마우스 조준</b><span>이동과 흡입은 연료를 소모합니다 · 0% 전에 RTB로 귀환</span></div>
       <div class="cloud-legend" id="cloudLegend"></div>
       <div class="toast" id="toast" aria-live="polite"></div>
-
-      <aside class="processing-widget" id="processingWidget" aria-label="구름 가공 진행 상황">
-        <header><span>FACTORY ONLINE</span><b id="processingSummary">1 LINE · 대기 없음</b></header>
-        <div class="processing-lanes" id="processingLanes"></div>
-        <button id="claimProcessingButton" disabled><span>완성품 출하</span><strong id="claimProcessingValue">◈ 0</strong></button>
-      </aside>
 
       <aside class="promotion-card">
         <div class="promotion-icon">↥</div>
@@ -97,11 +92,25 @@ app.innerHTML = `
         </div>
       </section>
 
+      <section class="processing-overlay" id="processingOverlay" aria-label="구름 가공 시설">
+        <div class="processing-panel">
+          <header class="processing-heading">
+            <div><span>FACILITY 03 // CLOUD PROCESSING</span><h2>구름 가공동</h2><p>비행 중에도 자동으로 돌아가는 가공 라인을 관리하고 완성품을 출하합니다.</p></div>
+            <button id="processingCloseButton" aria-label="가공동 닫기">×</button>
+          </header>
+          <div class="processing-overview"><span>FACTORY STATUS</span><strong id="processingSummary">1 LINE · 대기 없음</strong></div>
+          <div class="processing-lanes" id="processingLanes"></div>
+          <div class="processing-facility-tip">정비소의 고속 컨베이어·병렬 응축 라인·대형 적재 호퍼로 공장 처리량을 확장할 수 있습니다.</div>
+          <button class="processing-claim" id="claimProcessingButton" disabled><span>완성품 일괄 출하</span><strong id="claimProcessingValue">◈ 0</strong></button>
+        </div>
+      </section>
+
       <nav class="base-hub" id="baseHub" aria-label="구름 수확 기지 시설">
         <div class="base-hub-status"><small>DOCKING COMPLETE</small><strong id="baseHubStatus">화물 정산 완료 · 다음 작전을 준비하세요</strong></div>
         <button class="base-facility workshop" id="baseGarageButton"><b>MK · FACILITY 01</b><span>장비 정비소</span><small>영구 장비를 장착하고 강화합니다.</small><em>정비소 입장 →</em></button>
         <button class="base-facility blueprint" id="skillTreeButton"><b>TREE · FACILITY 02</b><span>특성 설계실</span><small>수확한 구름으로 시스템을 해금합니다.</small><em>특성 트리 열기 →</em></button>
-        <button class="base-facility launch" id="launchButton"><b>GO · FACILITY 03</b><span>출격 관제문</span><small>항로를 선택하고 다음 비행을 시작합니다.</small><em>항로 선택 →</em></button>
+        <button class="base-facility processing" id="processingFacilityButton"><b>PROC · FACILITY 03</b><span>구름 가공동</span><small>진행 중인 가공과 완성품을 관리합니다.</small><em>가공동 입장 →</em></button>
+        <button class="base-facility launch" id="launchButton"><b>GO · FACILITY 04</b><span>출격 관제문</span><small>항로를 선택하고 다음 비행을 시작합니다.</small><em>항로 선택 →</em></button>
       </nav>
 
       <section class="route-overlay" id="routeOverlay" aria-label="오늘의 비행 항로 선택">
@@ -136,6 +145,8 @@ function required<T extends Element>(selector: string): T {
 const canvas = required<HTMLCanvasElement>("#gameCanvas");
 const money = required<HTMLElement>("#money");
 const harvested = required<HTMLElement>("#harvested");
+const fuelValue = required<HTMLElement>("#fuelValue");
+const fuelFill = required<HTMLElement>("#fuelFill");
 const combo = required<HTMLElement>("#combo");
 const altitude = required<HTMLElement>("#altitude");
 const rankName = required<HTMLElement>("#rankName");
@@ -146,11 +157,12 @@ const promoteButton = required<HTMLButtonElement>("#promoteButton");
 const upgradeList = required<HTMLElement>("#upgradeList");
 const cloudLegend = required<HTMLElement>("#cloudLegend");
 const toast = required<HTMLElement>("#toast");
-const processingWidget = required<HTMLElement>("#processingWidget");
+const processingOverlay = required<HTMLElement>("#processingOverlay");
 const processingSummary = required<HTMLElement>("#processingSummary");
 const processingLanes = required<HTMLElement>("#processingLanes");
 const claimProcessingButton = required<HTMLButtonElement>("#claimProcessingButton");
 const claimProcessingValue = required<HTMLElement>("#claimProcessingValue");
+const processingCloseButton = required<HTMLButtonElement>("#processingCloseButton");
 const soundButton = required<HTMLButtonElement>("#soundButton");
 const resetButton = required<HTMLButtonElement>("#resetButton");
 const tutorial = required<HTMLElement>("#tutorial");
@@ -187,6 +199,7 @@ const researchList = required<HTMLElement>("#researchList");
 const baseGarageButton = required<HTMLButtonElement>("#baseGarageButton");
 const launchButton = required<HTMLButtonElement>("#launchButton");
 const skillTreeButton = required<HTMLButtonElement>("#skillTreeButton");
+const processingFacilityButton = required<HTMLButtonElement>("#processingFacilityButton");
 const baseHub = required<HTMLElement>("#baseHub");
 const baseHubStatus = required<HTMLElement>("#baseHubStatus");
 const routeOverlay = required<HTMLElement>("#routeOverlay");
@@ -297,12 +310,15 @@ function renderRunState(state: RunState): void {
   combo.textContent = state.combo > 0 ? `×${state.combo}` : "—";
   combo.parentElement?.classList.toggle("active", state.combo >= 2);
   const cargoCount = (Object.values(state.cargo) as number[]).reduce((total, amount) => total + amount, 0);
-  const estimatedValue = (Object.values(state.cargoValue) as number[]).reduce((total, amount) => total + amount, state.cargoBonus);
-  harvested.textContent = `${cargoCount}/${state.cargoCapacity}`;
-  cargoValue.textContent = `가공 예상 ◈${Math.floor(estimatedValue).toLocaleString()}`;
-  returnButton.disabled = cargoCount <= 0;
+  const fuelRatio = Math.max(0, Math.min(1, state.fuel / Math.max(1, state.fuelCapacity)));
+  harvested.textContent = cargoCount.toLocaleString();
+  fuelValue.textContent = `${Math.ceil(state.fuel)} / ${Math.round(state.fuelCapacity)}`;
+  fuelFill.style.width = `${fuelRatio * 100}%`;
+  cargoValue.textContent = `화물 ${cargoCount} · 연료 ${Math.ceil(fuelRatio * 100)}%`;
+  returnButton.disabled = state.emergencyReturn;
   garageButton.disabled = cargoCount > 0;
-  returnButton.classList.toggle("full", cargoCount >= state.cargoCapacity);
+  document.body.classList.toggle("fuel-low", fuelRatio <= .35);
+  document.body.classList.toggle("fuel-critical", fuelRatio <= .15);
   document.body.classList.toggle("fever-active", state.feverActive);
   renderProcessing(state);
 }
@@ -318,12 +334,13 @@ function processingTime(seconds: number): string {
 function renderProcessing(state: RunState): void {
   const jobs = state.processing.jobs;
   const active = jobs.slice(0, state.processingLines);
-  const visibleActive = active.slice(0, 2);
-  const hiddenActive = Math.max(0, active.length - visibleActive.length);
+  const visibleActive = active;
+  const hiddenActive = 0;
   const waiting = Math.max(0, jobs.length - active.length);
   const completed = Math.floor(state.processing.completedCoins);
-  processingWidget.classList.toggle("idle", jobs.length === 0 && completed <= 0);
-  processingWidget.classList.toggle("ready", completed > 0);
+  processingFacilityButton.classList.toggle("ready", completed > 0);
+  const processingCode = processingFacilityButton.querySelector<HTMLElement>("b");
+  if (processingCode) processingCode.textContent = completed > 0 ? "PROC! · FACILITY 03" : "PROC · FACILITY 03";
   processingSummary.textContent = `${state.processingLines} LINE · ${waiting > 0 ? `대기 ${waiting}묶음` : jobs.length > 0 ? "자동 가공 중" : "대기 없음"}`;
   processingLanes.innerHTML = active.length > 0 ? visibleActive.map((job, index) => {
     const dominantKind = CLOUD_ORDER.reduce((best, kind) => job.units[kind] > job.units[best] ? kind : best, CLOUD_ORDER[0]);
@@ -346,6 +363,19 @@ function showFactory(state: RunState): void {
   baseHub.classList.remove("show");
   factoryPanel.classList.remove("settled");
   factoryReceipt.classList.remove("show");
+  if (state.emergencyReturn) {
+    factoryOverlay.classList.remove("show");
+    baseHubStatus.textContent = "비상 견인 완료 · 이번 비행의 화물 전량 폐기 · 연료 재충전 완료";
+    baseHub.classList.add("show");
+    return;
+  }
+  const cargoCount = (Object.values(state.cargo) as number[]).reduce((total, amount) => total + amount, 0);
+  if (cargoCount <= 0) {
+    factoryOverlay.classList.remove("show");
+    baseHubStatus.textContent = "귀환 완료 · 수확 화물 없음 · 연료 재충전 완료";
+    baseHub.classList.add("show");
+    return;
+  }
   factoryManifest.innerHTML = (Object.values(CLOUDS)).map((cloud) => `
     <div class="manifest-item ${cloud.kind}">
       <span>${CLOUD_CODES[cloud.kind]}</span>
@@ -435,6 +465,8 @@ function equipmentEffect(id: UpgradeId, level: number): string {
     case "conveyor": return `가공 속도 +${level * 22}%`;
     case "processingLine": return `동시 가공 ${1 + level}라인`;
     case "hopper": return `묶음당 ${10 + level * 5}개`;
+    case "fuelTank": return `탱크 연료 +${level * 15}`;
+    case "fuelSaver": return `연료 소모 -${Math.min(68, Math.round(level * 4.25))}%`;
   }
 }
 
@@ -463,7 +495,7 @@ function renderState(state: GameState): void {
     ).join("");
     return `
       <button class="equipment-slot ${locked ? "locked" : ""}" style="--part-index:${index}" data-upgrade="${upgrade.id}" ${disabled ? "disabled" : ""}>
-        <span class="equipment-status"><b>PART 0${index + 1}</b><em>${status}</em></span>
+        <span class="equipment-status"><b>PART ${String(index + 1).padStart(2, "0")}</b><em>${status}</em></span>
         <span class="equipment-visual"><i>${upgrade.icon}</i><small>LV.${level}</small></span>
         <span class="equipment-info"><strong>${upgrade.name}</strong><small>${upgrade.description}</small></span>
         <span class="equipment-output">
@@ -558,6 +590,11 @@ contractList.addEventListener("click", (event) => {
   }
 });
 claimProcessingButton.addEventListener("click", () => game.claimProcessedCoins());
+processingFacilityButton.addEventListener("click", () => processingOverlay.classList.add("show"));
+processingCloseButton.addEventListener("click", () => processingOverlay.classList.remove("show"));
+processingOverlay.addEventListener("click", (event) => {
+  if (event.target === processingOverlay) processingOverlay.classList.remove("show");
+});
 researchList.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-research]");
   if (!button || !game.completeDay(button.dataset.research as ResearchId)) return;
@@ -593,6 +630,7 @@ routeList.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-route]");
   if (!button || !game.launchFlight(button.dataset.route as FlightRouteId)) return;
   routeOverlay.classList.remove("show");
+  processingOverlay.classList.remove("show");
   baseHub.classList.remove("show");
   factoryOverlay.classList.remove("show");
   factoryPanel.classList.remove("settled");
@@ -643,6 +681,7 @@ skillTreeButton.addEventListener("click", () => game.openSkillTree());
 resetButton.addEventListener("click", () => {
   if (window.confirm("현재 회사의 진행 상황을 지우고 처음부터 시작할까요?")) {
     document.body.classList.remove("base-open");
+    processingOverlay.classList.remove("show");
     game.reset();
   }
 });
