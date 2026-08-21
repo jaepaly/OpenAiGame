@@ -103,9 +103,18 @@ app.innerHTML = `
             <button id="processingCloseButton" aria-label="가공동 닫기">×</button>
           </header>
           <div class="processing-overview"><span>FACTORY STATUS</span><strong id="processingSummary">1 LINE · 대기 없음</strong></div>
-          <div class="processing-lanes" id="processingLanes"></div>
+          <div class="processing-floor">
+            <section class="processing-machine" aria-label="구름 응축 캡슐">
+              <div class="processing-rail"><span><i></i> RAW CLOUD FEED</span><b>자동 응축 설비 가동 중</b><span>OUTPUT <i></i></span></div>
+              <div class="processing-lanes" id="processingLanes"></div>
+            </section>
+            <aside class="processing-console">
+              <div class="processing-console-head"><span>LINE CONTROL</span><i></i><i></i><i></i></div>
+              <div class="processing-output" id="processingOutput"></div>
+              <button class="processing-claim" id="claimProcessingButton" disabled><span>완성품 일괄 출하</span><strong id="claimProcessingValue">◈ 0</strong></button>
+            </aside>
+          </div>
           <div class="processing-facility-tip">정비소의 고속 컨베이어·병렬 응축 라인·대형 적재 호퍼로 공장 처리량을 확장할 수 있습니다.</div>
-          <button class="processing-claim" id="claimProcessingButton" disabled><span>완성품 일괄 출하</span><strong id="claimProcessingValue">◈ 0</strong></button>
         </div>
       </section>
 
@@ -165,6 +174,7 @@ const toast = required<HTMLElement>("#toast");
 const processingOverlay = required<HTMLElement>("#processingOverlay");
 const processingSummary = required<HTMLElement>("#processingSummary");
 const processingLanes = required<HTMLElement>("#processingLanes");
+const processingOutput = required<HTMLElement>("#processingOutput");
 const claimProcessingButton = required<HTMLButtonElement>("#claimProcessingButton");
 const claimProcessingValue = required<HTMLElement>("#claimProcessingValue");
 const processingCloseButton = required<HTMLButtonElement>("#processingCloseButton");
@@ -223,6 +233,8 @@ const CLOUD_ORDER = Object.keys(CLOUDS) as (keyof GameState["materials"])[];
 const CLOUD_CODES: Record<keyof GameState["materials"], string> = {
   cumulus: "CUM", rain: "RAN", electric: "ELC", ice: "ICE", solar: "SOL", aurora: "AUR",
 };
+let processingLayoutKey = "";
+let processingOutputKey = "";
 
 const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast);
 if (import.meta.env.DEV) {
@@ -351,24 +363,56 @@ function processingTime(seconds: number): string {
 function renderProcessing(state: RunState): void {
   const jobs = state.processing.jobs;
   const active = jobs.slice(0, state.processingLines);
-  const visibleActive = active;
-  const hiddenActive = 0;
   const waiting = Math.max(0, jobs.length - active.length);
   const completed = Math.floor(state.processing.completedCoins);
   processingFacilityButton.classList.toggle("ready", completed > 0);
   const processingCode = processingFacilityButton.querySelector<HTMLElement>("b");
   if (processingCode) processingCode.textContent = completed > 0 ? "PROC! · FACILITY 03" : "PROC · FACILITY 03";
   processingSummary.textContent = `${state.processingLines} LINE · ${waiting > 0 ? `대기 ${waiting}묶음` : jobs.length > 0 ? "자동 가공 중" : "대기 없음"}`;
-  processingLanes.innerHTML = active.length > 0 ? visibleActive.map((job, index) => {
-    const dominantKind = CLOUD_ORDER.reduce((best, kind) => job.units[kind] > job.units[best] ? kind : best, CLOUD_ORDER[0]);
-    const cloud = CLOUDS[dominantKind];
+  const visibleLines = Math.max(3, state.processingLines);
+  const lineEntries = Array.from({ length: visibleLines }, (_, index) => {
+    const unlocked = index < state.processingLines;
+    const job = active[index];
+    const dominantKind = job ? CLOUD_ORDER.reduce((best, kind) => job.units[kind] > job.units[best] ? kind : best, CLOUD_ORDER[0]) : undefined;
+    return { unlocked, job, dominantKind };
+  });
+  const nextLayoutKey = `${state.processingLines}|${lineEntries.map(({ unlocked, job, dominantKind }) => unlocked ? job ? `${job.id}:${dominantKind}` : "idle" : "locked").join("|")}`;
+  if (processingLayoutKey !== nextLayoutKey) {
+    processingLanes.innerHTML = lineEntries.map(({ unlocked, job, dominantKind }, index) => {
+      if (!unlocked) return `<article class="processing-vat locked"><div class="vat-top"><span>LINE ${String(index + 1).padStart(2, "0")}</span><strong>LOCKED</strong></div><div class="vat-apparatus"><div class="vat-pipe"></div><div class="vat-glass"><div class="vat-lock">＋</div></div></div><div class="vat-meta"><b>병렬 라인 증설 대기</b><small>정비소에서 설비를 확장하세요</small></div></article>`;
+      if (!job) return `<article class="processing-vat idle"><div class="vat-top"><span>LINE ${String(index + 1).padStart(2, "0")}</span><strong>STANDBY</strong></div><div class="vat-apparatus"><div class="vat-pipe"></div><div class="vat-glass"><div class="vat-scan"></div><div class="vat-idle-mark">☁</div></div></div><div class="vat-meta"><b>투입 대기</b><small>원재료 구름을 기다리는 중</small></div></article>`;
+      const cloud = CLOUDS[dominantKind!];
+      const progress = Math.min(100, job.progress / job.workRequired * 100);
+      const remaining = (job.workRequired - job.progress) / state.processingSpeed;
+      const units = CLOUD_ORDER.reduce((total, kind) => total + job.units[kind], 0);
+      const contract = PROCESSING_CONTRACTS.find((item) => item.id === job.contractId);
+      return `<article class="processing-vat active ${dominantKind}" style="--vat-progress:${progress}%">
+        <div class="vat-top"><span>LINE ${String(index + 1).padStart(2, "0")}</span><strong>${processingTime(remaining)}</strong></div>
+        <div class="vat-apparatus"><div class="vat-pipe"></div><div class="vat-glass"><div class="vat-fluid"></div><div class="vat-cloud"><span>${cloud.icon}</span><i></i><i></i><i></i></div><div class="vat-bubbles"><i></i><i></i><i></i><i></i></div><div class="vat-scan"></div></div></div>
+        <div class="vat-meta"><b>${cloud.name} ${units} UNIT</b><small>${contract?.code ?? "PROC"} · ${Math.floor(progress)}% 응축</small><em><i style="width:${progress}%"></i></em></div>
+      </article>`;
+    }).join("");
+    processingLayoutKey = nextLayoutKey;
+  }
+  active.forEach((job, index) => {
+    const vat = processingLanes.children[index] as HTMLElement | undefined;
+    if (!vat) return;
     const progress = Math.min(100, job.progress / job.workRequired * 100);
     const remaining = (job.workRequired - job.progress) / state.processingSpeed;
-    const units = CLOUD_ORDER.reduce((total, kind) => total + job.units[kind], 0);
-    return `<div class="processing-lane ${dominantKind}">
-      <span>${cloud.icon}</span><div><small>LINE ${index + 1} · ${units} UNIT</small><b>${cloud.name} 중심 가공</b><i><em style="width:${progress}%"></em></i></div><strong>${processingTime(remaining)}</strong>
-    </div>`;
-  }).join("") + (hiddenActive > 0 ? `<div class="processing-more">+ ${hiddenActive}개 라인도 동시에 가동 중</div>` : "") : `<div class="processing-empty"><span>◇</span><b>가공 대기열 비어 있음</b><small>구름을 수확해 기지로 가져오세요.</small></div>`;
+    vat.style.setProperty("--vat-progress", `${progress}%`);
+    const timer = vat.querySelector<HTMLElement>(".vat-top strong");
+    const detail = vat.querySelector<HTMLElement>(".vat-meta small");
+    const progressFill = vat.querySelector<HTMLElement>(".vat-meta em i");
+    if (timer) timer.textContent = processingTime(remaining);
+    if (detail) detail.textContent = `${PROCESSING_CONTRACTS.find((item) => item.id === job.contractId)?.code ?? "PROC"} · ${Math.floor(progress)}% 응축`;
+    if (progressFill) progressFill.style.width = `${progress}%`;
+  });
+  const nextOutputKey = `${waiting}|${completed}|${jobs.length > 0}`;
+  if (processingOutputKey !== nextOutputKey) {
+    processingOutput.innerHTML = `<div class="output-readout"><small>대기열</small><strong>${waiting}</strong><span>BATCH</span></div>
+      <div class="output-window ${completed > 0 ? "ready" : ""}"><div class="output-canister"><i></i><b>${completed > 0 ? "◈" : "◇"}</b><span></span></div><strong>${completed > 0 ? "완제품 출하 준비" : jobs.length > 0 ? "제품 충전 중" : "완제품 대기"}</strong><small>${completed > 0 ? `◈ ${completed.toLocaleString()} 적재 완료` : "가공이 끝나면 이곳에 쌓입니다"}</small></div>`;
+    processingOutputKey = nextOutputKey;
+  }
   claimProcessingButton.disabled = completed <= 0;
   claimProcessingValue.textContent = `◈ ${completed.toLocaleString()}`;
 }
