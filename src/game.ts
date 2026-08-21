@@ -1541,17 +1541,6 @@ export class CloudHarvestGame {
       ctx.fillStyle = tank.color; ctx.globalAlpha = .72; ctx.fillRect(tank.x - 18, 292, 36, 62); ctx.globalAlpha = 1;
       ctx.fillStyle = "#dffaff"; ctx.textAlign = "center"; ctx.font = "900 9px Outfit, sans-serif"; ctx.fillText(tank.code, tank.x, 218);
     }
-    const facilities = [
-      { x: this.width * .15, w: 230, color: "#65c8d7", code: "MK", name: "WORKSHOP" },
-      { x: this.width * .5, w: 250, color: "#b69cff", code: "TREE", name: "BLUEPRINT TERMINAL" },
-      { x: this.width * .85, w: 230, color: "#fff36f", code: "GO", name: "LAUNCH GATE" },
-    ];
-    for (const facility of facilities) {
-      ctx.fillStyle = "rgba(8,30,42,.78)"; ctx.beginPath(); ctx.roundRect(facility.x - facility.w / 2, floorTop + 35, facility.w, 105, 18); ctx.fill();
-      ctx.strokeStyle = facility.color; ctx.lineWidth = 3; ctx.stroke();
-      ctx.fillStyle = facility.color; ctx.font = "900 13px Outfit, sans-serif"; ctx.fillText(facility.code, facility.x, floorTop + 70);
-      ctx.fillStyle = "#dffaff"; ctx.font = "900 11px Outfit, sans-serif"; ctx.fillText(facility.name, facility.x, floorTop + 96);
-    }
     ctx.fillStyle = "rgba(3,18,26,.5)"; ctx.beginPath(); ctx.ellipse(this.width * .5, this.height * .68, 150, 44, 0, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = "#fff36f"; ctx.lineWidth = 5; ctx.setLineDash([18, 12]); ctx.lineDashOffset = -time * 28;
     ctx.beginPath(); ctx.ellipse(this.width * .5, this.height * .68, 130, 34, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);

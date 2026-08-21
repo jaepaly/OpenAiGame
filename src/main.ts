@@ -93,9 +93,9 @@ app.innerHTML = `
 
       <nav class="base-hub" id="baseHub" aria-label="구름 수확 기지 시설">
         <div class="base-hub-status"><small>DOCKING COMPLETE</small><strong id="baseHubStatus">화물 정산 완료 · 다음 작전을 준비하세요</strong></div>
-        <button class="base-facility workshop" id="baseGarageButton"><b>MK</b><span>정비 베이</span><small>영구 장비 강화</small></button>
-        <button class="base-facility blueprint" id="skillTreeButton"><b>TREE</b><span>설계 터미널</span><small>구름 재료로 특성 해금</small></button>
-        <button class="base-facility launch" id="launchButton"><b>TAKE OFF</b><span>출격 게이트</span><small>다음 항로 선택</small></button>
+        <button class="base-facility workshop" id="baseGarageButton"><b>MK · FACILITY 01</b><span>장비 정비소</span><small>영구 장비를 장착하고 강화합니다.</small><em>정비소 입장 →</em></button>
+        <button class="base-facility blueprint" id="skillTreeButton"><b>TREE · FACILITY 02</b><span>특성 설계실</span><small>수확한 구름으로 시스템을 해금합니다.</small><em>특성 트리 열기 →</em></button>
+        <button class="base-facility launch" id="launchButton"><b>GO · FACILITY 03</b><span>출격 관제문</span><small>항로를 선택하고 다음 비행을 시작합니다.</small><em>항로 선택 →</em></button>
       </nav>
 
       <section class="route-overlay" id="routeOverlay" aria-label="오늘의 비행 항로 선택">
@@ -271,7 +271,9 @@ function renderRunState(state: RunState): void {
     const requirementsMet = RUN_SKILLS[id].requirements?.every((requirement) => state.skills[requirement] >= 1) ?? true;
     return state.skills[id] < 1 && requirementsMet && canAffordSkill(id, state);
   });
-  if (treeCode) treeCode.textContent = affordableSkill ? "TREE!" : "TREE";
+  if (treeCode) treeCode.textContent = affordableSkill
+    ? "TREE! · FACILITY 02"
+    : "TREE · FACILITY 02";
   skillTreeButton.classList.toggle("ready", affordableSkill);
   xpFill.style.width = `${Math.min(100, state.xp / state.xpNext * 100)}%`;
   xpText.textContent = `${Math.floor(state.xp)} / ${state.xpNext}`;
@@ -295,6 +297,7 @@ function renderRunState(state: RunState): void {
 
 function showFactory(state: RunState): void {
   document.body.classList.remove("returning");
+  document.body.classList.add("base-open");
   baseHub.classList.remove("show");
   factoryPanel.classList.remove("settled");
   factoryReceipt.classList.remove("show");
@@ -542,6 +545,7 @@ routeList.addEventListener("click", (event) => {
   factoryPanel.classList.remove("settled");
   factoryReceipt.classList.remove("show");
   document.body.classList.remove("returning");
+  document.body.classList.remove("base-open");
   document.body.classList.add("launching");
   window.setTimeout(() => document.body.classList.remove("launching"), 1850);
 });
@@ -584,7 +588,10 @@ skillTreeCloseButton.addEventListener("click", () => {
 });
 skillTreeButton.addEventListener("click", () => game.openSkillTree());
 resetButton.addEventListener("click", () => {
-  if (window.confirm("현재 회사의 진행 상황을 지우고 처음부터 시작할까요?")) game.reset();
+  if (window.confirm("현재 회사의 진행 상황을 지우고 처음부터 시작할까요?")) {
+    document.body.classList.remove("base-open");
+    game.reset();
+  }
 });
 
 window.addEventListener("beforeunload", () => game.destroy());
