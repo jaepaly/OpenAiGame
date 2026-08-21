@@ -465,7 +465,7 @@ function equipmentEffect(id: UpgradeId, level: number): string {
     case "conveyor": return `가공 속도 +${level * 22}%`;
     case "processingLine": return `동시 가공 ${1 + level}라인`;
     case "hopper": return `묶음당 ${10 + level * 5}개`;
-    case "fuelTank": return `탱크 연료 +${level * 15}`;
+    case "fuelTank": return `탱크 연료 +${level * 4}`;
     case "fuelSaver": return `연료 소모 -${Math.min(68, Math.round(level * 4.25))}%`;
   }
 }

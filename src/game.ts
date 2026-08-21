@@ -38,8 +38,8 @@ const freshRunState = (day = 1): RunState => ({
   cargo: emptyCloudStock(),
   cargoValue: emptyCloudStock(),
   cargoBonus: 0,
-  fuel: 100,
-  fuelCapacity: 100,
+  fuel: 9,
+  fuelCapacity: 9,
   emergencyReturn: false,
   materials: emptyCloudStock(),
   routeId: "tailwind",
@@ -2383,8 +2383,8 @@ export class CloudHarvestGame {
   }
 
   private getFuelCapacity(): number {
-    return 100 + this.state.rank * 6 + this.state.levels.fuelTank * 15 + this.state.research.logistics * 4
-      + FLIGHT_ROUTES[this.run.routeId].fuelBonus + this.run.skills.salvageProtocol * 20 + this.run.skills.cargoBay * 45;
+    return 7 + this.state.rank + this.state.levels.fuelTank * 4 + this.state.research.logistics
+      + FLIGHT_ROUTES[this.run.routeId].fuelBonus + this.run.skills.salvageProtocol * 6 + this.run.skills.cargoBay * 14;
   }
 
   private getMaxClouds(): number {

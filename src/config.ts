@@ -4,7 +4,7 @@ export const RESEARCH_PROJECTS: Record<ResearchId, ResearchDefinition> = {
   logistics: {
     id: "logistics", code: "CRG", name: "적운 물류망", color: "#71d8ef",
     description: "회수 동선과 보급 규격을 표준화해 비행선 연료와 가공 묶음을 늘립니다.",
-    effect: "영구 연료 +4 · 가공 묶음 +2",
+    effect: "영구 연료 +1 · 가공 묶음 +2",
   },
   refining: {
     id: "refining", code: "YLD", name: "초임계 정제", color: "#ffd15e",
@@ -22,7 +22,7 @@ export const FLIGHT_ROUTES: Record<FlightRouteId, FlightRouteDefinition> = {
   tailwind: {
     id: "tailwind", code: "WND", name: "순풍 회랑", color: "#6fe3ca",
     description: "저고도 구름 무리가 끊임없이 밀려오는 콤보 항로입니다. 부족한 초급 재료를 다시 모으기 좋습니다.",
-    effect: "연료 +16 · 유입 48%↑ · 하위 구름↑ · 콤보 +0.9초", fuelBonus: 16, denseBonus: 0,
+    effect: "연료 +2 · 유입 48%↑ · 하위 구름↑ · 콤보 +0.9초", fuelBonus: 2, denseBonus: 0,
     spawnInterval: .52, valueMultiplier: 1, frontDelay: 14, frontBonus: 1, comboWindowBonus: .9, dronePower: 1, startingFever: 0, lowTierBias: .26,
   },
   pressureMine: {
@@ -229,7 +229,7 @@ export const UPGRADES: UpgradeDefinition[] = [
     name: "기압 연료 탱크",
     description: "한 번의 비행에서 사용할 수 있는 최대 연료를 늘립니다.",
     icon: "FUL",
-    baseCost: 40,
+    baseCost: 16,
     maxLevel: 20,
   },
   {
@@ -237,7 +237,7 @@ export const UPGRADES: UpgradeDefinition[] = [
     name: "회생 추진기",
     description: "이동과 흡입에 필요한 연료 소모량을 줄입니다.",
     icon: "ECO",
-    baseCost: 58,
+    baseCost: 24,
     maxLevel: 16,
   },
 ];
@@ -259,7 +259,7 @@ export const RUN_SKILLS: Record<RunSkillId, RunSkillDefinition> = {
   twinDrone: { id: "twinDrone", name: "지원 드론", description: "자동으로 구름을 분해하는 드론이 출격합니다.", icon: "DRN", color: "#65d6b4", maxStacks: 1, category: "core" },
   droneAI: { id: "droneAI", name: "드론 표적 AI", description: "드론 분해력과 탐색 효율을 강화합니다.", icon: "A-I", color: "#76dfbe", maxStacks: 1, category: "core", requirements: ["twinDrone"] },
   relayBurst: { id: "relayBurst", name: "폭발 중계기", description: "연쇄 폭발의 범위와 피해를 크게 높입니다.", icon: "RLY", color: "#ffbd61", maxStacks: 1, category: "core", requirements: ["chainBurst"] },
-  salvageProtocol: { id: "salvageProtocol", name: "회수 프로토콜", description: "최대 연료 +20과 추가 수확 가치를 얻습니다.", icon: "SLV", color: "#86e5bd", maxStacks: 1, category: "core", requirements: ["relayBurst"] },
+  salvageProtocol: { id: "salvageProtocol", name: "회수 프로토콜", description: "최대 연료 +6과 추가 수확 가치를 얻습니다.", icon: "SLV", color: "#86e5bd", maxStacks: 1, category: "core", requirements: ["relayBurst"] },
   swarmMatrix: { id: "swarmMatrix", name: "군집 매트릭스", description: "지원 드론 2대와 무인 가공 라인 1개를 추가합니다.", icon: "SWM", color: "#7ff5c4", maxStacks: 1, category: "core", requirements: ["nanoSwarm"] },
   blackHole: { id: "blackHole", name: "블랙홀 압축기", description: "흡입장이 거대해지고 반 화면의 구름을 연속 붕괴시킵니다.", icon: "BLK", color: "#45e1df", maxStacks: 1, category: "evolution", requirements: ["massInduction"] },
   eventHorizon: { id: "eventHorizon", name: "사건의 지평선", description: "흡입장이 다시 확장되고 구름 수용량이 폭증합니다.", icon: "EVT", color: "#7afcff", maxStacks: 1, category: "evolution", requirements: ["blackHole"] },
@@ -267,7 +267,7 @@ export const RUN_SKILLS: Record<RunSkillId, RunSkillDefinition> = {
   sunStorm: { id: "sunStorm", name: "태양 폭풍", description: "피버가 더 오래 지속되고 흡입력·가치가 다시 폭증합니다.", icon: "SUN", color: "#fff07a", maxStacks: 1, category: "evolution", requirements: ["goldenStorm"] },
   droneFleet: { id: "droneFleet", name: "과급 드론 편대", description: "과충전 드론 3대가 추가 출격해 구름을 집중 분해합니다.", icon: "FLT", color: "#79f0bd", maxStacks: 1, category: "evolution", requirements: ["salvageProtocol"] },
   nanoSwarm: { id: "nanoSwarm", name: "나노 구름 군집", description: "지원 드론 5대와 드론 분해력 50%를 추가합니다.", icon: "N-S", color: "#a0ffd0", maxStacks: 1, category: "evolution", requirements: ["droneFleet"] },
-  cargoBay: { id: "cargoBay", name: "초대형 연료 베이", description: "최대 연료 +45와 가공 묶음 용량 +12를 얻습니다.", icon: "F-T", color: "#71d8ef", maxStacks: 1, category: "overdrive", requirements: ["droneFleet"] },
+  cargoBay: { id: "cargoBay", name: "초대형 연료 베이", description: "최대 연료 +14와 가공 묶음 용량 +12를 얻습니다.", icon: "F-T", color: "#71d8ef", maxStacks: 1, category: "overdrive", requirements: ["droneFleet"] },
   yieldBoost: { id: "yieldBoost", name: "수익 오버드라이브", description: "모든 구름 가치 +10%와 가공 속도 +25%를 얻습니다.", icon: "YLD+", color: "#ffd15e", maxStacks: 1, category: "overdrive", requirements: ["goldenStorm"] },
   denseRadar: { id: "denseRadar", name: "고밀도 레이더", description: "고밀도 구름 출현 확률이 추가로 3% 증가합니다.", icon: "DNS+", color: "#ff9b69", maxStacks: 1, category: "overdrive", requirements: ["blackHole"] },
   feverReserve: { id: "feverReserve", name: "피버 예비전력", description: "피버 지속시간이 추가로 0.8초 증가합니다.", icon: "FVR+", color: "#b695ff", maxStacks: 1, category: "overdrive", requirements: ["goldenStorm"] },
