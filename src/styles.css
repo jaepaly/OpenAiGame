@@ -1254,6 +1254,12 @@ body.base-open .base-hub-status { top: 142px; }
 .story-portrait.enter { animation: story-portrait-in .28s ease forwards; }
 @keyframes story-portrait-in { to { opacity: 1; transform: translateX(0); } }
 .story-portrait-art { position: relative; width: 270px; height: 292px; display: grid; place-items: center; overflow: hidden; background: radial-gradient(circle at 50% 44%,color-mix(in srgb,var(--story-accent),transparent 70%),transparent 38%),linear-gradient(165deg,#153d50,#071c29); border: 4px solid var(--story-accent); border-radius: 26px 26px 72px 26px; box-shadow: inset 0 0 48px rgba(0,0,0,.45),0 7px 0 #03121b,0 0 26px color-mix(in srgb,var(--story-accent),transparent 70%); }
+.story-portrait-art > img { position: absolute; z-index: 5; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 17%; filter: drop-shadow(0 12px 12px rgba(0,0,0,.36)); }
+.story-portrait.has-image .story-portrait-art { background: radial-gradient(circle at 50% 31%,color-mix(in srgb,var(--story-accent),#dff9ff 35%),transparent 48%),linear-gradient(165deg,#1b5268,#071c29); }
+.story-portrait.has-image .story-portrait-art::before,
+.story-portrait.has-image .story-portrait-art::after,
+.story-portrait.has-image .story-portrait-art > i,
+.story-portrait.has-image .story-portrait-art > span { display: none; }
 .story-portrait-art::before { content: ""; position: absolute; left: 50%; bottom: -78px; width: 220px; height: 220px; background: linear-gradient(155deg,var(--story-accent-soft),#0b2735); border: 5px solid color-mix(in srgb,var(--story-accent),white 25%); border-radius: 48% 48% 20% 20%; transform: translateX(-50%); box-shadow: 0 0 30px color-mix(in srgb,var(--story-accent),transparent 70%); }
 .story-portrait-art::after { content: ""; position: absolute; left: 50%; top: 45px; width: 132px; height: 132px; background: color-mix(in srgb,var(--story-accent),#eafcff 84%); border: 7px solid #0a2b3a; border-radius: 50% 50% 45% 45%; transform: translateX(-50%); box-shadow: inset 0 -20px 0 color-mix(in srgb,var(--story-accent),#8aa5af 82%),0 0 25px color-mix(in srgb,var(--story-accent),transparent 62%); }
 .story-portrait-art > span { position: relative; z-index: 3; margin-top: -52px; color: #0b2a39; font: 900 42px/1 "Outfit",sans-serif; letter-spacing: -.05em; text-shadow: 0 2px 0 rgba(255,255,255,.45); }
@@ -1330,6 +1336,7 @@ body.base-open .base-hub-status { top: 142px; }
   .story-stage { min-height: 0; padding: 12px; grid-template-columns: 1fr; gap: 12px; }
   .story-portrait { min-height: 130px; padding: 10px 12px; display: grid; grid-template-columns: 112px 1fr; grid-template-rows: 1fr 1fr; column-gap: 13px; align-items: center; justify-items: start; border-radius: 18px; }
   .story-portrait-art { grid-row: 1/3; width: 104px; height: 104px; border-width: 3px; border-radius: 18px 18px 38px 18px; }
+  .story-portrait-art > img { object-position: 50% 12%; }
   .story-portrait-art::before { bottom: -48px; width: 90px; height: 90px; border-width: 3px; }
   .story-portrait-art::after { top: 18px; width: 54px; height: 54px; border-width: 4px; box-shadow: inset 0 -9px 0 color-mix(in srgb,var(--story-accent),#8aa5af 82%); }
   .story-portrait-art > span { margin-top: -19px; font-size: 20px; }

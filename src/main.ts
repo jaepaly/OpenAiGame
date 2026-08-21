@@ -1,4 +1,8 @@
 import "./styles.css";
+import mokaNeutralPortrait from "./assets/characters/moka-neutral.png";
+import mokaSeriousPortrait from "./assets/characters/moka-serious.png";
+import mokaSurprisedPortrait from "./assets/characters/moka-surprised.png";
+import mokaWorriedPortrait from "./assets/characters/moka-worried.png";
 import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
 import { CloudHarvestGame } from "./game";
 import type { ContractId, GameState, GrowthMissionId, InfiniteResearchId, ResearchId, RunSkillId, RunState, StorySceneId, UpgradeId } from "./types";
@@ -168,7 +172,10 @@ app.innerHTML = `
           </header>
           <div class="story-stage">
             <aside class="story-portrait" id="storyPortrait">
-              <div class="story-portrait-art"><i></i><i></i><i></i><span id="storyPortraitMark">☁</span></div>
+              <div class="story-portrait-art">
+                <img id="storyPortraitImage" src="" alt="" hidden>
+                <i></i><i></i><i></i><span id="storyPortraitMark">☁</span>
+              </div>
               <strong id="storyPortraitName">구름 수확 회사</strong>
               <small id="storyPortraitRole">LAST SMALL WEATHER COMPANY</small>
             </aside>
@@ -279,6 +286,7 @@ const storyChapter = required<HTMLElement>("#storyChapter");
 const storySceneTitle = required<HTMLElement>("#storySceneTitle");
 const storySkipButton = required<HTMLButtonElement>("#storySkipButton");
 const storyPortrait = required<HTMLElement>("#storyPortrait");
+const storyPortraitImage = required<HTMLImageElement>("#storyPortraitImage");
 const storyPortraitMark = required<HTMLElement>("#storyPortraitMark");
 const storyPortraitName = required<HTMLElement>("#storyPortraitName");
 const storyPortraitRole = required<HTMLElement>("#storyPortraitRole");
@@ -308,8 +316,16 @@ let activeSkillTreeTab: "blueprint" | "infinite" = "blueprint";
 let infiniteResearchUnlockedPreviously = false;
 
 type StoryTone = "narrator" | "moka" | "sona" | "rival";
-type StoryBeat = { speaker: string; name: string; role: string; mark: string; tone: StoryTone; text: string };
+type MokaPortrait = "neutral" | "serious" | "surprised" | "worried";
+type StoryBeat = { speaker: string; name: string; role: string; mark: string; tone: StoryTone; portrait?: MokaPortrait; text: string };
 type StoryScene = { chapter: string; title: string; beats: StoryBeat[] };
+
+const MOKA_PORTRAITS: Record<MokaPortrait, string> = {
+  neutral: mokaNeutralPortrait,
+  serious: mokaSeriousPortrait,
+  surprised: mokaSurprisedPortrait,
+  worried: mokaWorriedPortrait,
+};
 
 const STORY_SCENES: Record<StorySceneId, StoryScene> = {
   prologue: {
@@ -317,8 +333,8 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
     title: "구름 없는 아침",
     beats: [
       { speaker: "NARRATION", name: "서부 7구역", role: "43 DAYS WITHOUT RAIN", mark: "☁", tone: "narrator", text: "맑은 하늘은 한때 축복이었다. 비가 멎은 지 마흔셋째 날, 사람들은 구름 한 점에도 가격표를 붙였다." },
-      { speaker: "모카", name: "정비사 모카", role: "SHIP MECHANIC // CO-FOUNDER", mark: "MK", tone: "moka", text: "신임 사장님 맞죠? 물려받은 건 빚 독촉장 열두 장, 낡은 격납고 하나… 그리고 아직 뜨는 비행선 한 대예요." },
-      { speaker: "모카", name: "정비사 모카", role: "SHIP MECHANIC // CO-FOUNDER", mark: "MK", tone: "moka", text: "구름만 가져오면 회사는 돌아가요. 좌클릭으로 흡입하고, 연료가 바닥나기 전에 SPACE로 귀환하세요. 화물보다 목숨이 먼저니까." },
+      { speaker: "모카", name: "정비사 모카", role: "SHIP MECHANIC // CO-FOUNDER", mark: "MK", tone: "moka", portrait: "neutral", text: "신임 사장님 맞죠? 물려받은 건 빚 독촉장 열두 장, 낡은 격납고 하나… 그리고 아직 뜨는 비행선 한 대예요." },
+      { speaker: "모카", name: "정비사 모카", role: "SHIP MECHANIC // CO-FOUNDER", mark: "MK", tone: "moka", portrait: "serious", text: "구름만 가져오면 회사는 돌아가요. 좌클릭으로 흡입하고, 연료가 바닥나기 전에 SPACE로 귀환하세요. 화물보다 목숨이 먼저니까." },
       { speaker: "소나 // 무전", name: "관측 연구원 소나", role: "WEATHER ANALYST // REMOTE", mark: "SN", tone: "sona", text: "관측팀 소나입니다. 첫 목표는 뭉게구름 여섯 개. 원재료를 확보하면 첫 가공 계약을 열 수 있어요." },
       { speaker: "NARRATION", name: "구름 수확 회사", role: "DAY 1 // FIRST SORTIE", mark: "01", tone: "narrator", text: "낡은 프로펠러가 다시 돌기 시작했다. 골목 기상소의 마지막 수확선이, 회사의 첫 구름을 향해 떠올랐다." },
     ],
@@ -327,9 +343,9 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
     chapter: "CHAPTER 1 // FIRST CARGO",
     title: "작은 회사의 첫 귀환",
     beats: [
-      { speaker: "모카", name: "정비사 모카", role: "DOCK CONTROL", mark: "MK", tone: "moka", text: "착륙 확인! 솔직히 첫 비행부터 견인차를 부를 줄 알았는데… 사장님, 생각보다 제법인데요?" },
+      { speaker: "모카", name: "정비사 모카", role: "DOCK CONTROL", mark: "MK", tone: "moka", portrait: "surprised", text: "착륙 확인! 솔직히 첫 비행부터 견인차를 부를 줄 알았는데… 사장님, 생각보다 제법인데요?" },
       { speaker: "소나", name: "관측 연구원 소나", role: "PROCESSING LAB", mark: "SN", tone: "sona", text: "가져온 구름은 아직 돈이 아닙니다. 가공 계약에 투입하면 비행 중에도 정제되고, 완제품이 되어야 코인으로 출하할 수 있어요." },
-      { speaker: "모카", name: "정비사 모카", role: "FUEL & SAFETY", mark: "MK", tone: "moka", text: "다음에는 조금 더 욕심내도 좋아요. 하지만 연료가 0이 되면 화물은 전량 폐기. 빨간 경고가 뜨면 SPACE, 잊지 마세요." },
+      { speaker: "모카", name: "정비사 모카", role: "FUEL & SAFETY", mark: "MK", tone: "moka", portrait: "worried", text: "다음에는 조금 더 욕심내도 좋아요. 하지만 연료가 0이 되면 화물은 전량 폐기. 빨간 경고가 뜨면 SPACE, 잊지 마세요." },
       { speaker: "NARRATION", name: "구름 수확 회사", role: "THE FIRST CONTRACT", mark: "◈", tone: "narrator", text: "작은 회사의 첫 화물이 가공동으로 향했다. 멈춰 있던 기계와 사람들의 하루가 다시 움직이기 시작했다." },
     ],
   },
@@ -339,7 +355,7 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
     beats: [
       { speaker: "소나", name: "관측 연구원 소나", role: "ALTITUDE DATA LINK", mark: "SN", tone: "sona", text: "지역 하늘지사 허가가 승인됐습니다. 해발 2,000미터 비구름 띠와 새 가공 계약을 사용할 수 있어요." },
       { speaker: "소나", name: "관측 연구원 소나", role: "ANOMALY REPORT", mark: "31", tone: "sona", text: "그런데 이상합니다. 실제 구름량이 예보보다 31% 적어요. 누군가 항로 앞쪽에서 대량으로 쓸어가고 있습니다." },
-      { speaker: "모카", name: "정비사 모카", role: "UNLICENSED CHANNEL", mark: "MK", tone: "moka", text: "이 주파수 표식… 쾌청산업이에요. 작은 회사가 올라오는 걸 제일 싫어하는 거대 기상기업이죠." },
+      { speaker: "모카", name: "정비사 모카", role: "UNLICENSED CHANNEL", mark: "MK", tone: "moka", portrait: "serious", text: "이 주파수 표식… 쾌청산업이에요. 작은 회사가 올라오는 걸 제일 싫어하는 거대 기상기업이죠." },
       { speaker: "쾌청산업 관제", name: "쾌청산업", role: "PRIORITY HARVEST NETWORK", mark: "QS", tone: "rival", text: "미등록 소형 수확선에 통보한다. 해당 비구름 띠는 쾌청산업 우선 채집 구역이다. 즉시 저고도로 복귀하라." },
       { speaker: "소나", name: "관측 연구원 소나", role: "NEW OBJECTIVE // RAIN CLOUD ×5", mark: "SN", tone: "sona", text: "법적으로는 공동 항로예요. 물러날 이유 없습니다. 비구름 다섯 개를 확보해 구름 소실 데이터부터 추적하죠." },
     ],
@@ -404,6 +420,11 @@ function renderStoryBeat(): void {
   storyPortraitRole.textContent = beat.role;
   storyPortraitMark.textContent = beat.mark;
   storyPortrait.className = `story-portrait ${beat.tone}`;
+  const portraitSrc = beat.portrait ? MOKA_PORTRAITS[beat.portrait] : null;
+  storyPortrait.classList.toggle("has-image", Boolean(portraitSrc));
+  storyPortraitImage.hidden = !portraitSrc;
+  storyPortraitImage.src = portraitSrc ?? "";
+  storyPortraitImage.alt = portraitSrc ? `${beat.name} 초상화` : "";
   storyOverlay.dataset.tone = beat.tone;
   storyText.textContent = beat.text;
   storyText.classList.remove("enter");
