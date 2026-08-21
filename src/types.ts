@@ -97,6 +97,26 @@ export interface ProcessingEnqueueResult extends ProcessingEstimate {
   materialsStored: number;
 }
 
+export type GrowthMissionId = "collect" | "return" | "contract" | "ship" | "skill" | "upgrade" | "promote" | "rain";
+
+export interface GrowthMissionDefinition {
+  id: GrowthMissionId;
+  code: string;
+  title: string;
+  description: string;
+  target: number;
+  reward: { money?: number; materials?: Partial<Record<CloudKind, number>> };
+  rewardLabel: string;
+}
+
+export interface GrowthMissionProgress {
+  step: number;
+  safeReturns: number;
+  contractsSigned: number;
+  shipmentsClaimed: number;
+  rainHarvested: number;
+}
+
 export interface GameState {
   money: number;
   totalEarned: number;
@@ -112,6 +132,7 @@ export interface GameState {
   materials: Record<CloudKind, number>;
   processing: ProcessingState;
   career: CareerProgress;
+  growthMission: GrowthMissionProgress;
 }
 
 export type CoreRunSkillId =

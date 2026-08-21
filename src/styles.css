@@ -99,6 +99,25 @@ body { min-width: 320px; background: #92ddf7; }
 .tutorial b { font-size: 14px; }
 .tutorial span { opacity: .8; font-size: 10px; }
 .tutorial.hidden { opacity: 0; transform: translate(-50%,-14px); }
+.growth-mission { position: absolute; z-index: 6; left: 20px; bottom: 22px; width: min(390px,calc(100% - 160px)); min-height: 96px; padding: 12px 13px; display: grid; grid-template-columns: 62px minmax(0,1fr) auto; grid-template-rows: auto 9px auto; align-items: center; gap: 7px 10px; color: white; background: linear-gradient(145deg,rgba(18,63,80,.96),rgba(8,34,47,.97)); border: 3px solid #7ff5df; border-radius: 18px; box-shadow: 0 8px 0 rgba(8,39,52,.4),0 15px 28px rgba(20,68,87,.22); pointer-events: none; transition: opacity .22s ease,transform .22s ease; }
+.growth-mission.hidden,body.base-open .growth-mission,.returning .growth-mission,.launching .growth-mission { opacity: 0; transform: translateY(18px); }
+.growth-mission-code { grid-row: 1/4; align-self: stretch; display: grid; place-items: center; color: #17394a; background: #7ff5df; border-radius: 11px; font: 900 12px "Outfit",sans-serif; letter-spacing: .05em; box-shadow: inset 0 -5px 0 rgba(35,122,126,.18); }
+.growth-mission-copy { min-width: 0; }
+.growth-mission-copy strong,.growth-mission-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.growth-mission-copy strong { font-size: 15px; }
+.growth-mission-copy small { margin-top: 2px; color: #a8cad1; font-size: 10px; font-weight: 900; }
+.growth-mission-progress { height: 9px; overflow: hidden; background: rgba(1,18,28,.72); border: 2px solid rgba(127,245,223,.23); border-radius: 99px; }
+.growth-mission-progress i { display: block; width: 0; height: 100%; background: linear-gradient(90deg,#4ad7e3,#7ff5df,#fff36f); border-radius: inherit; box-shadow: 0 0 10px #7ff5df; transition: width .25s ease; }
+.growth-mission-count { grid-column: 3; grid-row: 2; color: #fff36f; font: 900 11px "Outfit",sans-serif; white-space: nowrap; }
+.growth-mission-reward { grid-column: 2/4; color: #7fd8d4; font-size: 10px; font-weight: 900; }
+.growth-mission-reward b { margin-left: 5px; color: #fff36f; font-size: 12px; }
+.growth-mission::after { content:"JOB COMPLETE"; position: absolute; inset: -3px; display: grid; place-items: center; color: #17394a; background: linear-gradient(135deg,#fff36f,#7ff5df); border: 3px solid white; border-radius: inherit; font: 900 21px "Outfit",sans-serif; letter-spacing: .08em; opacity: 0; transform: scale(.82); pointer-events: none; }
+.growth-mission.advance::after { animation: mission-complete-card .82s cubic-bezier(.18,.8,.3,1) both; }
+.mission-target { outline: 4px solid #fff36f !important; outline-offset: 5px; animation: mission-target-glow .7s ease-in-out infinite alternate !important; }
+.contract-list.mission-target { outline: 0 !important; animation: none !important; }
+.contract-list.mission-target .contract-card.best { outline: 4px solid #fff36f; outline-offset: 3px; animation: mission-target-glow .7s ease-in-out infinite alternate; }
+@keyframes mission-complete-card { 0% { opacity:0; transform:scale(.82); } 16%,62% { opacity:1; transform:scale(1); } 100% { opacity:0; transform:scale(1.06); } }
+@keyframes mission-target-glow { to { filter:brightness(1.14); box-shadow:0 0 28px rgba(255,243,111,.65); } }
 .cloud-legend { position: absolute; z-index: 4; top: 82px; left: 22px; display: flex; flex-direction: column; gap: 5px; pointer-events: none; }
 .legend-item { width: max-content; padding: 5px 9px; color: #34566a; background: rgba(255,255,255,.66); border: 1px solid rgba(255,255,255,.72); border-radius: 9px; font-size: 10px; font-weight: 900; backdrop-filter: blur(5px); }
 .legend-item b { margin-left: 5px; color: #258ba9; }
@@ -1094,6 +1113,12 @@ body.base-open .promotion-card { top: 28px; }
 }
 
 @media (max-width: 680px) {
+  .growth-mission { left: 10px; bottom: 10px; width: calc(100% - 134px); min-height: 84px; padding: 9px; grid-template-columns: 48px minmax(0,1fr) auto; gap: 5px 7px; border-radius: 15px; }
+  .growth-mission-code { font-size: 9px; }
+  .growth-mission-copy strong { font-size: 12px; }
+  .growth-mission-copy small { font-size: 8px; }
+  .growth-mission-reward { font-size: 8px; }
+  .growth-mission-reward b { font-size: 10px; }
   .processing-overlay { padding: 8px; }
   .processing-panel { width: calc(100% - 4px); max-height: calc(100dvh - 16px); padding: 18px 13px 20px; border-radius: 23px; }
   .processing-heading h2 { font-size: 27px; }

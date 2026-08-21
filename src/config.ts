@@ -1,4 +1,15 @@
-import type { CloudDefinition, CloudKind, FlightRouteDefinition, FlightRouteId, ProcessingContract, ProcessingJob, RankDefinition, ResearchDefinition, ResearchId, RunSkillCost, RunSkillDefinition, RunSkillId, SkillTreeBranch, UpgradeDefinition } from "./types";
+import type { CloudDefinition, CloudKind, FlightRouteDefinition, FlightRouteId, GrowthMissionDefinition, ProcessingContract, ProcessingJob, RankDefinition, ResearchDefinition, ResearchId, RunSkillCost, RunSkillDefinition, RunSkillId, SkillTreeBranch, UpgradeDefinition } from "./types";
+
+export const GROWTH_MISSIONS: GrowthMissionDefinition[] = [
+  { id: "collect", code: "JOB 01", title: "첫 수확을 시작하세요", description: "뭉게구름 6개를 수확", target: 6, reward: { money: 4 }, rewardLabel: "◈ 4" },
+  { id: "return", code: "JOB 02", title: "연료를 남기고 귀환하세요", description: "RTB로 안전 귀환 1회", target: 1, reward: { materials: { cumulus: 2 } }, rewardLabel: "☁ 원재료 2" },
+  { id: "contract", code: "JOB 03", title: "첫 가공 계약을 체결하세요", description: "구름 가공 라인에 화물 적재", target: 1, reward: { money: 8 }, rewardLabel: "◈ 8" },
+  { id: "ship", code: "JOB 04", title: "완제품을 출하하세요", description: "가공동에서 일괄 출하 1회", target: 1, reward: { money: 12 }, rewardLabel: "◈ 12" },
+  { id: "skill", code: "JOB 05", title: "첫 특성을 설계하세요", description: "특성 설계실에서 노드 1개 해금", target: 1, reward: { money: 20 }, rewardLabel: "◈ 20" },
+  { id: "upgrade", code: "JOB 06", title: "비행선을 강화하세요", description: "장비 정비소에서 부품 1회 강화", target: 1, reward: { money: 40 }, rewardLabel: "◈ 40" },
+  { id: "promote", code: "JOB 07", title: "다음 고도를 해금하세요", description: "지역 하늘지사로 승급", target: 1, reward: { money: 40 }, rewardLabel: "◈ 40" },
+  { id: "rain", code: "JOB 08", title: "비구름 수확선을 만드세요", description: "비구름 5개를 수확", target: 5, reward: { money: 60, materials: { rain: 2 } }, rewardLabel: "◈ 60 · 🌧 2" },
+];
 
 export const RESEARCH_PROJECTS: Record<ResearchId, ResearchDefinition> = {
   logistics: {
@@ -323,6 +334,7 @@ export const INITIAL_STATE = {
   processing: {
     jobs: [] as ProcessingJob[], completedCoins: 0, totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now(),
   },
+  growthMission: { step: 0, safeReturns: 0, contractsSigned: 0, shipmentsClaimed: 0, rainHarvested: 0 },
   career: {
     day: 1, level: 1, xp: 0, xpNext: 6, pendingPicks: 0,
     skills: {

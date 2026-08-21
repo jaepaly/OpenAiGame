@@ -1,5 +1,5 @@
-import { CLOUDS, FLIGHT_ROUTES, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
-import type { Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, Particle, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
+import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
+import type { Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, Particle, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
@@ -159,6 +159,7 @@ export class CloudHarvestGame {
     const offlineSeconds = Math.min(60 * 60 * 4, Math.max(0, (Date.now() - this.state.processing.lastUpdatedAt) / 1000));
     this.advanceProcessing(offlineSeconds, false);
     this.state.processing.lastUpdatedAt = Date.now();
+    if (this.advanceGrowthMissions(false)) localStorage.setItem(SAVE_KEY, JSON.stringify(this.state));
     this.bindInput();
     this.resize();
     window.addEventListener("resize", () => this.resize());
@@ -283,6 +284,7 @@ export class CloudHarvestGame {
     const materialsStored = this.getCargoCount();
     const seconds = this.getProcessingEstimate(id).seconds;
     this.state.processing.jobs.push(...jobs);
+    this.state.growthMission.contractsSigned += 1;
     (Object.keys(this.run.cargo) as CloudKind[]).forEach((kind) => {
       this.state.materials[kind] += this.run.cargo[kind];
     });
@@ -316,6 +318,7 @@ export class CloudHarvestGame {
     this.state.processing.completedCoins = 0;
     this.state.money += coins;
     this.state.totalEarned += coins;
+    this.state.growthMission.shipmentsClaimed += 1;
     this.commit();
     this.onRunChange(this.getRunState());
     this.playChord();
@@ -1081,6 +1084,7 @@ export class CloudHarvestGame {
 
     if (this.returnTimer >= 1.55 && !this.atFactory) {
       this.atFactory = true;
+      if (!this.run.emergencyReturn) this.state.growthMission.safeReturns += 1;
       this.run.fuelCapacity = this.getFuelCapacity();
       this.run.fuel = this.run.fuelCapacity;
       this.shake = 0;
@@ -1089,6 +1093,7 @@ export class CloudHarvestGame {
       this.player.targetX = this.player.x;
       this.player.targetY = this.player.y;
       this.burst(this.player.x, this.player.y + 34, "#7ff5df", 28, 120);
+      this.commit();
     }
   }
 
@@ -1209,6 +1214,7 @@ export class CloudHarvestGame {
     this.run.cargo[cloud.kind] += 1;
     this.run.cargoValue[cloud.kind] += earned;
     this.state.harvested += 1;
+    if (cloud.kind === "rain") this.state.growthMission.rainHarvested += 1;
     if (source === "manual") this.tryRecoverFuel(cloud);
     const baseXp = { cumulus: 2, rain: 5, electric: 9, ice: 14, solar: 22, aurora: 34 }[cloud.kind];
     const xp = cloud.dense ? baseXp * 2 : baseXp;
@@ -2522,6 +2528,44 @@ export class CloudHarvestGame {
 
   private emitAll(): void { this.onStateChange(this.getState()); this.onRunChange(this.getRunState()); }
 
+  private growthMissionProgress(id: GrowthMissionId): number {
+    switch (id) {
+      case "collect": return this.state.harvested;
+      case "return": return this.state.growthMission.safeReturns;
+      case "contract": return this.state.growthMission.contractsSigned;
+      case "ship": return this.state.growthMission.shipmentsClaimed;
+      case "skill": return (Object.values(this.run.skills) as number[]).filter((level) => level > 0).length;
+      case "upgrade": return (Object.values(this.state.levels) as number[]).reduce((total, level) => total + level, 0);
+      case "promote": return this.state.rank;
+      case "rain": return this.state.growthMission.rainHarvested;
+    }
+  }
+
+  private advanceGrowthMissions(notify = true): boolean {
+    const completed: string[] = [];
+    while (this.state.growthMission.step < GROWTH_MISSIONS.length) {
+      const mission = GROWTH_MISSIONS[this.state.growthMission.step];
+      if (this.growthMissionProgress(mission.id) < mission.target) break;
+      if (mission.reward.money) {
+        this.state.money += mission.reward.money;
+        this.state.totalEarned += mission.reward.money;
+      }
+      (Object.entries(mission.reward.materials ?? {}) as [CloudKind, number][]).forEach(([kind, amount]) => {
+        this.state.materials[kind] += amount;
+      });
+      this.state.growthMission.step += 1;
+      completed.push(mission.title);
+    }
+    if (completed.length === 0) return false;
+    if (!notify) return true;
+    const message = completed.length > 1
+      ? `성장 미션 ${completed.length}개 연속 완료 · 보상 자동 지급!`
+      : `JOB COMPLETE · ${completed[0]} · 보상 자동 지급!`;
+    window.setTimeout(() => this.onToast(message, "success"), 100);
+    [660, 880, 1040].forEach((frequency, index) => window.setTimeout(() => this.playTone(frequency, .07), 90 + index * 55));
+    return true;
+  }
+
   private syncCareerProgress(): void {
     this.state.career = {
       day: this.run.day,
@@ -2550,6 +2594,7 @@ export class CloudHarvestGame {
   }
 
   private commit(): void {
+    this.advanceGrowthMissions();
     this.syncCareerProgress();
     localStorage.setItem(SAVE_KEY, JSON.stringify(this.state));
     this.onStateChange(this.getState());
@@ -2572,6 +2617,7 @@ export class CloudHarvestGame {
           jobs: Array.isArray(parsed.processing?.jobs) ? parsed.processing.jobs : [],
           lastUpdatedAt: parsed.processing?.lastUpdatedAt ?? Date.now(),
         },
+        growthMission: { ...INITIAL_STATE.growthMission, ...parsed.growthMission },
         career: {
           ...structuredClone(INITIAL_STATE.career),
           ...parsed.career,

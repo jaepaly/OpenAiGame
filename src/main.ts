@@ -1,7 +1,7 @@
 import "./styles.css";
-import { CLOUDS, FLIGHT_ROUTES, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, upgradeCost } from "./config";
+import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, upgradeCost } from "./config";
 import { CloudHarvestGame } from "./game";
-import type { ContractId, GameState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
+import type { ContractId, GameState, GrowthMissionId, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app 요소를 찾을 수 없습니다.");
@@ -39,6 +39,13 @@ app.innerHTML = `
       </div>
 
       <div class="tutorial" id="tutorial"><b>WASD 이동 · 마우스 조준</b><span>이동과 흡입은 연료를 소모합니다 · 0% 전에 RTB로 귀환</span></div>
+      <aside class="growth-mission" id="growthMission" aria-live="polite">
+        <span class="growth-mission-code" id="growthMissionCode">JOB 01</span>
+        <div class="growth-mission-copy"><strong id="growthMissionTitle">첫 수확을 시작하세요</strong><small id="growthMissionDescription">뭉게구름 6개를 수확</small></div>
+        <div class="growth-mission-progress"><i id="growthMissionFill"></i></div>
+        <b class="growth-mission-count" id="growthMissionCount">0 / 6</b>
+        <span class="growth-mission-reward">자동 보상 <b id="growthMissionReward">◈ 4</b></span>
+      </aside>
       <div class="cloud-legend" id="cloudLegend"></div>
       <div class="toast" id="toast" aria-live="polite"></div>
       <div class="fuel-warning" id="fuelWarning">
@@ -170,6 +177,7 @@ const promotionTitle = required<HTMLElement>("#promotionTitle");
 const promotionDescription = required<HTMLElement>("#promotionDescription");
 const promotionRequirements = required<HTMLElement>("#promotionRequirements");
 const promoteButton = required<HTMLButtonElement>("#promoteButton");
+const promotionCard = required<HTMLElement>(".promotion-card");
 const upgradeList = required<HTMLElement>("#upgradeList");
 const cloudLegend = required<HTMLElement>("#cloudLegend");
 const toast = required<HTMLElement>("#toast");
@@ -185,6 +193,13 @@ const processingCloseButton = required<HTMLButtonElement>("#processingCloseButto
 const soundButton = required<HTMLButtonElement>("#soundButton");
 const resetButton = required<HTMLButtonElement>("#resetButton");
 const tutorial = required<HTMLElement>("#tutorial");
+const growthMission = required<HTMLElement>("#growthMission");
+const growthMissionCode = required<HTMLElement>("#growthMissionCode");
+const growthMissionTitle = required<HTMLElement>("#growthMissionTitle");
+const growthMissionDescription = required<HTMLElement>("#growthMissionDescription");
+const growthMissionFill = required<HTMLElement>("#growthMissionFill");
+const growthMissionCount = required<HTMLElement>("#growthMissionCount");
+const growthMissionReward = required<HTMLElement>("#growthMissionReward");
 const runLevel = required<HTMLElement>("#runLevel");
 const xpFill = required<HTMLElement>("#xpFill");
 const xpText = required<HTMLElement>("#xpText");
@@ -241,6 +256,7 @@ let processingLayoutKey = "";
 let processingOutputKey = "";
 let previousProcessingJobs: { id: number; line: number; kind: keyof GameState["materials"] }[] | null = null;
 let previousCompletedCoins: number | null = null;
+let renderedGrowthMissionStep: number | null = null;
 
 const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast);
 if (import.meta.env.DEV) {
@@ -583,12 +599,60 @@ function equipmentEffect(id: UpgradeId, level: number): string {
   }
 }
 
+function growthMissionProgress(state: GameState, id: GrowthMissionId): number {
+  switch (id) {
+    case "collect": return state.harvested;
+    case "return": return state.growthMission.safeReturns;
+    case "contract": return state.growthMission.contractsSigned;
+    case "ship": return state.growthMission.shipmentsClaimed;
+    case "skill": return (Object.values(state.career.skills) as number[]).filter((level) => level > 0).length;
+    case "upgrade": return (Object.values(state.levels) as number[]).reduce((total, level) => total + level, 0);
+    case "promote": return state.rank;
+    case "rain": return state.growthMission.rainHarvested;
+  }
+}
+
+function renderGrowthMission(state: GameState): void {
+  const step = state.growthMission.step;
+  const complete = step >= GROWTH_MISSIONS.length;
+  growthMission.classList.toggle("hidden", complete);
+  [returnButton, contractList, processingFacilityButton, skillTreeButton, baseGarageButton, promotionCard, launchButton]
+    .forEach((element) => element.classList.remove("mission-target"));
+  if (complete) return;
+  const mission = GROWTH_MISSIONS[step];
+  const progress = Math.min(mission.target, growthMissionProgress(state, mission.id));
+  growthMissionCode.textContent = mission.code;
+  growthMissionTitle.textContent = mission.title;
+  growthMissionDescription.textContent = mission.description;
+  growthMissionCount.textContent = `${progress.toLocaleString()} / ${mission.target.toLocaleString()}`;
+  growthMissionFill.style.width = `${progress / mission.target * 100}%`;
+  growthMissionReward.textContent = mission.rewardLabel;
+  const missionTargets: Partial<Record<GrowthMissionId, HTMLElement>> = {
+    return: returnButton,
+    contract: contractList,
+    ship: processingFacilityButton,
+    skill: skillTreeButton,
+    upgrade: baseGarageButton,
+    promote: promotionCard,
+    rain: launchButton,
+  };
+  missionTargets[mission.id]?.classList.add("mission-target");
+  if (mission.id === "return" || mission.id === "contract") launchButton.classList.add("mission-target");
+  if (renderedGrowthMissionStep !== null && renderedGrowthMissionStep !== step) {
+    growthMission.classList.remove("advance");
+    requestAnimationFrame(() => growthMission.classList.add("advance"));
+    window.setTimeout(() => growthMission.classList.remove("advance"), 900);
+  }
+  renderedGrowthMissionStep = step;
+}
+
 function renderState(state: GameState): void {
   money.textContent = Math.floor(state.money).toLocaleString();
   altitude.textContent = RANKS[state.selectedMap].altitude;
   rankName.textContent = RANKS[state.rank].name;
   soundButton.textContent = state.sound ? "🔊" : "🔇";
   if (state.harvested > 2) tutorial.classList.add("hidden");
+  renderGrowthMission(state);
 
   cloudLegend.innerHTML = (Object.values(CLOUDS))
     .filter((cloud) => cloud.unlockRank <= state.rank)
