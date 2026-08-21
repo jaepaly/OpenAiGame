@@ -1,7 +1,7 @@
 import "./styles.css";
 import { CLOUDS, FLIGHT_ROUTES, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, upgradeCost } from "./config";
 import { CloudHarvestGame } from "./game";
-import type { ContractId, FlightRouteId, GameState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
+import type { ContractId, GameState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app 요소를 찾을 수 없습니다.");
@@ -114,12 +114,12 @@ app.innerHTML = `
         <button class="base-facility workshop" id="baseGarageButton"><b>MK · FACILITY 01</b><span>장비 정비소</span><small>영구 장비를 장착하고 강화합니다.</small><em>정비소 입장 →</em></button>
         <button class="base-facility blueprint" id="skillTreeButton"><b>TREE · FACILITY 02</b><span>특성 설계실</span><small>수확한 구름으로 시스템을 해금합니다.</small><em>특성 트리 열기 →</em></button>
         <button class="base-facility processing" id="processingFacilityButton"><b>PROC · FACILITY 03</b><span>구름 가공동</span><small>진행 중인 가공과 완성품을 관리합니다.</small><em>가공동 입장 →</em></button>
-        <button class="base-facility launch" id="launchButton"><b>GO · FACILITY 04</b><span>출격 관제문</span><small>항로를 선택하고 다음 비행을 시작합니다.</small><em>항로 선택 →</em></button>
+        <button class="base-facility launch" id="launchButton"><b>GO · FACILITY 04</b><span>출격 관제문</span><small>해금한 고도를 선택하고 다음 비행을 시작합니다.</small><em>출격지 선택 →</em></button>
       </nav>
 
-      <section class="route-overlay" id="routeOverlay" aria-label="오늘의 비행 항로 선택">
+      <section class="route-overlay" id="routeOverlay" aria-label="출격 고도 선택">
         <div class="route-panel">
-          <header><span>NEXT SORTIE // ROUTE SELECT</span><h2>오늘의 항로를 선택하세요</h2><p>항로마다 이번 비행의 위험도와 수익 구조가 달라집니다.</p></header>
+          <header><span>NEXT SORTIE // ALTITUDE SELECT</span><h2>어느 하늘로 출격할까요?</h2><p>높은 고도일수록 연료가 빠르게 줄지만 희귀 구름과 수익 배율이 커집니다.</p></header>
           <div class="route-list" id="routeList"></div>
           <button class="route-back" id="routeBackButton">← 기지 격납고로 돌아가기</button>
         </div>
@@ -127,7 +127,7 @@ app.innerHTML = `
 
       <section class="levelup-overlay" id="levelUpOverlay" aria-label="장기 성장 특성 트리">
         <div class="levelup-panel skill-tree-panel">
-          <span class="levelup-kicker">CAREER SYSTEM BLUEPRINT // 34 NODE GRID</span>
+          <span class="levelup-kicker">CAREER SYSTEM BLUEPRINT // 42 NODE GRID</span>
           <h2 id="levelUpTitle">회사의 장기 성장 설계도</h2>
           <p id="levelUpDescription">연결된 노드를 따라 영구 유지되는 수확 장치를 조립하세요.</p>
           <div class="skill-point-bank"><span>CLOUD STOCKPILE</span><strong id="skillPointCount">☁ 0 · 🌧 0 · ⚡ 0 · ❄ 0 · ☀ 0 · ✦ 0</strong><small>상위 구름 1개는 바로 아래 단계 구름 4개 가치로 자동 대체됩니다.</small></div>
@@ -229,41 +229,49 @@ if (import.meta.env.DEV) {
   (window as typeof window & { __cloudHarvestGame?: CloudHarvestGame }).__cloudHarvestGame = game;
 }
 
-const SKILL_NODE_LAYOUT: Record<RunSkillId, { x: number; y: number; branch: "vacuum" | "fever" | "automation" | "hybrid" }> = {
-  overclock: { x: 50, y: 150, branch: "vacuum" },
-  intakeServo: { x: 50, y: 320, branch: "vacuum" },
-  wideIntake: { x: 50, y: 490, branch: "vacuum" },
-  pressureChamber: { x: 50, y: 660, branch: "vacuum" },
-  massInduction: { x: 50, y: 830, branch: "vacuum" },
-  blackHole: { x: 50, y: 1000, branch: "vacuum" },
-  eventHorizon: { x: 50, y: 1170, branch: "vacuum" },
-  vacuumMomentum: { x: 50, y: 1340, branch: "vacuum" },
-  denseRadar: { x: 50, y: 1510, branch: "vacuum" },
-  profitRain: { x: 445, y: 150, branch: "fever" },
-  comboCapacitor: { x: 445, y: 320, branch: "fever" },
-  feverDrive: { x: 445, y: 490, branch: "fever" },
-  feverInjector: { x: 445, y: 660, branch: "fever" },
-  stormCatalyst: { x: 445, y: 830, branch: "fever" },
-  goldenStorm: { x: 445, y: 1000, branch: "fever" },
-  sunStorm: { x: 445, y: 1170, branch: "fever" },
-  jackpotPulse: { x: 445, y: 1340, branch: "fever" },
-  yieldBoost: { x: 300, y: 1510, branch: "fever" },
-  feverReserve: { x: 550, y: 1510, branch: "fever" },
-  twinDrone: { x: 840, y: 150, branch: "automation" },
-  droneAI: { x: 840, y: 320, branch: "automation" },
-  chainBurst: { x: 840, y: 490, branch: "automation" },
-  relayBurst: { x: 840, y: 660, branch: "automation" },
-  salvageProtocol: { x: 840, y: 830, branch: "automation" },
-  droneFleet: { x: 840, y: 1000, branch: "automation" },
-  nanoSwarm: { x: 840, y: 1170, branch: "automation" },
-  swarmMatrix: { x: 840, y: 1340, branch: "automation" },
-  cargoBay: { x: 840, y: 1510, branch: "automation" },
-  cycloneCore: { x: 150, y: 1720, branch: "hybrid" },
-  stormDrones: { x: 445, y: 1720, branch: "hybrid" },
-  cascadeGrid: { x: 740, y: 1720, branch: "hybrid" },
-  goldenVacuum: { x: 150, y: 1900, branch: "hybrid" },
-  cargoCyclone: { x: 445, y: 1900, branch: "hybrid" },
-  chainReactor: { x: 740, y: 1900, branch: "hybrid" },
+const SKILL_NODE_LAYOUT: Record<RunSkillId, { x: number; y: number; branch: "vacuum" | "fever" | "automation" | "navigation" | "hybrid" }> = {
+  overclock: { x: 40, y: 150, branch: "vacuum" },
+  intakeServo: { x: 40, y: 320, branch: "vacuum" },
+  wideIntake: { x: 40, y: 490, branch: "vacuum" },
+  pressureChamber: { x: 40, y: 660, branch: "vacuum" },
+  massInduction: { x: 40, y: 830, branch: "vacuum" },
+  blackHole: { x: 40, y: 1000, branch: "vacuum" },
+  eventHorizon: { x: 40, y: 1170, branch: "vacuum" },
+  vacuumMomentum: { x: 40, y: 1340, branch: "vacuum" },
+  denseRadar: { x: 40, y: 1510, branch: "vacuum" },
+  profitRain: { x: 410, y: 150, branch: "fever" },
+  comboCapacitor: { x: 410, y: 320, branch: "fever" },
+  feverDrive: { x: 410, y: 490, branch: "fever" },
+  feverInjector: { x: 410, y: 660, branch: "fever" },
+  stormCatalyst: { x: 410, y: 830, branch: "fever" },
+  goldenStorm: { x: 410, y: 1000, branch: "fever" },
+  sunStorm: { x: 410, y: 1170, branch: "fever" },
+  jackpotPulse: { x: 410, y: 1340, branch: "fever" },
+  yieldBoost: { x: 285, y: 1510, branch: "fever" },
+  feverReserve: { x: 535, y: 1510, branch: "fever" },
+  twinDrone: { x: 780, y: 150, branch: "automation" },
+  droneAI: { x: 780, y: 320, branch: "automation" },
+  chainBurst: { x: 780, y: 490, branch: "automation" },
+  relayBurst: { x: 780, y: 660, branch: "automation" },
+  salvageProtocol: { x: 780, y: 830, branch: "automation" },
+  droneFleet: { x: 780, y: 1000, branch: "automation" },
+  nanoSwarm: { x: 780, y: 1170, branch: "automation" },
+  swarmMatrix: { x: 780, y: 1340, branch: "automation" },
+  cargoBay: { x: 780, y: 1510, branch: "automation" },
+  auxTank: { x: 1150, y: 150, branch: "navigation" },
+  aeroDrive: { x: 1150, y: 320, branch: "navigation" },
+  ecoThrusters: { x: 1150, y: 490, branch: "navigation" },
+  vacuumRecycler: { x: 1150, y: 660, branch: "navigation" },
+  fuelCondenser: { x: 1150, y: 830, branch: "navigation" },
+  comboGenerator: { x: 1150, y: 1000, branch: "navigation" },
+  recoveryReservoir: { x: 1150, y: 1170, branch: "navigation" },
+  stormFuel: { x: 1150, y: 1340, branch: "navigation" },
+  cycloneCore: { x: 170, y: 1720, branch: "hybrid" },
+  stormDrones: { x: 625, y: 1720, branch: "hybrid" },
+  cascadeGrid: { x: 1080, y: 1720, branch: "hybrid" },
+  goldenVacuum: { x: 170, y: 1900, branch: "hybrid" },
+  cargoCyclone: { x: 625, y: 1900, branch: "hybrid" },
+  chainReactor: { x: 1080, y: 1900, branch: "hybrid" },
 };
 
 function skillCostLabel(id: RunSkillId): string {
@@ -311,7 +319,8 @@ function renderRunState(state: RunState): void {
   dayFlight.textContent = `DAY ${state.day} · FLIGHT ${state.flight}/3`;
   document.body.classList.toggle("flight-two", state.flight === 2);
   document.body.classList.toggle("flight-three", state.flight === 3);
-  routeName.textContent = FLIGHT_ROUTES[state.routeId].name;
+  altitude.textContent = RANKS[state.mapRank].altitude;
+  routeName.textContent = RANKS[state.mapRank].name;
   combo.textContent = state.combo > 0 ? `×${state.combo}` : "—";
   combo.parentElement?.classList.toggle("active", state.combo >= 2);
   const cargoCount = (Object.values(state.cargo) as number[]).reduce((total, amount) => total + amount, 0);
@@ -421,8 +430,8 @@ function showLevelUp(_pendingPicks: number): void {
   levelUpTitle.textContent = "보관한 구름으로 시스템을 해금하세요";
   levelUpDescription.textContent = "고도가 오를수록 빙정·태양·오로라구름이 열리고, 새로운 구름은 더 깊은 시스템의 재료가 됩니다.";
   skillTreeCloseButton.textContent = "기지로 돌아가기";
-  const roots = new Set<RunSkillId>(["overclock", "profitRain", "twinDrone"]);
-  const center = { x: 540, y: 83 };
+  const roots = new Set<RunSkillId>(["overclock", "profitRain", "twinDrone", "auxTank"]);
+  const center = { x: 740, y: 83 };
   const nodeCenter = (id: RunSkillId) => ({ x: SKILL_NODE_LAYOUT[id].x + 115, y: SKILL_NODE_LAYOUT[id].y + 75 });
   const connectors = (Object.keys(SKILL_NODE_LAYOUT) as RunSkillId[]).flatMap((id) => {
     const skill = RUN_SKILLS[id];
@@ -440,7 +449,7 @@ function showLevelUp(_pendingPicks: number): void {
     <div class="skill-tree-scroll-hint">SCROLL BLUEPRINT · CONNECT ADJACENT SYSTEMS</div>
     <div class="skill-tree-network">
       <div class="skill-tree-grid-glow"></div>
-      <svg class="skill-tree-links" viewBox="0 0 1080 2070" aria-hidden="true">${connectors}</svg>
+       <svg class="skill-tree-links" viewBox="0 0 1480 2070" aria-hidden="true">${connectors}</svg>
       <div class="skill-tree-core"><small>CAREER CLOUD RESERVE</small><strong>${totalStock}</strong><span>CLOUDS</span></div>
       ${(Object.keys(SKILL_NODE_LAYOUT) as RunSkillId[]).map((id) => {
         const skill = RUN_SKILLS[id];
@@ -480,7 +489,7 @@ function equipmentEffect(id: UpgradeId, level: number): string {
 
 function renderState(state: GameState): void {
   money.textContent = Math.floor(state.money).toLocaleString();
-  altitude.textContent = RANKS[state.rank].altitude;
+  altitude.textContent = RANKS[state.selectedMap].altitude;
   rankName.textContent = RANKS[state.rank].name;
   soundButton.textContent = state.sound ? "🔊" : "🔇";
   if (state.harvested > 2) tutorial.classList.add("hidden");
@@ -527,13 +536,15 @@ function renderState(state: GameState): void {
     promotionTitle.textContent = next.name;
     promotionDescription.textContent = next.description;
     const moneyDone = state.money >= next.promotionCost;
-    const harvestDone = state.harvested >= next.requiredHarvest;
+    const harvestDone = state.rankHarvested >= next.requiredHarvest;
+    const flightDone = state.rankFlights >= 1;
     promotionRequirements.innerHTML = `
       <span class="${moneyDone ? "done" : ""}">◈ ${Math.floor(state.money).toLocaleString()} / ${next.promotionCost.toLocaleString()}</span>
-      <span class="${harvestDone ? "done" : ""}">☁ ${state.harvested} / ${next.requiredHarvest}</span>
+      <span class="${harvestDone ? "done" : ""}">☁ 현 고도 납품 ${state.rankHarvested} / ${next.requiredHarvest}</span>
+      <span class="${flightDone ? "done" : ""}">RTB 안전 귀환 ${state.rankFlights} / 1</span>
     `;
-    promoteButton.disabled = !(state.money >= next.promotionCost && state.harvested >= next.requiredHarvest);
-    promoteButton.textContent = `${next.altitude} 승급`;
+    promoteButton.disabled = !(moneyDone && harvestDone && flightDone);
+    promoteButton.textContent = `${next.altitude} 항로 해금`;
   }
 }
 
@@ -619,24 +630,34 @@ baseGarageButton.addEventListener("click", () => {
   openGarage();
 });
 launchButton.addEventListener("click", () => {
-  routeList.innerHTML = Object.values(FLIGHT_ROUTES).map((route) => `
-    <button class="route-card route-${route.id}" data-route="${route.id}" style="--route-color:${route.color}">
-      <span class="route-visual">${route.id === "tailwind" ? "≋" : route.id === "pressureMine" ? "◆" : "⚠"}</span>
-      <span class="route-code">${route.code}</span>
-      <small>FLIGHT PLAN</small>
-      <strong>${route.name}</strong>
-      <p>${route.description}</p>
-      <b>${route.effect}</b>
-      <span class="route-identity">${route.id === "tailwind" ? "MATERIAL FARM · LONG COMBO" : route.id === "pressureMine" ? "DRONE MINING · HIGH VALUE" : "FEVER RUSH · FRONT JACKPOT"}</span>
-      <em>이 항로로 출격</em>
+  const company = game.getState();
+  routeList.innerHTML = RANKS.map((map, mapRank) => {
+    const locked = mapRank > company.rank;
+    const clouds = (Object.keys(map.weights) as (keyof typeof map.weights)[])
+      .filter((kind) => map.weights[kind] > 0)
+      .map((kind) => `${CLOUDS[kind].icon}${Math.round(map.weights[kind] * 100)}%`)
+      .join(" · ");
+    const payout = map.valueMultiplier * FLIGHT_ROUTES[map.routeId].valueMultiplier;
+    return `
+    <button class="route-card map-${mapRank} ${locked ? "locked" : ""} ${company.selectedMap === mapRank ? "selected" : ""}" data-map="${mapRank}" style="--route-color:${map.color}" ${locked ? "disabled" : ""}>
+      <span class="route-visual">${locked ? "🔒" : map.icon}</span>
+      <span class="route-code">${map.code}</span>
+      <small>${locked ? "LOCKED ALTITUDE" : mapRank === company.rank ? "FRONTIER MAP" : "UNLOCKED MAP"}</small>
+      <strong>${map.name}</strong>
+      <p>${map.description}</p>
+      <b>연료 소모 ×${map.fuelDrain.toFixed(2)} · 수익 ×${payout.toFixed(2)}</b>
+      <span class="route-clouds">${clouds}</span>
+      <span class="route-identity">${map.identity}</span>
+      <em>${locked ? `이전 고도 승급 필요` : company.selectedMap === mapRank ? "현재 선택 · 다시 출격" : "이 고도로 출격"}</em>
     </button>
-  `).join("");
+  `;
+  }).join("");
   routeOverlay.classList.add("show");
 });
 routeBackButton.addEventListener("click", () => routeOverlay.classList.remove("show"));
 routeList.addEventListener("click", (event) => {
-  const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-route]");
-  if (!button || !game.launchFlight(button.dataset.route as FlightRouteId)) return;
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-map]");
+  if (!button || !game.launchFlight(Number(button.dataset.map))) return;
   routeOverlay.classList.remove("show");
   processingOverlay.classList.remove("show");
   baseHub.classList.remove("show");

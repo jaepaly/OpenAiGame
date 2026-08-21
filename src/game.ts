@@ -1,5 +1,5 @@
 import { CLOUDS, FLIGHT_ROUTES, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
-import type { Cloud, CloudFormationKind, CloudKind, ContractId, FlightRouteId, FloatingText, GameState, Particle, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
+import type { Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, Particle, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
@@ -13,6 +13,7 @@ type Shockwave = { x: number; y: number; radius: number; life: number; maxLife: 
 type CascadeHarvest = { cloudId: number; delay: number; depth: number };
 type DroneBeam = { x: number; y: number; targetX: number; targetY: number };
 type HarvestLink = { x: number; y: number; targetX: number; targetY: number; life: number; maxLife: number; color: string };
+type HarvestSource = "manual" | "drone" | "cascade";
 
 const MAX_PARTICLES = 850;
 const MAX_FLOATING_TEXTS = 30;
@@ -40,9 +41,12 @@ const freshRunState = (day = 1): RunState => ({
   cargoBonus: 0,
   fuel: 9,
   fuelCapacity: 9,
+  fuelRecovered: 0,
+  fuelRecoveryLimit: 0,
   emergencyReturn: false,
   materials: emptyCloudStock(),
   routeId: "tailwind",
+  mapRank: 0,
   skills: {
     overclock: 0, intakeServo: 0, wideIntake: 0, pressureChamber: 0, massInduction: 0, vacuumMomentum: 0,
     profitRain: 0, comboCapacitor: 0, feverDrive: 0, feverInjector: 0, stormCatalyst: 0, jackpotPulse: 0,
@@ -50,6 +54,8 @@ const freshRunState = (day = 1): RunState => ({
     blackHole: 0, eventHorizon: 0, goldenStorm: 0, sunStorm: 0, droneFleet: 0, nanoSwarm: 0,
     cargoBay: 0, yieldBoost: 0, denseRadar: 0, feverReserve: 0,
     cycloneCore: 0, cascadeGrid: 0, stormDrones: 0, goldenVacuum: 0, chainReactor: 0, cargoCyclone: 0,
+    auxTank: 0, aeroDrive: 0, ecoThrusters: 0, vacuumRecycler: 0,
+    fuelCondenser: 0, comboGenerator: 0, recoveryReservoir: 0, stormFuel: 0,
   },
   processing: freshProcessingState(),
   processingLines: 1,
@@ -121,6 +127,8 @@ export class CloudHarvestGame {
   private runEmitTimer = 0;
   private processingEmitTimer = 0;
   private fuelWarningStage = 0;
+  private fuelPity = 0;
+  private fuelPickupFlash = 0;
   private audioContext?: AudioContext;
   private lastHarvestToneAt = 0;
   private discoveredCloudKinds = new Set<CloudKind>(["cumulus"]);
@@ -163,6 +171,8 @@ export class CloudHarvestGame {
     const state = structuredClone(this.run);
     state.fuelCapacity = this.getFuelCapacity();
     state.fuel = Math.min(state.fuel, state.fuelCapacity);
+    state.fuelRecovered = this.run.fuelRecovered;
+    state.fuelRecoveryLimit = this.getFuelRecoveryLimit();
     state.materials = structuredClone(this.state.materials);
     state.processing = structuredClone(this.state.processing);
     state.processingLines = this.getProcessingLineCount();
@@ -218,10 +228,9 @@ export class CloudHarvestGame {
 
   private consumeFuel(amount: number): boolean {
     if (amount <= 0 || this.atFactory || this.returning || this.launching) return false;
-    const equipmentEfficiency = Math.max(.32, 1 - this.state.levels.fuelSaver * .0425);
     const feverEfficiency = this.run.feverActive && this.run.skills.cargoCyclone ? .72 : 1;
-    const efficiency = equipmentEfficiency * feverEfficiency;
-    this.run.fuel = Math.max(0, this.run.fuel - amount * efficiency);
+    const altitudeDrain = RANKS[this.run.mapRank].fuelDrain;
+    this.run.fuel = Math.max(0, this.run.fuel - amount * feverEfficiency * altitudeDrain);
     const ratio = this.run.fuel / Math.max(1, this.getFuelCapacity());
     if (ratio <= .15 && this.fuelWarningStage < 2) {
       this.fuelWarningStage = 2;
@@ -274,6 +283,10 @@ export class CloudHarvestGame {
     (Object.keys(this.run.cargo) as CloudKind[]).forEach((kind) => {
       this.state.materials[kind] += this.run.cargo[kind];
     });
+    if (this.run.mapRank === this.state.rank) {
+      this.state.rankFlights += 1;
+      this.state.rankHarvested += materialsStored;
+    }
     const finalFlight = this.run.flight >= 3;
     this.run.cargo = emptyCloudStock();
     this.run.cargoValue = emptyCloudStock();
@@ -348,7 +361,8 @@ export class CloudHarvestGame {
   }
 
   private getProcessingSpeed(): number {
-    return 1 + this.state.levels.conveyor * .22 + this.state.research.refining * .04 + this.run.skills.yieldBoost * .25;
+    return 1 + this.state.levels.conveyor * .22 + this.state.research.refining * .04
+      + this.state.research.logistics * .02 + this.run.skills.yieldBoost * .25;
   }
 
   private getProcessingLineCount(): number {
@@ -399,13 +413,21 @@ export class CloudHarvestGame {
     }
   }
 
-  launchFlight(routeId: FlightRouteId): boolean {
+  launchFlight(mapRank: number): boolean {
     if (!this.atFactory || this.launching || this.returning || this.dayComplete) return false;
+    if (!Number.isInteger(mapRank) || mapRank < 0 || mapRank > this.state.rank || !RANKS[mapRank]) return false;
+    const routeId = RANKS[mapRank].routeId;
+    this.state.selectedMap = mapRank;
+    this.run.mapRank = mapRank;
     this.run.routeId = routeId;
     this.run.fuelCapacity = this.getFuelCapacity();
     this.run.fuel = this.run.fuelCapacity;
+    this.run.fuelRecovered = 0;
+    this.run.fuelRecoveryLimit = this.getFuelRecoveryLimit();
     this.run.emergencyReturn = false;
     this.fuelWarningStage = 0;
+    this.fuelPity = 0;
+    this.fuelPickupFlash = 0;
     this.launching = true;
     this.launchTimer = 0;
     this.pausedForLevel = false;
@@ -434,7 +456,9 @@ export class CloudHarvestGame {
     this.player.targetX = this.width * .5;
     this.player.targetY = this.height * .55;
     const phaseName = this.run.flight === 3 ? "최종 수확" : this.run.flight === 2 ? "고밀도 운항" : "탐색 운항";
-    this.onToast(`FLIGHT ${this.run.flight}/3 ${phaseName} — ${FLIGHT_ROUTES[routeId].name}`, "success");
+    this.rankReveal = 2.4;
+    this.commit();
+    this.onToast(`FLIGHT ${this.run.flight}/3 ${phaseName} — ${RANKS[mapRank].name}`, "success");
     this.playTone(165, .28);
     return true;
   }
@@ -540,34 +564,27 @@ export class CloudHarvestGame {
 
   canPromote(): boolean {
     const next = RANKS[this.state.rank + 1];
-    return Boolean(next && this.state.money >= next.promotionCost && this.state.harvested >= next.requiredHarvest);
+    return Boolean(this.atFactory && next && this.state.rankFlights >= 1
+      && this.state.money >= next.promotionCost && this.state.rankHarvested >= next.requiredHarvest);
   }
 
   promote(): void {
     const next = RANKS[this.state.rank + 1];
     if (!next) return;
+    if (!this.atFactory) {
+      this.onToast("고도 승급은 기지 관제실에서만 승인할 수 있습니다.", "warning");
+      return;
+    }
     if (!this.canPromote()) {
       this.onToast("승급 조건을 조금 더 채워주세요.", "warning");
       return;
     }
-    const previousWorldWidth = this.getWorldWidth();
-    const previousWorldHeight = this.getWorldHeight();
-    const normalizedX = this.player.x / previousWorldWidth;
-    const normalizedY = this.player.y / previousWorldHeight;
     this.state.money -= next.promotionCost;
     this.state.rank += 1;
-    this.player.x = normalizedX * this.getWorldWidth();
-    this.player.y = normalizedY * this.getWorldHeight();
-    this.player.targetX = this.player.x;
-    this.player.targetY = this.player.y;
-    this.clouds = [];
-    for (let i = 0; i < Math.min(this.getMaxClouds(), 18 + this.state.rank * 4); i += 1) this.spawnCloud(true);
-    this.shake = 18;
-    this.impactFlash = .65;
-    this.rankReveal = 3.2;
-    this.burst(this.width / 2, this.height / 2, "#fff4a8", 85, 260);
+    this.state.rankHarvested = 0;
+    this.state.rankFlights = 0;
     const unlocked = ["", "비구름", "전기구름", "빙정구름", "태양구름", "오로라구름"][this.state.rank];
-    this.onToast(`${next.name} 진입! ${unlocked} 출현!`, "success");
+    this.onToast(`${next.name} 항로 해금! GO에서 선택하면 ${unlocked}이 출현합니다.`, "success");
     this.playChord();
     this.commit();
   }
@@ -735,7 +752,7 @@ export class CloudHarvestGame {
         this.playerVelocity.x *= drag;
         this.playerVelocity.y *= drag;
       }
-      const skillSpeedMultiplier = 1 + this.run.skills.intakeServo * .22 + this.run.skills.vacuumMomentum * .28;
+      const skillSpeedMultiplier = 1 + this.run.skills.intakeServo * .22 + this.run.skills.vacuumMomentum * .28 + this.run.skills.aeroDrive * .18;
       const maxSpeed = (315 + this.run.skills.overclock * 18) * skillSpeedMultiplier * feverMovementBoost;
       const speed = Math.hypot(this.playerVelocity.x, this.playerVelocity.y);
       if (speed > maxSpeed) {
@@ -774,7 +791,7 @@ export class CloudHarvestGame {
   }
 
   private getWorldZoom(): number {
-    return [1, .93, .85, .77, .69, .61][this.state.rank] ?? .61;
+    return [1, .93, .85, .77, .69, .61][this.run.mapRank] ?? .61;
   }
 
   private getWorldWidth(): number { return this.width / this.getWorldZoom(); }
@@ -819,7 +836,9 @@ export class CloudHarvestGame {
     const movementLoad = this.updatePlayerMovement(dt);
     this.updateAimDirection(dt);
     const suctionLoad = this.isSuctionActive() ? .72 : 0;
-    if (this.consumeFuel((movementLoad * .32 + suctionLoad) * dt)) return;
+    const movementEfficiency = 1 - this.run.skills.ecoThrusters * .22;
+    const suctionEfficiency = 1 - this.run.skills.vacuumRecycler * .22;
+    if (this.consumeFuel((movementLoad * .32 * movementEfficiency + suctionLoad * suctionEfficiency) * dt)) return;
     this.overload = Math.max(0, this.overload - dt);
     this.shockToastCooldown = Math.max(0, this.shockToastCooldown - dt);
     this.comboTimer -= dt;
@@ -828,6 +847,7 @@ export class CloudHarvestGame {
     this.run.comboTime = Math.max(0, this.comboTimer);
     this.shake = Math.max(0, this.shake - dt * 30);
     this.impactFlash = Math.max(0, this.impactFlash - dt * 4.6);
+    this.fuelPickupFlash = Math.max(0, this.fuelPickupFlash - dt * 2.8);
     this.comboPunch = Math.max(0, this.comboPunch - dt * 3.8);
     this.cascadeTimer = Math.max(0, this.cascadeTimer - dt);
     this.cascadePunch = Math.max(0, this.cascadePunch - dt * 7);
@@ -909,7 +929,7 @@ export class CloudHarvestGame {
     if (this.droneBeams.length > 0 && this.consumeFuel(this.droneBeams.length * .035 * dt)) return;
     for (const cloud of collected) {
       if (!this.clouds.some((item) => item.id === cloud.id)) continue;
-      this.collectCloud(cloud, 0, true);
+      this.collectCloud(cloud, 0, true, "manual");
       harvestedThisFrame = true;
     }
     harvestedThisFrame = this.updateCascadeQueue(dt) || harvestedThisFrame;
@@ -1115,7 +1135,7 @@ export class CloudHarvestGame {
           if (Math.random() < dt * 18) this.particles.push({ x: drone.x, y: drone.y, vx: dx * 1.8, vy: dy * 1.8, life: .24, maxLife: .24, size: 2.5, color: "#6ff6e2" });
           if (target.health <= 0) {
             this.addFloatingText({ x: target.x, y: target.y - 24, text: "DRONE HARVEST!", color: "#8fffe9", life: .8 });
-            this.collectCloud(target, 0, true);
+            this.collectCloud(target, 0, true, "drone");
             harvested = true;
             drone.targetId = undefined;
           }
@@ -1149,7 +1169,7 @@ export class CloudHarvestGame {
     this.playTone(110, .14);
   }
 
-  private collectCloud(cloud: Cloud, cascadeDepth = 0, deferSync = false): void {
+  private collectCloud(cloud: Cloud, cascadeDepth = 0, deferSync = false, source: HarvestSource = "manual"): void {
     const cloudIndex = this.clouds.findIndex((item) => item.id === cloud.id);
     if (cloudIndex < 0) return;
     this.queuedCascadeIds.delete(cloud.id);
@@ -1169,11 +1189,12 @@ export class CloudHarvestGame {
     const energizedCloud = cloud.kind === "electric" || cloud.kind === "solar" || cloud.kind === "aurora";
     const insulationValue = energizedCloud && this.state.levels.insulation > 0 ? 1.5 : 1;
     const densityValue = cloud.dense ? 3 : 1;
-    const altitudeValue = 1 + this.state.rank * .18;
+    const altitudeValue = RANKS[this.run.mapRank].valueMultiplier;
     const earned = Math.round(definition.value * comboMultiplier * permanentValue * runValue * insulationValue * densityValue * altitudeValue);
     this.run.cargo[cloud.kind] += 1;
     this.run.cargoValue[cloud.kind] += earned;
     this.state.harvested += 1;
+    if (source === "manual") this.tryRecoverFuel(cloud);
     const baseXp = { cumulus: 2, rain: 5, electric: 9, ice: 14, solar: 22, aurora: 34 }[cloud.kind];
     const xp = cloud.dense ? baseXp * 2 : baseXp;
     this.run.xp += xp;
@@ -1239,6 +1260,37 @@ export class CloudHarvestGame {
     }
   }
 
+  private getFuelRecoveryLimit(): number {
+    if (!this.run.skills.fuelCondenser) return 0;
+    return 3 + this.run.skills.recoveryReservoir * 4 + this.run.skills.stormFuel * 8;
+  }
+
+  private tryRecoverFuel(cloud: Cloud): void {
+    const limit = this.getFuelRecoveryLimit();
+    if (limit <= 0 || this.run.fuelRecovered >= limit || this.run.fuel >= this.getFuelCapacity()) return;
+    const tier = CLOUD_ORDER.indexOf(cloud.kind);
+    this.fuelPity += 1 + tier * .16;
+    const comboChance = this.run.skills.comboGenerator ? Math.min(.12, this.combo * .006) : 0;
+    const highTierChance = this.run.skills.stormFuel && tier >= 2 ? .08 : 0;
+    const guaranteedCombo = this.run.skills.comboGenerator && this.combo > 0 && this.combo % 8 === 0;
+    if (!guaranteedCombo && this.fuelPity < 7 && Math.random() >= .06 + comboChance + highTierChance) return;
+    const recovery = Math.min(
+      this.run.skills.stormFuel && tier >= 2 ? 1.5 : 1,
+      limit - this.run.fuelRecovered,
+      this.getFuelCapacity() - this.run.fuel,
+    );
+    if (recovery <= 0) return;
+    this.fuelPity = 0;
+    this.run.fuel += recovery;
+    this.run.fuelRecovered += recovery;
+    this.run.fuelRecoveryLimit = limit;
+    this.fuelPickupFlash = 1;
+    this.addFloatingText({ x: cloud.x, y: cloud.y - 28, text: `FUEL CELL  +${recovery.toFixed(recovery % 1 ? 1 : 0)}`, color: "#fff36f", life: 1.2 });
+    this.addShockwave({ x: cloud.x, y: cloud.y, radius: 15, life: .55, maxLife: .55, color: "#fff36f" });
+    this.burst(cloud.x, cloud.y, "#fff36f", 18, 230, "spark");
+    this.playTone(610, .08);
+  }
+
   private triggerCloudHarvestEffect(cloud: Cloud, cascadeDepth: number): void {
     const definition = CLOUDS[cloud.kind];
     const cascadeScale = cascadeDepth > 0 ? .68 : 1;
@@ -1264,7 +1316,7 @@ export class CloudHarvestGame {
         .slice(0, 3);
       for (const target of targets) {
         this.addHarvestLink({ x: cloud.x, y: cloud.y, targetX: target.x, targetY: target.y, life: .22, maxLife: .22, color: "#fff071" });
-        target.health -= 15 + this.state.rank * 3;
+        target.health -= 15 + this.run.mapRank * 3;
         target.hurtFlash = 1;
         if (target.health <= 0) this.queueCascade(target, cascadeDepth + 1);
       }
@@ -1307,7 +1359,7 @@ export class CloudHarvestGame {
   private spawnAuroraEcho(source: Cloud, index: number, count: number): void {
     const angle = source.phase + index / Math.max(1, count) * Math.PI * 2;
     const radius = 16 + Math.random() * 5;
-    const health = CLOUDS.cumulus.health * (1 + this.state.rank * .2) * .75;
+    const health = CLOUDS.cumulus.health * (1 + this.run.mapRank * .2) * .75;
     this.clouds.push({
       id: ++this.cloudId, kind: "cumulus", x: source.x + Math.cos(angle) * 58, y: source.y + Math.sin(angle) * 44,
       vx: Math.cos(angle) * 105, vy: Math.sin(angle) * 82, radius, phase: Math.random() * Math.PI * 2,
@@ -1371,7 +1423,7 @@ export class CloudHarvestGame {
       this.queuedCascadeIds.delete(item.cloudId);
       const cloud = cloudById.get(item.cloudId);
       if (!cloud) continue;
-      this.collectCloud(cloud, item.depth, true);
+      this.collectCloud(cloud, item.depth, true, "cascade");
       harvested = true;
     }
     return harvested;
@@ -1436,7 +1488,7 @@ export class CloudHarvestGame {
 
   private completeCloudFront(x: number, y: number): void {
     const jackpot = this.goldenFront;
-    const bonus = Math.round((45 + this.state.rank * 35) * FLIGHT_ROUTES[this.run.routeId].frontBonus * (jackpot ? 3 : 1));
+    const bonus = Math.round((45 + this.run.mapRank * 35) * FLIGHT_ROUTES[this.run.routeId].frontBonus * (jackpot ? 3 : 1));
     this.run.cargoBonus += bonus;
     if (!this.run.feverActive) {
       this.run.fever = Math.min(100, this.run.fever + (jackpot ? 60 : 28));
@@ -1472,7 +1524,7 @@ export class CloudHarvestGame {
     const zoom = this.getWorldZoom();
     const worldWidth = this.getWorldWidth();
     const worldHeight = this.getWorldHeight();
-    const rank = RANKS[this.state.rank];
+    const rank = RANKS[this.run.mapRank];
     const roll = Math.random();
     let cursor = 0;
     let kind: CloudKind = "cumulus";
@@ -1481,12 +1533,12 @@ export class CloudHarvestGame {
       if (roll <= cursor) { kind = candidate; break; }
     }
     const lowTierBias = FLIGHT_ROUTES[this.run.routeId].lowTierBias;
-    if (this.state.rank > 0 && Math.random() < lowTierBias) {
-      const highestFallback = Math.max(0, this.state.rank - 1);
+    if (this.run.mapRank > 0 && Math.random() < lowTierBias) {
+      const highestFallback = Math.max(0, this.run.mapRank - 1);
       kind = CLOUD_ORDER[Math.floor(Math.random() * (highestFallback + 1))];
     }
     const definition = CLOUDS[kind];
-    const dense = Math.random() < .085 + this.state.rank * .018 + (this.run.flight - 1) * .035 + FLIGHT_ROUTES[this.run.routeId].denseBonus + this.run.skills.denseRadar * .03 + this.state.research.forecasting * .015;
+    const dense = Math.random() < .085 + this.run.mapRank * .018 + (this.run.flight - 1) * .035 + FLIGHT_ROUTES[this.run.routeId].denseBonus + this.run.skills.denseRadar * .03 + this.state.research.forecasting * .015;
     const radius = (definition.radius[0] + Math.random() * (definition.radius[1] - definition.radius[0])) * (dense ? 1.16 : 1);
     const scale = radius / ((definition.radius[0] + definition.radius[1]) * .5);
     let x = 90 / zoom + Math.random() * Math.max(100 / zoom, worldWidth - 180 / zoom);
@@ -1504,7 +1556,7 @@ export class CloudHarvestGame {
       if (side === 1) { x = worldWidth - radius - 4 / zoom; y = 350 / zoom + Math.random() * Math.max(55 / zoom, worldHeight - 520 / zoom); }
       if (side === 2) { y = 180 / zoom + radius; x = 85 / zoom + Math.random() * Math.max(100 / zoom, worldWidth - 540 / zoom); }
     }
-    const altitudeResistance = 1 + this.state.rank * .2;
+    const altitudeResistance = 1 + this.run.mapRank * .2;
     const health = definition.health * scale * (dense ? 1.65 : 1) * altitudeResistance;
     this.clouds.push({ id: ++this.cloudId, kind, x, y, vx: (Math.random() - .5) * 8, vy: (Math.random() - .5) * 6, radius, phase: Math.random() * Math.PI * 2, charged: false, age: initial ? .6 + Math.random() * 4.4 : 0, health, maxHealth: health, hurtFlash: 0, dense, front: false });
     this.announceCloudDiscovery(kind);
@@ -1575,11 +1627,11 @@ export class CloudHarvestGame {
     const worldWidth = this.getWorldWidth();
     const worldHeight = this.getWorldHeight();
     this.goldenFront = this.run.flight === 3 && !this.goldenFrontClaimed;
-    this.frontTimer = this.goldenFront ? 20 : Math.max(24, 36 - this.state.rank * 4);
+    this.frontTimer = this.goldenFront ? 20 : Math.max(24, 36 - this.run.mapRank * 4);
     this.frontActive = 11;
     this.frontBanner = 3.2;
     this.frontDirection = Math.random() < .5 ? 1 : -1;
-    const count = (this.goldenFront ? 11 : 7) + this.state.rank * 2;
+    const count = (this.goldenFront ? 11 : 7) + this.run.mapRank * 2;
     for (let index = 0; index < count; index += 1) {
       this.spawnCloud(false);
       const cloud = this.clouds[this.clouds.length - 1];
@@ -1802,7 +1854,7 @@ export class CloudHarvestGame {
       ["#5c327f", "#e47372", "#ffd271"],
       ["#07152f", "#173c65", "#3d7390"],
     ];
-    const gradients = this.run.feverActive ? ["#7e73f2", "#64dfe3", "#fff0a8"] : rankSkies[this.state.rank];
+    const gradients = this.run.feverActive ? ["#7e73f2", "#64dfe3", "#fff0a8"] : rankSkies[this.run.mapRank];
     const gradient = ctx.createLinearGradient(0, 0, 0, this.height);
     gradient.addColorStop(0, gradients[0]); gradient.addColorStop(.7, gradients[1]); gradient.addColorStop(1, gradients[2]);
     ctx.fillStyle = gradient; ctx.fillRect(0, 0, this.width, this.height);
@@ -1823,7 +1875,7 @@ export class CloudHarvestGame {
       ctx.beginPath(); ctx.arc(x, y, 2 + i % 3, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
-    if (!this.run.feverActive && this.state.rank === 3) {
+    if (!this.run.feverActive && this.run.mapRank === 3) {
       ctx.strokeStyle = "rgba(194,249,255,.42)"; ctx.lineWidth = 2;
       for (let crystal = 0; crystal < 16; crystal += 1) {
         const x = (crystal * 113 + time * 28) % (this.width + 100) - 50;
@@ -1831,12 +1883,12 @@ export class CloudHarvestGame {
         ctx.beginPath(); ctx.moveTo(x - 11, y); ctx.lineTo(x, y - 18); ctx.lineTo(x + 11, y); ctx.lineTo(x, y + 18); ctx.closePath(); ctx.stroke();
       }
     }
-    if (!this.run.feverActive && this.state.rank === 4) {
+    if (!this.run.feverActive && this.run.mapRank === 4) {
       const sun = ctx.createRadialGradient(this.width * .78, this.height * .22, 8, this.width * .78, this.height * .22, 130);
       sun.addColorStop(0, "rgba(255,255,210,.98)"); sun.addColorStop(.18, "rgba(255,231,103,.72)"); sun.addColorStop(1, "rgba(255,153,74,0)");
       ctx.fillStyle = sun; ctx.fillRect(0, 0, this.width, this.height);
     }
-    if (!this.run.feverActive && this.state.rank >= 5) {
+    if (!this.run.feverActive && this.run.mapRank >= 5) {
       ctx.globalCompositeOperation = "lighter"; ctx.lineWidth = 18; ctx.lineCap = "round";
       ["rgba(99,255,198,.18)", "rgba(147,115,255,.17)", "rgba(83,208,255,.15)"].forEach((color, ribbon) => {
         ctx.strokeStyle = color; ctx.beginPath(); ctx.moveTo(-80, 145 + ribbon * 62);
@@ -1844,11 +1896,11 @@ export class CloudHarvestGame {
       });
       ctx.globalCompositeOperation = "source-over";
     }
-    if (this.state.rank >= 1 && !this.run.feverActive) {
-      ctx.strokeStyle = this.state.rank === 2 ? "rgba(191,210,255,.22)" : "rgba(255,255,255,.2)";
-      ctx.lineWidth = this.state.rank === 2 ? 2 : 1.5;
+    if (this.run.mapRank >= 1 && !this.run.feverActive) {
+      ctx.strokeStyle = this.run.mapRank === 2 ? "rgba(191,210,255,.22)" : "rgba(255,255,255,.2)";
+      ctx.lineWidth = this.run.mapRank === 2 ? 2 : 1.5;
       for (let i = 0; i < 34; i += 1) {
-        const x = (i * 91 + time * (this.state.rank === 2 ? 145 : 85)) % (this.width + 160) - 80;
+        const x = (i * 91 + time * (this.run.mapRank === 2 ? 145 : 85)) % (this.width + 160) - 80;
         const y = 110 + (i * 53) % Math.max(120, this.height - 250);
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 12, y + 30); ctx.stroke();
       }
@@ -1888,24 +1940,24 @@ export class CloudHarvestGame {
     const worldHeight = this.getWorldHeight();
     const zoom = this.getWorldZoom();
     const y = worldHeight - 68 / zoom;
-    if (this.state.rank <= 1) {
-      ctx.fillStyle = this.state.rank === 0 ? "#7fce64" : "#6b9f72";
+    if (this.run.mapRank <= 1) {
+      ctx.fillStyle = this.run.mapRank === 0 ? "#7fce64" : "#6b9f72";
       ctx.beginPath(); ctx.ellipse(worldWidth * .48, y, worldWidth * .52, 72 / zoom, 0, Math.PI, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = this.state.rank === 0 ? "#73b754" : "#557f68"; ctx.fillRect(0, y, worldWidth, worldHeight - y);
+      ctx.fillStyle = this.run.mapRank === 0 ? "#73b754" : "#557f68"; ctx.fillRect(0, y, worldWidth, worldHeight - y);
       const buildings = Math.min(8, 2 + Math.floor(this.state.totalEarned / 100));
       for (let i = 0; i < buildings; i += 1) {
         const bx = (38 + i * 58) / zoom; const bh = (23 + i % 3 * 11) / zoom;
         ctx.fillStyle = ["#fff0b8", "#ffb5a7", "#bde0fe"][i % 3]; ctx.fillRect(bx, y - bh, 36 / zoom, bh);
         ctx.fillStyle = "#594f62"; ctx.beginPath(); ctx.moveTo(bx - 4 / zoom, y - bh); ctx.lineTo(bx + 18 / zoom, y - bh - 15 / zoom); ctx.lineTo(bx + 40 / zoom, y - bh); ctx.fill();
       }
-    } else if (this.state.rank === 2) {
+    } else if (this.run.mapRank === 2) {
       ctx.fillStyle = "#263b60"; ctx.beginPath(); ctx.moveTo(0, y + 18 / zoom); ctx.lineTo(worldWidth * .18, y - 48 / zoom); ctx.lineTo(worldWidth * .34, y + 4 / zoom); ctx.lineTo(worldWidth * .56, y - 78 / zoom); ctx.lineTo(worldWidth * .77, y); ctx.lineTo(worldWidth, y - 38 / zoom); ctx.lineTo(worldWidth, worldHeight); ctx.lineTo(0, worldHeight); ctx.closePath(); ctx.fill();
-    } else if (this.state.rank === 3) {
+    } else if (this.run.mapRank === 3) {
       ctx.fillStyle = "#8bcbd8"; ctx.beginPath(); ctx.moveTo(0, y + 5 / zoom); ctx.lineTo(worldWidth * .14, y - 25 / zoom); ctx.lineTo(worldWidth * .3, y + 2 / zoom); ctx.lineTo(worldWidth * .5, y - 46 / zoom); ctx.lineTo(worldWidth * .72, y - 8 / zoom); ctx.lineTo(worldWidth, y - 34 / zoom); ctx.lineTo(worldWidth, worldHeight); ctx.lineTo(0, worldHeight); ctx.closePath(); ctx.fill();
       ctx.strokeStyle = "rgba(235,255,255,.75)"; ctx.lineWidth = 4 / zoom; ctx.beginPath(); ctx.moveTo(0, y + 5 / zoom); ctx.lineTo(worldWidth * .14, y - 25 / zoom); ctx.lineTo(worldWidth * .3, y + 2 / zoom); ctx.lineTo(worldWidth * .5, y - 46 / zoom); ctx.lineTo(worldWidth * .72, y - 8 / zoom); ctx.lineTo(worldWidth, y - 34 / zoom); ctx.stroke();
     } else {
       const earth = ctx.createRadialGradient(worldWidth * .5, worldHeight + 210 / zoom, 100 / zoom, worldWidth * .5, worldHeight + 210 / zoom, worldWidth * .72);
-      earth.addColorStop(.58, this.state.rank === 4 ? "#397ead" : "#214f80"); earth.addColorStop(.72, "#8bd6e4"); earth.addColorStop(.75, "rgba(202,249,255,.8)"); earth.addColorStop(.79, "rgba(130,210,255,.12)"); earth.addColorStop(1, "rgba(30,77,120,0)");
+      earth.addColorStop(.58, this.run.mapRank === 4 ? "#397ead" : "#214f80"); earth.addColorStop(.72, "#8bd6e4"); earth.addColorStop(.75, "rgba(202,249,255,.8)"); earth.addColorStop(.79, "rgba(130,210,255,.12)"); earth.addColorStop(1, "rgba(30,77,120,0)");
       ctx.fillStyle = earth; ctx.fillRect(0, 0, worldWidth, worldHeight);
     }
   }
@@ -2263,15 +2315,15 @@ export class CloudHarvestGame {
     const ratio = Math.max(0, Math.min(1, this.run.fuel / Math.max(1, this.getFuelCapacity())));
     const critical = ratio <= .15;
     const low = ratio <= .35;
-    const barWidth = Math.min(124, Math.max(96, this.width * .1));
+    const barWidth = this.getFuelRecoveryLimit() > 0 ? 172 : Math.min(124, Math.max(96, this.width * .1));
     const barHeight = 11;
     const playerX = this.player.x * zoom;
     const bob = Math.sin(time * 4) * 3 * zoom;
     const playerY = this.player.y * zoom + bob;
     const barX = playerX - barWidth * .5;
     const barY = playerY + Math.max(29, 39 * zoom);
-    const color = critical ? "#ff6258" : low ? "#ffd15e" : "#63e3bd";
-    const pulse = low ? .72 + (Math.sin(time * (critical ? 15 : 9)) + 1) * .14 : 1;
+    const color = this.fuelPickupFlash > 0 ? "#fff36f" : critical ? "#ff6258" : low ? "#ffd15e" : "#63e3bd";
+    const pulse = this.fuelPickupFlash > 0 ? .88 + Math.sin(time * 18) * .12 : low ? .72 + (Math.sin(time * (critical ? 15 : 9)) + 1) * .14 : 1;
 
     ctx.save();
     ctx.globalAlpha = pulse;
@@ -2283,7 +2335,8 @@ export class CloudHarvestGame {
     ctx.textBaseline = "middle";
     ctx.fillStyle = low ? color : "#dffaff";
     ctx.font = "900 11px Outfit, sans-serif";
-    ctx.fillText(`${critical ? "! " : ""}FUEL  ${Math.ceil(this.run.fuel)} / ${Math.round(this.getFuelCapacity())}`, playerX, barY - 10);
+    const recovery = this.getFuelRecoveryLimit() > 0 ? `  CELL ${this.run.fuelRecovered.toFixed(0)}/${this.getFuelRecoveryLimit()}` : "";
+    ctx.fillText(`${critical ? "! " : ""}FUEL  ${Math.ceil(this.run.fuel)} / ${Math.round(this.getFuelCapacity())}${recovery}`, playerX, barY - 10);
     ctx.fillStyle = "rgba(198,225,229,.26)";
     ctx.beginPath(); ctx.roundRect(barX, barY, barWidth, barHeight, 6); ctx.fill();
     if (ratio > 0) {
@@ -2382,10 +2435,10 @@ export class CloudHarvestGame {
       ctx.globalAlpha = alpha; ctx.textAlign = "center";
       ctx.strokeStyle = "rgba(16,53,72,.6)"; ctx.lineWidth = 10;
       ctx.font = "900 52px Nunito, sans-serif";
-      ctx.strokeText(RANKS[this.state.rank].name, this.width / 2, this.height / 2 - 4);
-      ctx.fillStyle = "#ffffff"; ctx.fillText(RANKS[this.state.rank].name, this.width / 2, this.height / 2 - 4);
+      ctx.strokeText(RANKS[this.run.mapRank].name, this.width / 2, this.height / 2 - 4);
+      ctx.fillStyle = "#ffffff"; ctx.fillText(RANKS[this.run.mapRank].name, this.width / 2, this.height / 2 - 4);
       ctx.font = "900 17px Outfit, sans-serif"; ctx.fillStyle = "#fff178";
-      ctx.fillText(`ALTITUDE ${RANKS[this.state.rank].altitude}`, this.width / 2, this.height / 2 + 31);
+      ctx.fillText(`ALTITUDE ${RANKS[this.run.mapRank].altitude}`, this.width / 2, this.height / 2 + 31);
       ctx.globalAlpha = 1;
     }
     void time;
@@ -2422,12 +2475,11 @@ export class CloudHarvestGame {
   }
 
   private getFuelCapacity(): number {
-    return 7 + this.state.rank + this.state.levels.fuelTank * 4 + this.state.research.logistics
-      + FLIGHT_ROUTES[this.run.routeId].fuelBonus + this.run.skills.salvageProtocol * 6 + this.run.skills.cargoBay * 14;
+    return 9 + this.run.skills.auxTank * 3 + this.run.skills.recoveryReservoir * 3;
   }
 
   private getMaxClouds(): number {
-    return 22 + this.state.rank * 7 + (this.run.flight - 1) * 6 + this.state.levels.radius * 3 + this.run.skills.wideIntake * 4
+    return 22 + this.run.mapRank * 7 + (this.run.flight - 1) * 6 + this.state.levels.radius * 3 + this.run.skills.wideIntake * 4
       + this.run.skills.massInduction * 6 + this.run.skills.blackHole * 8 + this.run.skills.eventHorizon * 12
       + (this.run.feverActive ? this.run.skills.cycloneCore * 6 + this.run.skills.cargoCyclone * 14 : 0);
   }
@@ -2450,7 +2502,7 @@ export class CloudHarvestGame {
     const cycloneInduction = this.run.feverActive ? this.run.skills.cycloneCore * .45 : 0;
     const runInduction = Math.max(.28, 1 - this.run.skills.wideIntake * .08 - this.run.skills.massInduction * .06
       - this.run.skills.blackHole * .15 - this.run.skills.eventHorizon * .12 - cycloneInduction);
-    return Math.max(.11, (0.78 - this.state.rank * .08) * FLIGHT_ROUTES[this.run.routeId].spawnInterval * (1 - flightPressure * .14) * permanentInduction * runInduction);
+    return Math.max(.11, (0.78 - this.run.mapRank * .08) * FLIGHT_ROUTES[this.run.routeId].spawnInterval * (1 - flightPressure * .14) * permanentInduction * runInduction);
   }
 
   private emitAll(): void { this.onStateChange(this.getState()); this.onRunChange(this.getRunState()); }
@@ -2477,6 +2529,9 @@ export class CloudHarvestGame {
     (Object.keys(this.run.skills) as RunSkillId[]).forEach((id) => {
       this.run.skills[id] = this.run.skills[id] > 0 ? 1 : 0;
     });
+    this.state.selectedMap = Math.max(0, Math.min(this.state.rank, this.state.selectedMap ?? this.state.rank));
+    this.run.mapRank = this.state.selectedMap;
+    this.run.routeId = RANKS[this.run.mapRank].routeId;
   }
 
   private commit(): void {
@@ -2489,9 +2544,10 @@ export class CloudHarvestGame {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return structuredClone(INITIAL_STATE);
       const parsed = JSON.parse(raw) as Partial<GameState>;
-      return {
+      const loaded: GameState = {
         ...structuredClone(INITIAL_STATE),
         ...parsed,
+        selectedMap: parsed.selectedMap ?? parsed.rank ?? 0,
         levels: { ...INITIAL_STATE.levels, ...parsed.levels },
         research: { ...INITIAL_STATE.research, ...parsed.research },
         materials: { ...INITIAL_STATE.materials, ...parsed.materials },
@@ -2507,6 +2563,15 @@ export class CloudHarvestGame {
           skills: { ...INITIAL_STATE.career.skills, ...parsed.career?.skills },
         },
       };
+      if (loaded.levels.fuelTank > 0) loaded.career.skills.auxTank = 1;
+      if (loaded.levels.fuelSaver > 0) {
+        loaded.career.skills.auxTank = 1;
+        loaded.career.skills.aeroDrive = 1;
+        loaded.career.skills.ecoThrusters = 1;
+      }
+      loaded.levels.fuelTank = 0;
+      loaded.levels.fuelSaver = 0;
+      return loaded;
     } catch { return structuredClone(INITIAL_STATE); }
   }
 

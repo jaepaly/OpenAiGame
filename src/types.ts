@@ -102,6 +102,9 @@ export interface GameState {
   totalEarned: number;
   harvested: number;
   rank: number;
+  selectedMap: number;
+  rankHarvested: number;
+  rankFlights: number;
   levels: Record<UpgradeId, number>;
   research: Record<ResearchId, number>;
   bestCombo: number;
@@ -118,7 +121,8 @@ export type CoreRunSkillId =
 export type EvolutionSkillId = "blackHole" | "eventHorizon" | "goldenStorm" | "sunStorm" | "droneFleet" | "nanoSwarm";
 export type OverdriveSkillId = "cargoBay" | "yieldBoost" | "denseRadar" | "feverReserve";
 export type SynergySkillId = "cycloneCore" | "cascadeGrid" | "stormDrones" | "goldenVacuum" | "chainReactor" | "cargoCyclone";
-export type RunSkillId = CoreRunSkillId | EvolutionSkillId | OverdriveSkillId | SynergySkillId;
+export type NavigationSkillId = "auxTank" | "aeroDrive" | "ecoThrusters" | "vacuumRecycler" | "fuelCondenser" | "comboGenerator" | "recoveryReservoir" | "stormFuel";
+export type RunSkillId = CoreRunSkillId | EvolutionSkillId | OverdriveSkillId | SynergySkillId | NavigationSkillId;
 
 export interface CareerProgress {
   day: number;
@@ -143,7 +147,7 @@ export interface RunSkillDefinition {
 export type RunSkillCost = Partial<Record<CloudKind, number>>;
 
 export interface SkillTreeBranch {
-  id: "vacuum" | "fever" | "automation";
+  id: "vacuum" | "fever" | "automation" | "navigation";
   code: string;
   name: string;
   description: string;
@@ -168,9 +172,12 @@ export interface RunState {
   cargoBonus: number;
   fuel: number;
   fuelCapacity: number;
+  fuelRecovered: number;
+  fuelRecoveryLimit: number;
   emergencyReturn: boolean;
   materials: Record<CloudKind, number>;
   routeId: FlightRouteId;
+  mapRank: number;
   skills: Record<RunSkillId, number>;
   processing: ProcessingState;
   processingLines: number;
@@ -215,10 +222,17 @@ export interface ProcessingContract {
 }
 
 export interface RankDefinition {
+  code: string;
+  icon: string;
+  color: string;
   name: string;
   altitude: string;
   promotionCost: number;
   requiredHarvest: number;
+  fuelDrain: number;
+  valueMultiplier: number;
+  routeId: FlightRouteId;
+  identity: string;
   weights: Record<CloudKind, number>;
   description: string;
 }
