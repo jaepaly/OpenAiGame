@@ -2593,30 +2593,44 @@ export class CloudHarvestGame {
     this.ensureAudio();
     if (!this.audioContext) return;
     const context = this.audioContext;
-    const duration = .58;
+    const duration = .52;
     const now = context.currentTime;
     const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
     const samples = buffer.getChannelData(0);
     for (let index = 0; index < samples.length; index += 1) {
       const progress = index / samples.length;
-      const envelope = Math.sin(Math.PI * progress) * (1 - progress * .28);
+      const envelope = Math.sin(Math.PI * progress) * (1 - progress * .38);
       samples[index] = (Math.random() * 2 - 1) * envelope;
     }
     const source = context.createBufferSource();
     const filter = context.createBiquadFilter();
-    const gain = context.createGain();
+    const noiseGain = context.createGain();
+    const tone = context.createOscillator();
+    const toneGain = context.createGain();
     source.buffer = buffer;
     filter.type = "bandpass";
-    filter.Q.value = .72;
-    filter.frequency.setValueAtTime(rising ? 260 : 1750, now);
-    filter.frequency.exponentialRampToValueAtTime(rising ? 1900 : 280, now + duration);
-    gain.gain.setValueAtTime(.0001, now);
-    gain.gain.exponentialRampToValueAtTime(.105, now + .1);
-    gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
-    source.connect(filter).connect(gain).connect(context.destination);
+    filter.Q.value = .58;
+    filter.frequency.setValueAtTime(rising ? 420 : 1800, now);
+    filter.frequency.exponentialRampToValueAtTime(rising ? 2450 : 360, now + duration);
+    noiseGain.gain.setValueAtTime(.0001, now);
+    noiseGain.gain.exponentialRampToValueAtTime(.048, now + .075);
+    noiseGain.gain.exponentialRampToValueAtTime(.0001, now + duration);
+    tone.type = "triangle";
+    tone.frequency.setValueAtTime(rising ? 360 : 920, now);
+    tone.frequency.exponentialRampToValueAtTime(rising ? 1080 : 340, now + .3);
+    if (rising) tone.frequency.exponentialRampToValueAtTime(760, now + duration);
+    toneGain.gain.setValueAtTime(.0001, now);
+    toneGain.gain.exponentialRampToValueAtTime(.072, now + .055);
+    toneGain.gain.exponentialRampToValueAtTime(.0001, now + duration);
+    source.connect(filter).connect(noiseGain).connect(context.destination);
+    tone.connect(toneGain).connect(context.destination);
     source.start(now);
+    tone.start(now);
     source.stop(now + duration);
-    source.addEventListener("ended", () => { source.disconnect(); filter.disconnect(); gain.disconnect(); }, { once: true });
+    tone.stop(now + duration);
+    source.addEventListener("ended", () => {
+      source.disconnect(); filter.disconnect(); noiseGain.disconnect(); tone.disconnect(); toneGain.disconnect();
+    }, { once: true });
   }
   private playHarvestTone(kind: CloudKind, cascadeDepth: number): void {
     const now = performance.now();

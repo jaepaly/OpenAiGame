@@ -816,7 +816,7 @@ body.base-open .promotion-card { top: 28px; }
   .promotion-requirements span { font-size: 14px; }
   .promote-button { width: 112px; min-height: 48px; font-size: 15px; }
 
-  .garage-panel { width: min(1180px, calc(100% - 32px)); }
+  .garage-panel { width: min(1380px, calc(100% - 24px)); }
   .garage-heading span { font-size: 15px; }
   .garage-heading p { font-size: 17px; }
   .equipment-slot { height: 408px; padding: 17px; }
@@ -967,9 +967,10 @@ body.base-open .promotion-card { top: 28px; }
 /* Workshop panels own their scroll area so cards never cover the heading or footer. */
 .garage-overlay { overflow-y: auto; place-items: start center; }
 .garage-panel { max-height: calc(100dvh - 32px); margin: auto; display: flex; flex-direction: column; overflow: hidden; }
-.garage-heading, .garage-tip { flex-shrink: 0; }
-.garage-panel .upgrade-list { min-height: 0; padding: 7px 7px 16px; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.garage-panel .equipment-slot { height: auto; min-height: 350px; }
+.garage-heading { flex-shrink: 0; margin-bottom: 16px; }
+.garage-tip { flex-shrink: 0; margin-top: 12px; }
+.garage-panel .upgrade-list { min-height: 0; padding: 7px 7px 16px; grid-template-columns: repeat(auto-fit,minmax(250px,1fr)); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.garage-panel .equipment-slot { height: auto; min-height: 420px; }
 .factory-overlay { overflow-y: auto; place-items: start center; }
 .factory-panel { max-height: calc(100dvh - 32px); margin: auto; overflow-y: auto; overscroll-behavior: contain; }
 
@@ -999,7 +1000,7 @@ body.base-open .promotion-card { top: 28px; }
   .base-facility small { display: none; }
   .base-facility em { margin-top: 7px; }
   .garage-panel { max-height: calc(100dvh - 20px); }
-  .garage-panel .equipment-slot { min-height: 330px; }
+  .garage-panel .equipment-slot { min-height: 420px; }
 }
 
 @media (min-width: 681px) {
