@@ -12,6 +12,12 @@ const CLOUD_ORDER: CloudKind[] = ["cumulus", "rain", "electric", "ice", "solar",
 type Shockwave = { x: number; y: number; radius: number; life: number; maxLife: number; color: string };
 type CascadeHarvest = { cloudId: number; delay: number; depth: number };
 type DroneBeam = { x: number; y: number; targetX: number; targetY: number };
+type HarvestLink = { x: number; y: number; targetX: number; targetY: number; life: number; maxLife: number; color: string };
+
+const MAX_PARTICLES = 850;
+const MAX_FLOATING_TEXTS = 30;
+const MAX_SHOCKWAVES = 24;
+const MAX_HARVEST_LINKS = 24;
 
 const SAVE_KEY = "cloud-harvest-inc-save-v2";
 
@@ -58,6 +64,7 @@ export class CloudHarvestGame {
   private texts: FloatingText[] = [];
   private shockwaves: Shockwave[] = [];
   private droneBeams: DroneBeam[] = [];
+  private harvestLinks: HarvestLink[] = [];
   private width = 960;
   private height = 640;
   private dpr = 1;
@@ -84,6 +91,7 @@ export class CloudHarvestGame {
   private impactFreeze = 0;
   private comboPunch = 0;
   private cascadeQueue: CascadeHarvest[] = [];
+  private cascadeTailDelay = 0;
   private queuedCascadeIds = new Set<number>();
   private cascadeCount = 0;
   private cascadeTimer = 0;
@@ -104,6 +112,9 @@ export class CloudHarvestGame {
   private harvestDrones: HarvestDrone[] = [];
   private runEmitTimer = 0;
   private audioContext?: AudioContext;
+  private lastHarvestToneAt = 0;
+  private discoveredCloudKinds = new Set<CloudKind>(["cumulus"]);
+  private discoveryBanner?: { kind: CloudKind; life: number; maxLife: number };
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -223,6 +234,7 @@ export class CloudHarvestGame {
     this.texts = [];
     this.shockwaves = [];
     this.droneBeams = [];
+    this.harvestLinks = [];
     this.harvestDrones = [];
     this.formationCooldown = 2.8;
     this.clearCascade();
@@ -397,7 +409,10 @@ export class CloudHarvestGame {
     this.formationId = 0;
     this.combo = 0;
     this.droneBeams = [];
+    this.harvestLinks = [];
     this.harvestDrones = [];
+    this.discoveredCloudKinds = new Set<CloudKind>(["cumulus"]);
+    this.discoveryBanner = undefined;
     this.formationCooldown = 4;
     this.clearCascade();
     for (let i = 0; i < Math.min(18, this.getMaxClouds()); i += 1) this.spawnCloud(true);
@@ -619,6 +634,10 @@ export class CloudHarvestGame {
     this.cascadePunch = Math.max(0, this.cascadePunch - dt * 7);
     if (this.cascadeTimer <= 0 && this.cascadeQueue.length === 0) this.cascadeCount = 0;
     this.rankReveal = Math.max(0, this.rankReveal - dt);
+    if (this.discoveryBanner) {
+      this.discoveryBanner.life -= dt;
+      if (this.discoveryBanner.life <= 0) this.discoveryBanner = undefined;
+    }
     this.frontTimer -= dt;
     this.frontActive = Math.max(0, this.frontActive - dt);
     this.frontBanner = Math.max(0, this.frontBanner - dt);
@@ -688,15 +707,24 @@ export class CloudHarvestGame {
       if (cloud.y > this.getWorldHeight() - 125 / worldZoom - margin) { cloud.y = this.getWorldHeight() - 125 / worldZoom - margin; cloud.vy = -Math.abs(cloud.vy) * 0.6; }
     }
 
-    this.updateDrones(dt);
-    for (const cloud of collected) if (this.clouds.some((item) => item.id === cloud.id)) this.collectCloud(cloud);
-    this.updateCascadeQueue(dt);
+    let harvestedThisFrame = this.updateDrones(dt);
+    for (const cloud of collected) {
+      if (!this.clouds.some((item) => item.id === cloud.id)) continue;
+      this.collectCloud(cloud, 0, true);
+      harvestedThisFrame = true;
+    }
+    harvestedThisFrame = this.updateCascadeQueue(dt) || harvestedThisFrame;
+    if (harvestedThisFrame) {
+      this.commit();
+      this.bankLevelUps();
+    }
     this.replenishCloudFloor();
 
     this.particles = this.particles.filter((particle) => {
       particle.life -= dt;
       particle.x += particle.vx * dt;
       particle.y += particle.vy * dt;
+      particle.vy += (particle.gravity ?? 0) * dt;
       particle.vx *= 0.965;
       particle.vy *= 0.965;
       return particle.life > 0;
@@ -707,6 +735,7 @@ export class CloudHarvestGame {
       wave.radius += dt * 240;
       return wave.life > 0;
     });
+    this.harvestLinks = this.harvestLinks.filter((link) => { link.life -= dt; return link.life > 0; });
     this.runEmitTimer -= dt;
     if (this.runEmitTimer <= 0) { this.onRunChange(this.getRunState()); this.runEmitTimer = 0.08; }
   }
@@ -827,8 +856,9 @@ export class CloudHarvestGame {
     }
   }
 
-  private updateDrones(dt: number): void {
+  private updateDrones(dt: number): boolean {
     this.droneBeams = [];
+    let harvested = false;
     const stormDroneBonus = this.run.feverActive ? this.run.skills.stormDrones * 2 : 0;
     const totalCount = this.state.levels.drone + this.run.skills.twinDrone + this.run.skills.droneFleet * 3
       + this.run.skills.nanoSwarm * 5 + this.run.skills.swarmMatrix * 2 + stormDroneBonus;
@@ -838,7 +868,7 @@ export class CloudHarvestGame {
       this.harvestDrones.push({ x: this.player.x + Math.cos(phase) * 55, y: this.player.y + Math.sin(phase) * 40, vx: 0, vy: 0, phase });
     }
     if (this.harvestDrones.length > count) this.harvestDrones.length = count;
-    if (count <= 0) return;
+    if (count <= 0) return false;
     const cargoFull = this.getCargoCount() >= this.getCargoCapacity();
     const claimedTargets = new Set<number>();
 
@@ -884,8 +914,9 @@ export class CloudHarvestGame {
           target.hurtFlash = .7;
           if (Math.random() < dt * 18) this.particles.push({ x: drone.x, y: drone.y, vx: dx * 1.8, vy: dy * 1.8, life: .24, maxLife: .24, size: 2.5, color: "#6ff6e2" });
           if (target.health <= 0) {
-            this.texts.push({ x: target.x, y: target.y - 24, text: "DRONE HARVEST!", color: "#8fffe9", life: .8 });
-            this.collectCloud(target);
+            this.addFloatingText({ x: target.x, y: target.y - 24, text: "DRONE HARVEST!", color: "#8fffe9", life: .8 });
+            this.collectCloud(target, 0, true);
+            harvested = true;
             drone.targetId = undefined;
           }
         }
@@ -899,12 +930,13 @@ export class CloudHarvestGame {
       drone.vx *= Math.exp(-dt * 2.8);
       drone.vy *= Math.exp(-dt * 2.8);
     }
+    return harvested;
   }
 
   private triggerElectric(cloud: Cloud): void {
     if (this.state.levels.insulation > 0) {
       cloud.health -= 18 * this.state.levels.insulation;
-      this.texts.push({ x: cloud.x, y: cloud.y, text: "절연 반사!", color: "#fff07d", life: .8 });
+      this.addFloatingText({ x: cloud.x, y: cloud.y, text: "절연 반사!", color: "#fff07d", life: .8 });
       this.burst(cloud.x, cloud.y, "#fff07d", 8, 120);
       return;
     }
@@ -918,10 +950,11 @@ export class CloudHarvestGame {
   }
 
   private collectCloud(cloud: Cloud, cascadeDepth = 0, deferSync = false): void {
-    if (!this.clouds.some((item) => item.id === cloud.id)) return;
+    const cloudIndex = this.clouds.findIndex((item) => item.id === cloud.id);
+    if (cloudIndex < 0) return;
     if (this.getCargoCount() >= this.getCargoCapacity()) return;
     this.queuedCascadeIds.delete(cloud.id);
-    this.clouds = this.clouds.filter((item) => item.id !== cloud.id);
+    this.clouds.splice(cloudIndex, 1);
     const definition = CLOUDS[cloud.kind];
     this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
     this.comboTimer = 3.4 + FLIGHT_ROUTES[this.run.routeId].comboWindowBonus + this.run.skills.comboCapacitor * .35 + this.run.skills.vacuumMomentum * .22;
@@ -956,23 +989,21 @@ export class CloudHarvestGame {
       this.cascadePunch = 1;
     }
     const cascadeLabel = cascadeDepth > 0 ? `  CASCADE ×${this.cascadeCount}` : "";
-    this.texts.push({ x: cloud.x, y: cloud.y, text: `${cloud.dense ? "DENSE  " : ""}+1 CARGO  ◈${earned}${cascadeLabel}`, color: cloud.dense || definition.value >= 28 || cascadeDepth > 0 ? "#fff27a" : "#ffffff", life: 1.15 });
-    if (this.combo >= 3) this.texts.push({ x: cloud.x, y: cloud.y + 28, text: `${this.combo} COMBO!`, color: "#ffdf70", life: .9 });
-    this.burst(cloud.x, cloud.y, definition.color, 24 + Math.min(34, this.combo * 2), 270);
-    this.burst(cloud.x, cloud.y, "#ffd15e", 8 + Math.min(14, this.combo), 330);
-    this.shockwaves.push({ x: cloud.x, y: cloud.y, radius: 12, life: .42, maxLife: .42, color: definition.color });
-    this.shockwaves.push({ x: cloud.x, y: cloud.y, radius: 3, life: .22, maxLife: .22, color: "#ffffff" });
+    const harvestVerb: Record<CloudKind, string> = { cumulus: "POP", rain: "COMPRESS", electric: "ARC", ice: "SHATTER", solar: "FLARE", aurora: "SPECTRUM" };
+    this.addFloatingText({ x: cloud.x, y: cloud.y, text: `${harvestVerb[cloud.kind]}  ${cloud.dense ? "DENSE  " : ""}+1  ◈${earned}${cascadeLabel}`, color: cloud.dense || definition.value >= 28 || cascadeDepth > 0 ? "#fff27a" : "#ffffff", life: 1.15 });
+    if (this.combo >= 3 && this.combo % 3 === 0) this.addFloatingText({ x: cloud.x, y: cloud.y + 28, text: `${this.combo} COMBO!`, color: "#ffdf70", life: .9 });
+    this.triggerCloudHarvestEffect(cloud, cascadeDepth);
     const harvestShake = Math.min(3.2, .7 + this.combo * .12 + Math.min(1.2, cascadeDepth * .24));
     this.shake = this.run.feverActive ? Math.min(.8, harvestShake) : harvestShake;
     this.impactFlash = Math.min(.92, .22 + this.combo * .025 + cascadeDepth * .025);
     this.impactFreeze = this.run.feverActive ? 0 : Math.min(.025, .008 + this.combo * .0006);
     this.comboPunch = 1;
-    this.playTone(290 + Math.min(590, this.combo * 31) + definition.value * 2 + Math.min(480, cascadeDepth * 58), cascadeDepth > 0 ? .04 : .055);
+    this.playHarvestTone(cloud.kind, cascadeDepth);
 
     if (cascadeDepth > 0 && this.cascadeCount % 5 === 0) {
       const milestone = this.cascadeCount >= 30 ? "MEGA HARVEST" : this.cascadeCount >= 20 ? "SUPER CASCADE" : this.cascadeCount >= 10 ? "CHAIN REACTION" : "CASCADE";
-      this.texts.push({ x: cloud.x, y: cloud.y - 34, text: `${milestone} ×${this.cascadeCount}!`, color: "#fff36f", life: 1.35 });
-      this.shockwaves.push({ x: cloud.x, y: cloud.y, radius: 24, life: .78, maxLife: .78, color: "#fff36f" });
+      this.addFloatingText({ x: cloud.x, y: cloud.y - 34, text: `${milestone} ×${this.cascadeCount}!`, color: "#fff36f", life: 1.35 });
+      this.addShockwave({ x: cloud.x, y: cloud.y, radius: 24, life: .78, maxLife: .78, color: "#fff36f" });
       this.burst(cloud.x, cloud.y, "#fff36f", 16 + Math.min(34, this.cascadeCount), 390);
       const milestoneShake = Math.min(5, 2.4 + this.cascadeCount * .07);
       this.shake = this.run.feverActive ? Math.min(.8, milestoneShake) : milestoneShake;
@@ -1011,6 +1042,97 @@ export class CloudHarvestGame {
     }
   }
 
+  private triggerCloudHarvestEffect(cloud: Cloud, cascadeDepth: number): void {
+    const definition = CLOUDS[cloud.kind];
+    const cascadeScale = cascadeDepth > 0 ? .68 : 1;
+    if (cloud.kind === "cumulus") {
+      this.burst(cloud.x, cloud.y, definition.color, Math.round(18 * cascadeScale), 245, "spark");
+      this.burst(cloud.x, cloud.y, "#bcecff", Math.round(5 * cascadeScale), 180, "spark");
+      this.addShockwave({ x: cloud.x, y: cloud.y, radius: 8, life: .26, maxLife: .26, color: "#ffffff" });
+      return;
+    }
+
+    if (cloud.kind === "rain") {
+      this.burst(cloud.x, cloud.y, definition.color, Math.round(14 * cascadeScale), 205, "spark");
+      this.burst(cloud.x, cloud.y + cloud.radius * .2, "#61c7ff", Math.round(12 * cascadeScale), 150, "drop", 270);
+      this.addShockwave({ x: cloud.x, y: cloud.y, radius: cloud.radius * .7, life: .5, maxLife: .5, color: "#78d5ff" });
+      return;
+    }
+
+    if (cloud.kind === "electric") {
+      this.burst(cloud.x, cloud.y, "#ffe76b", Math.round(24 * cascadeScale), 335, "spark");
+      const targets = this.clouds
+        .filter((candidate) => !this.queuedCascadeIds.has(candidate.id) && Math.hypot(candidate.x - cloud.x, candidate.y - cloud.y) < 245)
+        .sort((a, b) => Math.hypot(a.x - cloud.x, a.y - cloud.y) - Math.hypot(b.x - cloud.x, b.y - cloud.y))
+        .slice(0, 3);
+      for (const target of targets) {
+        this.addHarvestLink({ x: cloud.x, y: cloud.y, targetX: target.x, targetY: target.y, life: .22, maxLife: .22, color: "#fff071" });
+        target.health -= 15 + this.state.rank * 3;
+        target.hurtFlash = 1;
+        if (target.health <= 0) this.queueCascade(target, cascadeDepth + 1);
+      }
+      this.addShockwave({ x: cloud.x, y: cloud.y, radius: 12, life: .38, maxLife: .38, color: "#ffe76b" });
+      return;
+    }
+
+    if (cloud.kind === "ice") {
+      this.burst(cloud.x, cloud.y, "#d9fbff", Math.round(26 * cascadeScale), 360, "shard", 120);
+      this.burst(cloud.x, cloud.y, "#72e7ff", Math.round(8 * cascadeScale), 235, "spark");
+      this.addShockwave({ x: cloud.x, y: cloud.y, radius: 16, life: .46, maxLife: .46, color: "#b9f3ff" });
+      return;
+    }
+
+    if (cloud.kind === "solar") {
+      this.burst(cloud.x, cloud.y, "#fff4a1", Math.round(30 * cascadeScale), 430, "spark");
+      this.addShockwave({ x: cloud.x, y: cloud.y, radius: 20, life: .72, maxLife: .72, color: "#ffd86a" });
+      for (const nearby of this.clouds) {
+        const dx = nearby.x - cloud.x;
+        const dy = nearby.y - cloud.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        if (distance > 280) continue;
+        const force = (1 - distance / 280) * 310;
+        nearby.vx += dx / distance * force;
+        nearby.vy += dy / distance * force;
+      }
+      return;
+    }
+
+    this.burst(cloud.x, cloud.y, "#8fffd2", Math.round(18 * cascadeScale), 300, "ribbon");
+    this.burst(cloud.x, cloud.y, "#c69cff", Math.round(14 * cascadeScale), 260, "ribbon");
+    this.addShockwave({ x: cloud.x, y: cloud.y, radius: 24, life: .8, maxLife: .8, color: "#a98cff" });
+    if (cascadeDepth === 0) {
+      const echoCount = Math.min(2, Math.max(0, this.getMaxClouds() - this.clouds.length));
+      for (let index = 0; index < echoCount; index += 1) this.spawnAuroraEcho(cloud, index, echoCount);
+      if (echoCount > 0) this.addFloatingText({ x: cloud.x, y: cloud.y - 38, text: `PRISM SEEDS  +${echoCount}`, color: "#8fffd2", life: 1.2 });
+    }
+  }
+
+  private spawnAuroraEcho(source: Cloud, index: number, count: number): void {
+    const angle = source.phase + index / Math.max(1, count) * Math.PI * 2;
+    const radius = 16 + Math.random() * 5;
+    const health = CLOUDS.cumulus.health * (1 + this.state.rank * .2) * .75;
+    this.clouds.push({
+      id: ++this.cloudId, kind: "cumulus", x: source.x + Math.cos(angle) * 58, y: source.y + Math.sin(angle) * 44,
+      vx: Math.cos(angle) * 105, vy: Math.sin(angle) * 82, radius, phase: Math.random() * Math.PI * 2,
+      charged: false, age: 0, health, maxHealth: health, hurtFlash: 0, dense: false, front: false,
+    });
+  }
+
+  private addFloatingText(text: FloatingText): void {
+    if (this.texts.length >= MAX_FLOATING_TEXTS) this.texts.splice(0, this.texts.length - MAX_FLOATING_TEXTS + 1);
+    this.texts.push(text);
+  }
+
+  private addShockwave(wave: Shockwave): void {
+    if (this.shockwaves.length >= MAX_SHOCKWAVES) this.shockwaves.splice(0, this.shockwaves.length - MAX_SHOCKWAVES + 1);
+    this.shockwaves.push(wave);
+  }
+
+  private addHarvestLink(link: HarvestLink): void {
+    if (this.harvestLinks.length >= MAX_HARVEST_LINKS) this.harvestLinks.shift();
+    this.harvestLinks.push(link);
+  }
+
   private queueCascade(cloud: Cloud, depth: number): void {
     if (this.queuedCascadeIds.has(cloud.id)) return;
     this.queuedCascadeIds.add(cloud.id);
@@ -1019,15 +1141,15 @@ export class CloudHarvestGame {
     this.cascadeCount = Math.max(1, this.cascadeCount);
     this.cascadeTimer = .72;
     const tempo = Math.max(.022, .068 - Math.min(5, depth) * .005 - this.run.skills.cascadeGrid * .014 - this.run.skills.chainReactor * .01);
-    const tailDelay = this.cascadeQueue.reduce((latest, item) => Math.max(latest, item.delay), 0);
-    this.cascadeQueue.push({ cloudId: cloud.id, delay: tailDelay + tempo + Math.random() * .012, depth });
+    this.cascadeTailDelay += tempo + Math.random() * .012;
+    this.cascadeQueue.push({ cloudId: cloud.id, delay: this.cascadeTailDelay, depth });
   }
 
   private collapseFormation(core: Cloud, cascadeDepth: number): void {
     const members = this.clouds.filter((cloud) => cloud.formationId === core.formationId);
     if (members.length === 0) return;
-    this.texts.push({ x: core.x, y: core.y - 45, text: `FORMATION BREAK  ×${members.length + 1}`, color: "#ffcf67", life: 1.6 });
-    this.shockwaves.push({ x: core.x, y: core.y, radius: 30, life: .9, maxLife: .9, color: "#ffad66" });
+    this.addFloatingText({ x: core.x, y: core.y - 45, text: `FORMATION BREAK  ×${members.length + 1}`, color: "#ffcf67", life: 1.6 });
+    this.addShockwave({ x: core.x, y: core.y, radius: 30, life: .9, maxLife: .9, color: "#ffad66" });
     this.burst(core.x, core.y, "#ffad66", 34, 360);
     for (const member of members) {
       member.health = 0;
@@ -1036,11 +1158,17 @@ export class CloudHarvestGame {
     }
   }
 
-  private updateCascadeQueue(dt: number): void {
-    if (this.cascadeQueue.length === 0) return;
-    for (const item of this.cascadeQueue) item.delay -= dt;
-    const due = this.cascadeQueue.filter((item) => item.delay <= 0);
-    this.cascadeQueue = this.cascadeQueue.filter((item) => item.delay > 0);
+  private updateCascadeQueue(dt: number): boolean {
+    if (this.cascadeQueue.length === 0) return false;
+    this.cascadeTailDelay = Math.max(0, this.cascadeTailDelay - dt);
+    const due: CascadeHarvest[] = [];
+    const pending: CascadeHarvest[] = [];
+    for (const item of this.cascadeQueue) {
+      item.delay -= dt;
+      (item.delay <= 0 ? due : pending).push(item);
+    }
+    this.cascadeQueue = pending;
+    const cloudById = new Map(this.clouds.map((cloud) => [cloud.id, cloud]));
     let harvested = false;
     for (const item of due) {
       this.queuedCascadeIds.delete(item.cloudId);
@@ -1048,19 +1176,17 @@ export class CloudHarvestGame {
         this.clearCascade(false);
         break;
       }
-      const cloud = this.clouds.find((candidate) => candidate.id === item.cloudId);
+      const cloud = cloudById.get(item.cloudId);
       if (!cloud) continue;
       this.collectCloud(cloud, item.depth, true);
       harvested = true;
     }
-    if (harvested) {
-      this.commit();
-      this.bankLevelUps();
-    }
+    return harvested;
   }
 
   private clearCascade(resetDisplay = true): void {
     this.cascadeQueue = [];
+    this.cascadeTailDelay = 0;
     this.queuedCascadeIds.clear();
     if (resetDisplay) {
       this.cascadeCount = 0;
@@ -1106,8 +1232,8 @@ export class CloudHarvestGame {
       nearby.vx += dx / length * 150 * force;
       nearby.vy += dy / length * 150 * force;
     }
-    this.texts.push({ x, y: y - 35, text: `PRESSURE SURGE  +${bonus}`, color: "#fff36f", life: 1.45 });
-    this.shockwaves.push({ x, y, radius: 28, life: .78, maxLife: .78, color: "#fff36f" });
+    this.addFloatingText({ x, y: y - 35, text: `PRESSURE SURGE  +${bonus}`, color: "#fff36f", life: 1.45 });
+    this.addShockwave({ x, y, radius: 28, life: .78, maxLife: .78, color: "#fff36f" });
     this.burst(x, y, "#fff36f", 42, 390);
     this.shake = this.run.feverActive ? .8 : 5;
     this.impactFlash = .9;
@@ -1126,9 +1252,9 @@ export class CloudHarvestGame {
     this.frontActive = 0;
     if (jackpot) this.goldenFrontClaimed = true;
     this.frontBanner = 2.4;
-    this.texts.push({ x, y: y - 42, text: `${jackpot ? "JACKPOT SECURED" : "FRONT CLEARED"}  +${bonus}`, color: jackpot ? "#fff36f" : "#8fffe4", life: 1.8 });
-    this.shockwaves.push({ x, y, radius: 40, life: 1, maxLife: 1, color: "#71ffe0" });
-    this.shockwaves.push({ x, y, radius: 16, life: .72, maxLife: .72, color: "#fff36f" });
+    this.addFloatingText({ x, y: y - 42, text: `${jackpot ? "JACKPOT SECURED" : "FRONT CLEARED"}  +${bonus}`, color: jackpot ? "#fff36f" : "#8fffe4", life: 1.8 });
+    this.addShockwave({ x, y, radius: 40, life: 1, maxLife: 1, color: "#71ffe0" });
+    this.addShockwave({ x, y, radius: 16, life: .72, maxLife: .72, color: "#fff36f" });
     this.burst(x, y, "#71ffe0", 65, 430);
     this.burst(x, y, "#fff36f", 35, 360);
     this.shake = this.run.feverActive ? .8 : 22;
@@ -1188,6 +1314,16 @@ export class CloudHarvestGame {
     const altitudeResistance = 1 + this.state.rank * .2;
     const health = definition.health * scale * (dense ? 1.65 : 1) * altitudeResistance;
     this.clouds.push({ id: ++this.cloudId, kind, x, y, vx: (Math.random() - .5) * 8, vy: (Math.random() - .5) * 6, radius, phase: Math.random() * Math.PI * 2, charged: false, age: initial ? .6 + Math.random() * 4.4 : 0, health, maxHealth: health, hurtFlash: 0, dense, front: false });
+    this.announceCloudDiscovery(kind);
+  }
+
+  private announceCloudDiscovery(kind: CloudKind): void {
+    if (kind === "cumulus" || this.discoveredCloudKinds.has(kind)) return;
+    this.discoveredCloudKinds.add(kind);
+    this.discoveryBanner = { kind, life: 2.8, maxLife: 2.8 };
+    const definition = CLOUDS[kind];
+    this.onToast(`${definition.icon} 신규 기상체 발견 — ${definition.name}!`, "success");
+    this.playTone(460 + definition.unlockRank * 95, .16);
   }
 
   private spawnFormation(availableSlots: number): boolean {
@@ -1237,7 +1373,7 @@ export class CloudHarvestGame {
     }
     this.formationCooldown = this.run.feverActive ? 2.6 : Math.max(4.2, 7 - this.run.flight * .7);
     const label = formationKind === "ring" ? "CLOUD RING" : formationKind === "stream" ? "JETSTREAM PACK" : "PRESSURE CLUSTER";
-    this.texts.push({ x: centerX, y: centerY - 90, text: `${label}  ·  CORE TARGET`, color: "#8fffe9", life: 1.5 });
+    this.addFloatingText({ x: centerX, y: centerY - 90, text: `${label}  ·  CORE TARGET`, color: "#8fffe9", life: 1.5 });
     return true;
   }
 
@@ -1274,6 +1410,7 @@ export class CloudHarvestGame {
   }
 
   private suctionParticle(cloud: Cloud): void {
+    if (this.particles.length >= MAX_PARTICLES) return;
     const progress = Math.random();
     const x = cloud.x + (this.player.x - cloud.x) * progress + (Math.random() - .5) * cloud.radius;
     const y = cloud.y + (this.player.y - cloud.y) * progress + (Math.random() - .5) * cloud.radius;
@@ -1309,6 +1446,7 @@ export class CloudHarvestGame {
     this.drawCascadeLinks(ctx, time);
     for (const cloud of this.clouds) this.drawCloud(ctx, cloud, time);
     this.drawStormDroneBeams(ctx, time);
+    this.drawHarvestLinks(ctx, time);
     for (const wave of this.shockwaves) {
       const alpha = Math.max(0, wave.life / wave.maxLife);
       ctx.globalAlpha = alpha;
@@ -1323,6 +1461,21 @@ export class CloudHarvestGame {
     for (const particle of this.particles) {
       ctx.globalAlpha = Math.min(1, particle.life / particle.maxLife);
       const speed = Math.hypot(particle.vx, particle.vy);
+      if (particle.shape === "drop") {
+        ctx.save(); ctx.translate(particle.x, particle.y); ctx.rotate(Math.atan2(particle.vy, particle.vx) - Math.PI / 2);
+        ctx.fillStyle = particle.color; ctx.beginPath(); ctx.ellipse(0, 0, particle.size * .58, particle.size * 1.8, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        continue;
+      }
+      if (particle.shape === "shard") {
+        ctx.save(); ctx.translate(particle.x, particle.y); ctx.rotate(Math.atan2(particle.vy, particle.vx));
+        ctx.fillStyle = particle.color; ctx.beginPath(); ctx.moveTo(particle.size * 1.9, 0); ctx.lineTo(-particle.size, particle.size * .7); ctx.lineTo(-particle.size * .45, -particle.size * .8); ctx.closePath(); ctx.fill(); ctx.restore();
+        continue;
+      }
+      if (particle.shape === "ribbon") {
+        ctx.strokeStyle = particle.color; ctx.lineWidth = Math.max(2, particle.size * .8); ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(particle.x, particle.y); ctx.quadraticCurveTo(particle.x - particle.vx * .03, particle.y - particle.vy * .01, particle.x - particle.vx * .065, particle.y - particle.vy * .055); ctx.stroke();
+        continue;
+      }
       if (speed > 90) {
         ctx.strokeStyle = particle.color;
         ctx.lineWidth = Math.max(1.5, particle.size * .65);
@@ -1576,6 +1729,7 @@ export class CloudHarvestGame {
 
   private drawCloud(ctx: CanvasRenderingContext2D, cloud: Cloud, time: number): void {
     const definition = CLOUDS[cloud.kind];
+    const reducedEffects = this.clouds.length > 58 || this.particles.length > 560;
     const healthRatio = Math.max(0, cloud.health / cloud.maxHealth);
     const damageRatio = Math.max(.42, healthRatio);
     const pulse = cloud.hurtFlash > 0 ? 1 + Math.sin(time * 45) * .055 : 1;
@@ -1597,11 +1751,15 @@ export class CloudHarvestGame {
     ctx.translate(cloud.x, cloud.y + Math.sin(time * 1.5 + cloud.phase) * 2);
     if (beingSucked) ctx.rotate(angle);
     ctx.scale(pulse * damageRatio * stretch * arrivalScale, pulse * damageRatio * squeeze * arrivalScale);
-    ctx.shadowColor = cloud.hurtFlash > 0 ? "rgba(255,255,255,.85)" : "rgba(31,82,118,.2)"; ctx.shadowBlur = cloud.hurtFlash > 0 ? 25 : 14; ctx.shadowOffsetY = 7;
+    ctx.shadowColor = reducedEffects ? "transparent" : cloud.hurtFlash > 0 ? "rgba(255,255,255,.85)" : "rgba(31,82,118,.2)"; ctx.shadowBlur = reducedEffects ? 0 : cloud.hurtFlash > 0 ? 25 : 14; ctx.shadowOffsetY = reducedEffects ? 0 : 7;
     ctx.fillStyle = definition.shadow; this.cloudPath(ctx, cloud.radius, 4); ctx.fill();
     ctx.shadowColor = "transparent"; ctx.translate(0, -4); ctx.fillStyle = definition.color; this.cloudPath(ctx, cloud.radius, 0); ctx.fill();
-    const shine = ctx.createRadialGradient(-cloud.radius * .3, -cloud.radius * .35, 1, 0, 0, cloud.radius);
-    shine.addColorStop(0, "rgba(255,255,255,.8)"); shine.addColorStop(1, "rgba(255,255,255,0)"); ctx.fillStyle = shine; this.cloudPath(ctx, cloud.radius, 0); ctx.fill();
+    if (!reducedEffects) {
+      const shine = ctx.createRadialGradient(-cloud.radius * .3, -cloud.radius * .35, 1, 0, 0, cloud.radius);
+      shine.addColorStop(0, "rgba(255,255,255,.8)"); shine.addColorStop(1, "rgba(255,255,255,0)"); ctx.fillStyle = shine; this.cloudPath(ctx, cloud.radius, 0); ctx.fill();
+    } else {
+      ctx.fillStyle = "rgba(255,255,255,.18)"; ctx.beginPath(); ctx.ellipse(-cloud.radius * .24, -cloud.radius * .22, cloud.radius * .22, cloud.radius * .13, -.35, 0, Math.PI * 2); ctx.fill();
+    }
     if (cloud.dense) {
       ctx.strokeStyle = "#ffe76b"; ctx.lineWidth = 3;
       ctx.setLineDash([5, 5]); ctx.lineDashOffset = -time * 24;
@@ -1616,7 +1774,7 @@ export class CloudHarvestGame {
       ctx.fillStyle = "#fff36f"; ctx.beginPath(); ctx.arc(0, 0, cloud.radius * .09, 0, Math.PI * 2); ctx.fill();
     }
     if (cloud.formationCore) {
-      ctx.shadowColor = "#ffad66"; ctx.shadowBlur = 22;
+      ctx.shadowColor = reducedEffects ? "transparent" : "#ffad66"; ctx.shadowBlur = reducedEffects ? 0 : 22;
       ctx.strokeStyle = "#ffad66"; ctx.lineWidth = 4;
       ctx.setLineDash([9, 6]); ctx.lineDashOffset = -time * 42;
       ctx.beginPath(); ctx.arc(0, 0, cloud.radius * 1.18, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
@@ -1641,7 +1799,7 @@ export class CloudHarvestGame {
     if (cloud.kind === "rain") { ctx.fillStyle = "#3d8cca"; for (let i = -1; i <= 1; i += 1) { ctx.beginPath(); ctx.ellipse(i * 13, cloud.radius * .65, 3, 7, .4, 0, Math.PI * 2); ctx.fill(); } }
     if (cloud.kind === "electric") { ctx.strokeStyle = "#ffe45e"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(2, cloud.radius * .2); ctx.lineTo(-8, cloud.radius * .56); ctx.lineTo(3, cloud.radius * .5); ctx.lineTo(-2, cloud.radius * .9); ctx.lineTo(14, cloud.radius * .4); ctx.stroke(); }
     if (cloud.kind === "ice") {
-      ctx.strokeStyle = "#eaffff"; ctx.lineWidth = 3; ctx.shadowColor = "#72e7ff"; ctx.shadowBlur = 12;
+      ctx.strokeStyle = "#eaffff"; ctx.lineWidth = 3; ctx.shadowColor = reducedEffects ? "transparent" : "#72e7ff"; ctx.shadowBlur = reducedEffects ? 0 : 12;
       for (let arm = 0; arm < 3; arm += 1) {
         const angle = arm * Math.PI / 3;
         ctx.beginPath(); ctx.moveTo(-Math.cos(angle) * 17, -Math.sin(angle) * 17); ctx.lineTo(Math.cos(angle) * 17, Math.sin(angle) * 17); ctx.stroke();
@@ -1649,7 +1807,7 @@ export class CloudHarvestGame {
       ctx.shadowColor = "transparent";
     }
     if (cloud.kind === "solar") {
-      ctx.strokeStyle = "#fff5a0"; ctx.lineWidth = 3; ctx.shadowColor = "#ffb84d"; ctx.shadowBlur = 16;
+      ctx.strokeStyle = "#fff5a0"; ctx.lineWidth = 3; ctx.shadowColor = reducedEffects ? "transparent" : "#ffb84d"; ctx.shadowBlur = reducedEffects ? 0 : 16;
       ctx.beginPath(); ctx.arc(0, 0, cloud.radius * .42, 0, Math.PI * 2); ctx.stroke();
       for (let ray = 0; ray < 8; ray += 1) {
         const angle = ray * Math.PI / 4 + time * .4;
@@ -1658,7 +1816,7 @@ export class CloudHarvestGame {
       ctx.shadowColor = "transparent";
     }
     if (cloud.kind === "aurora") {
-      ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.shadowColor = "#b48cff"; ctx.shadowBlur = 15;
+      ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.shadowColor = reducedEffects ? "transparent" : "#b48cff"; ctx.shadowBlur = reducedEffects ? 0 : 15;
       ["#8fffd2", "#c69cff", "#7bdcff"].forEach((color, ribbon) => {
         const offset = (ribbon - 1) * 9;
         ctx.strokeStyle = color; ctx.beginPath(); ctx.moveTo(-cloud.radius * .55, offset);
@@ -1714,8 +1872,9 @@ export class CloudHarvestGame {
 
   private drawCascadeLinks(ctx: CanvasRenderingContext2D, time: number): void {
     if (!this.run.skills.cascadeGrid || this.cascadeQueue.length < 2) return;
+    const cloudById = new Map(this.clouds.map((cloud) => [cloud.id, cloud]));
     const queued = this.cascadeQueue
-      .map((item) => this.clouds.find((cloud) => cloud.id === item.cloudId))
+      .map((item) => cloudById.get(item.cloudId))
       .filter((cloud): cloud is Cloud => Boolean(cloud));
     if (queued.length < 2) return;
     ctx.save();
@@ -1728,6 +1887,34 @@ export class CloudHarvestGame {
     ctx.beginPath(); ctx.moveTo(queued[0].x, queued[0].y);
     for (let index = 1; index < queued.length; index += 1) ctx.lineTo(queued[index].x, queued[index].y);
     ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawHarvestLinks(ctx: CanvasRenderingContext2D, time: number): void {
+    if (this.harvestLinks.length === 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const link of this.harvestLinks) {
+      const alpha = Math.max(0, link.life / link.maxLife);
+      const dx = link.targetX - link.x;
+      const dy = link.targetY - link.y;
+      const segments = 6;
+      ctx.strokeStyle = link.color;
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = 2.5 + alpha * 2;
+      ctx.shadowColor = link.color;
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.moveTo(link.x, link.y);
+      for (let index = 1; index < segments; index += 1) {
+        const progress = index / segments;
+        const jitter = Math.sin(time * 90 + index * 4.7 + link.x) * 9 * alpha;
+        const length = Math.hypot(dx, dy) || 1;
+        ctx.lineTo(link.x + dx * progress - dy / length * jitter, link.y + dy * progress + dx / length * jitter);
+      }
+      ctx.lineTo(link.targetX, link.targetY);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -1898,6 +2085,20 @@ export class CloudHarvestGame {
       flash.addColorStop(1, "rgba(255,255,255,0)");
       ctx.fillStyle = flash; ctx.fillRect(0, 0, this.width, this.height);
     }
+    if (this.discoveryBanner) {
+      const definition = CLOUDS[this.discoveryBanner.kind];
+      const progress = this.discoveryBanner.life / this.discoveryBanner.maxLife;
+      const alpha = Math.min(1, (1 - progress) * 6, progress * 2.8);
+      const scale = .94 + (1 - progress) * .06;
+      ctx.save(); ctx.translate(this.width * .5, this.height * .58); ctx.scale(scale, scale); ctx.globalAlpha = alpha;
+      ctx.fillStyle = "rgba(7,31,44,.9)"; ctx.beginPath(); ctx.roundRect(-235, -52, 470, 104, 22); ctx.fill();
+      ctx.strokeStyle = definition.color; ctx.lineWidth = 4; ctx.shadowColor = definition.color; ctx.shadowBlur = 20; ctx.stroke();
+      ctx.shadowBlur = 0; ctx.textAlign = "center"; ctx.fillStyle = definition.color; ctx.font = "900 13px Outfit, sans-serif";
+      ctx.fillText("NEW WEATHER SIGNATURE", 0, -23);
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 31px Nunito, sans-serif"; ctx.fillText(`${definition.icon} ${definition.name}`, 0, 16);
+      ctx.fillStyle = "#cce7ed"; ctx.font = "800 12px Outfit, sans-serif"; ctx.fillText("새로운 수집 반응이 활성화되었습니다", 0, 38);
+      ctx.restore();
+    }
     if (this.combo >= 3 && this.comboTimer > 0) {
       const fade = Math.min(1, this.comboTimer * 1.6);
       const punch = 1 + this.comboPunch * .42;
@@ -1985,11 +2186,13 @@ export class CloudHarvestGame {
     }
   }
 
-  private burst(x: number, y: number, color: string, count: number, maxSpeed: number): void {
-    for (let i = 0; i < count; i += 1) {
+  private burst(x: number, y: number, color: string, count: number, maxSpeed: number, shape: Particle["shape"] = "spark", gravity = 0): void {
+    const available = Math.max(0, MAX_PARTICLES - this.particles.length);
+    const renderCount = Math.min(Math.round(count), available);
+    for (let i = 0; i < renderCount; i += 1) {
       const angle = Math.random() * Math.PI * 2; const speed = 35 + Math.random() * maxSpeed;
       const life = .4 + Math.random() * .55;
-      this.particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life, maxLife: life, size: 2 + Math.random() * 5, color });
+      this.particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life, maxLife: life, size: 2 + Math.random() * 5, color, shape, gravity });
     }
   }
 
@@ -2082,6 +2285,14 @@ export class CloudHarvestGame {
   }
 
   private ensureAudio(): void { if (this.state.sound && !this.audioContext) this.audioContext = new AudioContext(); }
+  private playHarvestTone(kind: CloudKind, cascadeDepth: number): void {
+    const now = performance.now();
+    const minimumGap = cascadeDepth > 0 ? 58 : 38;
+    if (now - this.lastHarvestToneAt < minimumGap) return;
+    this.lastHarvestToneAt = now;
+    const baseFrequency: Record<CloudKind, number> = { cumulus: 390, rain: 270, electric: 610, ice: 740, solar: 880, aurora: 1040 };
+    this.playTone(baseFrequency[kind] + Math.min(360, this.combo * 18 + cascadeDepth * 34), cascadeDepth > 0 ? .035 : .055);
+  }
   private playTone(frequency: number, duration: number): void {
     if (!this.state.sound) return;
     this.ensureAudio(); if (!this.audioContext) return;
@@ -2089,6 +2300,7 @@ export class CloudHarvestGame {
     oscillator.type = "sine"; oscillator.frequency.value = frequency;
     gain.gain.setValueAtTime(.045, this.audioContext.currentTime); gain.gain.exponentialRampToValueAtTime(.001, this.audioContext.currentTime + duration);
     oscillator.connect(gain).connect(this.audioContext.destination); oscillator.start(); oscillator.stop(this.audioContext.currentTime + duration);
+    oscillator.addEventListener("ended", () => { oscillator.disconnect(); gain.disconnect(); }, { once: true });
   }
   private playChord(): void { [392,523,659,784].forEach((frequency,index) => window.setTimeout(() => this.playTone(frequency,.18), index * 70)); }
 }

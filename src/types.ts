@@ -47,6 +47,8 @@ export interface Particle {
   maxLife: number;
   size: number;
   color: string;
+  shape?: "spark" | "drop" | "shard" | "ribbon";
+  gravity?: number;
 }
 
 export interface FloatingText {
