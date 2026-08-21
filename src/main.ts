@@ -792,34 +792,73 @@ baseGarageButton.addEventListener("click", () => {
   factoryOverlay.classList.remove("show");
   openGarage();
 });
-launchButton.addEventListener("click", () => {
+
+function renderRouteList(): void {
   const company = game.getState();
+  const currentMission = GROWTH_MISSIONS[company.growthMission.step]?.id;
   routeList.innerHTML = RANKS.map((map, mapRank) => {
     const locked = mapRank > company.rank;
+    const nextUnlock = mapRank === company.rank + 1;
+    const moneyReady = company.money >= map.promotionCost;
+    const harvestReady = company.rankHarvested >= map.requiredHarvest;
+    const returnReady = company.rankFlights >= 1;
+    const canUnlock = nextUnlock && game.canPromote();
+    const missionTarget = currentMission === "promote" && nextUnlock;
     const clouds = (Object.keys(map.weights) as (keyof typeof map.weights)[])
       .filter((kind) => map.weights[kind] > 0)
       .map((kind) => `${CLOUDS[kind].icon}${Math.round(map.weights[kind] * 100)}%`)
       .join(" · ");
     const payout = map.valueMultiplier * FLIGHT_ROUTES[map.routeId].valueMultiplier;
-    return `
-    <button class="route-card map-${mapRank} ${locked ? "locked" : ""} ${company.selectedMap === mapRank ? "selected" : ""}" data-map="${mapRank}" style="--route-color:${map.color}" ${locked ? "disabled" : ""}>
+    const cardContents = `
       <span class="route-visual">${locked ? "🔒" : map.icon}</span>
       <span class="route-code">${map.code}</span>
-      <small>${locked ? "LOCKED ALTITUDE" : mapRank === company.rank ? "FRONTIER MAP" : "UNLOCKED MAP"}</small>
+      <small>${locked ? nextUnlock ? "NEXT ALTITUDE" : "LOCKED ALTITUDE" : mapRank === company.rank ? "FRONTIER MAP" : "UNLOCKED MAP"}</small>
       <strong>${map.name}</strong>
       <p>${map.description}</p>
       <b>연료 소모 ×${map.fuelDrain.toFixed(2)} · 수익 ×${payout.toFixed(2)}</b>
       <span class="route-clouds">${clouds}</span>
-      <span class="route-identity">${map.identity}</span>
-      <em>${locked ? `이전 고도 승급 필요` : company.selectedMap === mapRank ? "현재 선택 · 다시 출격" : "이 고도로 출격"}</em>
-    </button>
-  `;
+      <span class="route-identity">${map.identity}</span>`;
+
+    if (locked) {
+      return `
+        <article class="route-card map-${mapRank} locked ${nextUnlock ? "next-unlock" : ""} ${missionTarget ? "mission-route-target" : ""}" style="--route-color:${map.color}">
+          ${cardContents}
+          ${nextUnlock ? `
+            <div class="route-unlock-requirements" aria-label="${map.name} 해금 조건">
+              <span class="${moneyReady ? "done" : ""}">◈ ${Math.floor(company.money).toLocaleString()} / ${map.promotionCost.toLocaleString()}</span>
+              <span class="${harvestReady ? "done" : ""}">☁ 납품 ${company.rankHarvested.toLocaleString()} / ${map.requiredHarvest.toLocaleString()}</span>
+              <span class="${returnReady ? "done" : ""}">↩ 안전 귀환 ${company.rankFlights} / 1</span>
+            </div>
+            <button class="route-unlock-button" data-promote-map="${mapRank}" ${canUnlock ? "" : "disabled"}>
+              ${canUnlock ? `${map.altitude} 고도 해금` : "승급 조건 미달"}
+            </button>` : `<em>직전 고도를 먼저 해금해야 합니다</em>`}
+        </article>`;
+    }
+
+    return `
+      <button class="route-card map-${mapRank} ${company.selectedMap === mapRank ? "selected" : ""}" data-map="${mapRank}" style="--route-color:${map.color}">
+        ${cardContents}
+        <em>${company.selectedMap === mapRank ? "현재 선택 · 다시 출격" : "이 고도로 출격"}</em>
+      </button>`;
   }).join("");
+}
+
+launchButton.addEventListener("click", () => {
+  renderRouteList();
   routeOverlay.classList.add("show");
 });
 routeBackButton.addEventListener("click", () => routeOverlay.classList.remove("show"));
 routeList.addEventListener("click", (event) => {
-  const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-map]");
+  const target = event.target as HTMLElement;
+  const unlockButton = target.closest<HTMLButtonElement>("[data-promote-map]");
+  if (unlockButton) {
+    const targetRank = Number(unlockButton.dataset.promoteMap);
+    if (targetRank !== game.getState().rank + 1 || !game.promote()) return;
+    renderRouteList();
+    return;
+  }
+
+  const button = target.closest<HTMLButtonElement>("[data-map]");
   if (!button || !game.launchFlight(Number(button.dataset.map))) return;
   routeOverlay.classList.remove("show");
   processingOverlay.classList.remove("show");

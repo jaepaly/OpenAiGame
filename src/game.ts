@@ -578,25 +578,30 @@ export class CloudHarvestGame {
       && this.state.money >= next.promotionCost && this.state.rankHarvested >= next.requiredHarvest);
   }
 
-  promote(): void {
+  promote(): boolean {
     const next = RANKS[this.state.rank + 1];
-    if (!next) return;
+    if (!next) return false;
     if (!this.atFactory) {
       this.onToast("고도 승급은 기지 관제실에서만 승인할 수 있습니다.", "warning");
-      return;
+      return false;
     }
     if (!this.canPromote()) {
       this.onToast("승급 조건을 조금 더 채워주세요.", "warning");
-      return;
+      return false;
     }
     this.state.money -= next.promotionCost;
     this.state.rank += 1;
+    this.state.selectedMap = this.state.rank;
     this.state.rankHarvested = 0;
     this.state.rankFlights = 0;
+    this.run.mapRank = this.state.rank;
+    this.run.routeId = RANKS[this.run.mapRank].routeId;
     const unlocked = ["", "비구름", "전기구름", "빙정구름", "태양구름", "오로라구름"][this.state.rank];
-    this.onToast(`${next.name} 항로 해금! GO에서 선택하면 ${unlocked}이 출현합니다.`, "success");
+    this.onToast(`${next.name} 항로 해금 · 새 항로가 자동 선택되었습니다! ${unlocked} 출현`, "success");
     this.playChord();
     this.commit();
+    this.onRunChange(this.getRunState());
+    return true;
   }
 
   toggleSound(): void { this.state.sound = !this.state.sound; this.commit(); }
