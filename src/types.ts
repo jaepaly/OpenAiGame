@@ -4,6 +4,7 @@ export type ContractId = "water" | "climate" | "energy" | "cryogenic" | "stellar
 export type FlightRouteId = "tailwind" | "pressureMine" | "frontline";
 export type ResearchId = "logistics" | "refining" | "forecasting";
 export type InfiniteResearchId = "speed" | "power" | "fuel" | "drone" | "yield";
+export type StorySceneId = "prologue" | "firstReturn" | "rainFrontier";
 
 export interface CloudDefinition {
   kind: CloudKind;
@@ -134,7 +135,12 @@ export interface GameState {
   processing: ProcessingState;
   career: CareerProgress;
   infiniteResearch: Record<InfiniteResearchId, number>;
+  story: StoryProgress;
   growthMission: GrowthMissionProgress;
+}
+
+export interface StoryProgress {
+  seen: StorySceneId[];
 }
 
 export type CoreRunSkillId =

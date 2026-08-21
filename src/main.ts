@@ -1,7 +1,7 @@
 import "./styles.css";
 import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
 import { CloudHarvestGame } from "./game";
-import type { ContractId, GameState, GrowthMissionId, InfiniteResearchId, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
+import type { ContractId, GameState, GrowthMissionId, InfiniteResearchId, ResearchId, RunSkillId, RunState, StorySceneId, UpgradeId } from "./types";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app 요소를 찾을 수 없습니다.");
@@ -158,6 +158,31 @@ app.innerHTML = `
         </div>
       </section>
       <aside class="skill-hover-card" id="skillHoverCard" aria-hidden="true"></aside>
+
+      <section class="story-overlay" id="storyOverlay" aria-label="구름 수확 회사 이야기" aria-live="polite" aria-hidden="true">
+        <div class="story-vignette"></div>
+        <div class="story-frame" id="storyFrame">
+          <header class="story-header">
+            <div><span id="storyChapter">CHAPTER 0</span><strong id="storySceneTitle">구름 없는 아침</strong></div>
+            <button id="storySkipButton">장면 건너뛰기</button>
+          </header>
+          <div class="story-stage">
+            <aside class="story-portrait" id="storyPortrait">
+              <div class="story-portrait-art"><i></i><i></i><i></i><span id="storyPortraitMark">☁</span></div>
+              <strong id="storyPortraitName">구름 수확 회사</strong>
+              <small id="storyPortraitRole">LAST SMALL WEATHER COMPANY</small>
+            </aside>
+            <article class="story-dialogue">
+              <span class="story-speaker" id="storySpeaker">NARRATION</span>
+              <p id="storyText">맑은 하늘이 언제나 좋은 것은 아니었다.</p>
+              <div class="story-footer">
+                <div class="story-progress" id="storyProgress"></div>
+                <button id="storyNextButton"><span>다음</span><small>ENTER</small></button>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
     </section>
   </main>
 `;
@@ -248,6 +273,19 @@ const baseHubStatus = required<HTMLElement>("#baseHubStatus");
 const routeOverlay = required<HTMLElement>("#routeOverlay");
 const routeList = required<HTMLElement>("#routeList");
 const routeBackButton = required<HTMLButtonElement>("#routeBackButton");
+const storyOverlay = required<HTMLElement>("#storyOverlay");
+const storyFrame = required<HTMLElement>("#storyFrame");
+const storyChapter = required<HTMLElement>("#storyChapter");
+const storySceneTitle = required<HTMLElement>("#storySceneTitle");
+const storySkipButton = required<HTMLButtonElement>("#storySkipButton");
+const storyPortrait = required<HTMLElement>("#storyPortrait");
+const storyPortraitMark = required<HTMLElement>("#storyPortraitMark");
+const storyPortraitName = required<HTMLElement>("#storyPortraitName");
+const storyPortraitRole = required<HTMLElement>("#storyPortraitRole");
+const storySpeaker = required<HTMLElement>("#storySpeaker");
+const storyText = required<HTMLElement>("#storyText");
+const storyProgress = required<HTMLElement>("#storyProgress");
+const storyNextButton = required<HTMLButtonElement>("#storyNextButton");
 
 let toastTimer = 0;
 const showToast = (message: string, tone: "normal" | "success" | "warning" = "normal") => {
@@ -269,9 +307,144 @@ let renderedGrowthMissionStep: number | null = null;
 let activeSkillTreeTab: "blueprint" | "infinite" = "blueprint";
 let infiniteResearchUnlockedPreviously = false;
 
+type StoryTone = "narrator" | "moka" | "sona" | "rival";
+type StoryBeat = { speaker: string; name: string; role: string; mark: string; tone: StoryTone; text: string };
+type StoryScene = { chapter: string; title: string; beats: StoryBeat[] };
+
+const STORY_SCENES: Record<StorySceneId, StoryScene> = {
+  prologue: {
+    chapter: "CHAPTER 0 // THE LAST SMALL COMPANY",
+    title: "구름 없는 아침",
+    beats: [
+      { speaker: "NARRATION", name: "서부 7구역", role: "43 DAYS WITHOUT RAIN", mark: "☁", tone: "narrator", text: "맑은 하늘은 한때 축복이었다. 비가 멎은 지 마흔셋째 날, 사람들은 구름 한 점에도 가격표를 붙였다." },
+      { speaker: "모카", name: "정비사 모카", role: "SHIP MECHANIC // CO-FOUNDER", mark: "MK", tone: "moka", text: "신임 사장님 맞죠? 물려받은 건 빚 독촉장 열두 장, 낡은 격납고 하나… 그리고 아직 뜨는 비행선 한 대예요." },
+      { speaker: "모카", name: "정비사 모카", role: "SHIP MECHANIC // CO-FOUNDER", mark: "MK", tone: "moka", text: "구름만 가져오면 회사는 돌아가요. 좌클릭으로 흡입하고, 연료가 바닥나기 전에 SPACE로 귀환하세요. 화물보다 목숨이 먼저니까." },
+      { speaker: "소나 // 무전", name: "관측 연구원 소나", role: "WEATHER ANALYST // REMOTE", mark: "SN", tone: "sona", text: "관측팀 소나입니다. 첫 목표는 뭉게구름 여섯 개. 원재료를 확보하면 첫 가공 계약을 열 수 있어요." },
+      { speaker: "NARRATION", name: "구름 수확 회사", role: "DAY 1 // FIRST SORTIE", mark: "01", tone: "narrator", text: "낡은 프로펠러가 다시 돌기 시작했다. 골목 기상소의 마지막 수확선이, 회사의 첫 구름을 향해 떠올랐다." },
+    ],
+  },
+  firstReturn: {
+    chapter: "CHAPTER 1 // FIRST CARGO",
+    title: "작은 회사의 첫 귀환",
+    beats: [
+      { speaker: "모카", name: "정비사 모카", role: "DOCK CONTROL", mark: "MK", tone: "moka", text: "착륙 확인! 솔직히 첫 비행부터 견인차를 부를 줄 알았는데… 사장님, 생각보다 제법인데요?" },
+      { speaker: "소나", name: "관측 연구원 소나", role: "PROCESSING LAB", mark: "SN", tone: "sona", text: "가져온 구름은 아직 돈이 아닙니다. 가공 계약에 투입하면 비행 중에도 정제되고, 완제품이 되어야 코인으로 출하할 수 있어요." },
+      { speaker: "모카", name: "정비사 모카", role: "FUEL & SAFETY", mark: "MK", tone: "moka", text: "다음에는 조금 더 욕심내도 좋아요. 하지만 연료가 0이 되면 화물은 전량 폐기. 빨간 경고가 뜨면 SPACE, 잊지 마세요." },
+      { speaker: "NARRATION", name: "구름 수확 회사", role: "THE FIRST CONTRACT", mark: "◈", tone: "narrator", text: "작은 회사의 첫 화물이 가공동으로 향했다. 멈춰 있던 기계와 사람들의 하루가 다시 움직이기 시작했다." },
+    ],
+  },
+  rainFrontier: {
+    chapter: "CHAPTER 2 // RAIN BELT",
+    title: "비구름 항로와 낯선 호출",
+    beats: [
+      { speaker: "소나", name: "관측 연구원 소나", role: "ALTITUDE DATA LINK", mark: "SN", tone: "sona", text: "지역 하늘지사 허가가 승인됐습니다. 해발 2,000미터 비구름 띠와 새 가공 계약을 사용할 수 있어요." },
+      { speaker: "소나", name: "관측 연구원 소나", role: "ANOMALY REPORT", mark: "31", tone: "sona", text: "그런데 이상합니다. 실제 구름량이 예보보다 31% 적어요. 누군가 항로 앞쪽에서 대량으로 쓸어가고 있습니다." },
+      { speaker: "모카", name: "정비사 모카", role: "UNLICENSED CHANNEL", mark: "MK", tone: "moka", text: "이 주파수 표식… 쾌청산업이에요. 작은 회사가 올라오는 걸 제일 싫어하는 거대 기상기업이죠." },
+      { speaker: "쾌청산업 관제", name: "쾌청산업", role: "PRIORITY HARVEST NETWORK", mark: "QS", tone: "rival", text: "미등록 소형 수확선에 통보한다. 해당 비구름 띠는 쾌청산업 우선 채집 구역이다. 즉시 저고도로 복귀하라." },
+      { speaker: "소나", name: "관측 연구원 소나", role: "NEW OBJECTIVE // RAIN CLOUD ×5", mark: "SN", tone: "sona", text: "법적으로는 공동 항로예요. 물러날 이유 없습니다. 비구름 다섯 개를 확보해 구름 소실 데이터부터 추적하죠." },
+    ],
+  },
+};
+
+const storyQueue: StorySceneId[] = [];
+let activeStoryScene: StorySceneId | null = null;
+let activeStoryBeat = 0;
+let storySystemReady = false;
+let storyTransitioning = false;
+
 const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast);
 if (import.meta.env.DEV) {
   (window as typeof window & { __cloudHarvestGame?: CloudHarvestGame }).__cloudHarvestGame = game;
+}
+storySystemReady = true;
+window.setTimeout(() => syncStoryTriggers(game.getState()), 360);
+
+function queueStoryScene(id: StorySceneId): void {
+  if (!storySystemReady || game.getState().story.seen.includes(id) || activeStoryScene === id || storyQueue.includes(id)) return;
+  storyQueue.push(id);
+  openNextStoryScene();
+}
+
+function syncStoryTriggers(state: GameState): void {
+  if (!storySystemReady || storyTransitioning) return;
+  if (!state.story.seen.includes("prologue")) {
+    queueStoryScene("prologue");
+    return;
+  }
+  if (!game.isAtFactory()) return;
+  if (state.growthMission.safeReturns >= 1 && !state.story.seen.includes("firstReturn")) {
+    queueStoryScene("firstReturn");
+    return;
+  }
+  if (state.rank >= 1 && !state.story.seen.includes("rainFrontier")) queueStoryScene("rainFrontier");
+}
+
+function openNextStoryScene(): void {
+  if (activeStoryScene || storyTransitioning) return;
+  const next = storyQueue.shift();
+  if (!next) return;
+  activeStoryScene = next;
+  activeStoryBeat = 0;
+  game.setStoryPaused(true);
+  document.body.classList.add("story-open");
+  storyOverlay.classList.add("show");
+  storyOverlay.setAttribute("aria-hidden", "false");
+  renderStoryBeat();
+  storyNextButton.focus({ preventScroll: true });
+}
+
+function renderStoryBeat(): void {
+  if (!activeStoryScene) return;
+  const scene = STORY_SCENES[activeStoryScene];
+  const beat = scene.beats[activeStoryBeat];
+  storyChapter.textContent = scene.chapter;
+  storySceneTitle.textContent = scene.title;
+  storySpeaker.textContent = beat.speaker;
+  storyPortraitName.textContent = beat.name;
+  storyPortraitRole.textContent = beat.role;
+  storyPortraitMark.textContent = beat.mark;
+  storyPortrait.className = `story-portrait ${beat.tone}`;
+  storyOverlay.dataset.tone = beat.tone;
+  storyText.textContent = beat.text;
+  storyText.classList.remove("enter");
+  storyPortrait.classList.remove("enter");
+  requestAnimationFrame(() => {
+    storyText.classList.add("enter");
+    storyPortrait.classList.add("enter");
+  });
+  storyProgress.innerHTML = scene.beats.map((_, index) => `<i class="${index < activeStoryBeat ? "done" : index === activeStoryBeat ? "active" : ""}"></i>`).join("")
+    + `<b>${String(activeStoryBeat + 1).padStart(2, "0")} / ${String(scene.beats.length).padStart(2, "0")}</b>`;
+  const nextLabel = storyNextButton.querySelector<HTMLElement>("span");
+  if (nextLabel) nextLabel.textContent = activeStoryBeat === scene.beats.length - 1 ? "장면 완료" : "다음";
+}
+
+function advanceStory(): void {
+  if (!activeStoryScene || storyTransitioning) return;
+  const scene = STORY_SCENES[activeStoryScene];
+  if (activeStoryBeat < scene.beats.length - 1) {
+    activeStoryBeat += 1;
+    renderStoryBeat();
+    return;
+  }
+  finishStoryScene();
+}
+
+function finishStoryScene(): void {
+  if (!activeStoryScene || storyTransitioning) return;
+  const completed = activeStoryScene;
+  storyTransitioning = true;
+  activeStoryScene = null;
+  canvas.focus({ preventScroll: true });
+  storyOverlay.classList.remove("show");
+  storyOverlay.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("story-open");
+  game.setStoryPaused(false);
+  game.completeStoryScene(completed);
+  window.setTimeout(() => {
+    storyTransitioning = false;
+    syncStoryTriggers(game.getState());
+    openNextStoryScene();
+  }, 280);
 }
 
 const SKILL_NODE_LAYOUT: Record<RunSkillId, { x: number; y: number; branch: "vacuum" | "fever" | "automation" | "navigation" | "hybrid" }> = {
@@ -798,7 +971,25 @@ function renderState(state: GameState): void {
     promoteButton.disabled = !(moneyDone && harvestDone && flightDone);
     promoteButton.textContent = `${next.altitude} 항로 해금`;
   }
+  if (storySystemReady) syncStoryTriggers(state);
 }
+
+storyNextButton.addEventListener("click", advanceStory);
+storySkipButton.addEventListener("click", finishStoryScene);
+storyFrame.addEventListener("click", (event) => {
+  if ((event.target as HTMLElement).closest("button")) return;
+  advanceStory();
+});
+window.addEventListener("keydown", (event) => {
+  if (!storyOverlay.classList.contains("show")) return;
+  if (event.code === "Enter" || event.code === "Space") {
+    event.preventDefault();
+    advanceStory();
+  } else if (event.code === "Escape") {
+    event.preventDefault();
+    finishStoryScene();
+  }
+});
 
 upgradeList.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-upgrade]");

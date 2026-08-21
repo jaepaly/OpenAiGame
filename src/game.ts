@@ -1,5 +1,5 @@
 import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
-import type { Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, Particle, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
+import type { Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, Particle, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RunSkillId, RunState, StorySceneId, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
@@ -90,6 +90,7 @@ export class CloudHarvestGame {
   private formationCooldown = 4;
   private running = true;
   private pausedForLevel = false;
+  private storyPaused = false;
   private player = { x: 480, y: 380, targetX: 480, targetY: 380 };
   private pointer = { x: 480, y: 380, active: false, visible: false };
   private aimAngle = 0;
@@ -212,6 +213,21 @@ export class CloudHarvestGame {
   }
 
   getSkillCost(id: RunSkillId) { return { ...RUN_SKILL_COSTS[id] }; }
+
+  setStoryPaused(paused: boolean): void {
+    this.storyPaused = paused;
+    this.pointer.active = false;
+    this.touchDirect = false;
+    this.keys.clear();
+    this.playerVelocity = { x: 0, y: 0 };
+  }
+
+  completeStoryScene(id: StorySceneId): boolean {
+    if (this.state.story.seen.includes(id)) return false;
+    this.state.story.seen.push(id);
+    this.commit();
+    return true;
+  }
 
   areAllSkillsUnlocked(): boolean {
     return (Object.keys(RUN_SKILLS) as RunSkillId[]).every((id) => this.state.career.skills[id] >= 1);
@@ -662,6 +678,7 @@ export class CloudHarvestGame {
     this.keys.clear();
     this.playerVelocity = { x: 0, y: 0 };
     this.pausedForLevel = false;
+    this.storyPaused = false;
     this.atFactory = false;
     this.returning = false;
     this.returnTimer = 0;
@@ -731,7 +748,7 @@ export class CloudHarvestGame {
 
     const controlCodes = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight", "Space"]);
     window.addEventListener("keydown", (event) => {
-      if (!controlCodes.has(event.code) || this.atFactory || this.pausedForLevel) return;
+      if (!controlCodes.has(event.code) || this.atFactory || this.pausedForLevel || this.storyPaused) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("button, input, textarea, select")) return;
       event.preventDefault();
@@ -871,7 +888,7 @@ export class CloudHarvestGame {
     this.lastTime = time;
     this.updateProcessing(dt);
     if (this.impactFreeze > 0) this.impactFreeze -= dt;
-    else if (!this.pausedForLevel && (!this.atFactory || this.launching || this.returning)) this.update(dt);
+    else if (!this.pausedForLevel && !this.storyPaused && (!this.atFactory || this.launching || this.returning)) this.update(dt);
     this.render(time / 1000);
     requestAnimationFrame((next) => this.frame(next));
   }
@@ -2681,6 +2698,11 @@ export class CloudHarvestGame {
         },
         growthMission: { ...INITIAL_STATE.growthMission, ...parsed.growthMission },
         infiniteResearch: { ...INITIAL_STATE.infiniteResearch, ...parsed.infiniteResearch },
+        story: {
+          ...INITIAL_STATE.story,
+          ...parsed.story,
+          seen: Array.isArray(parsed.story?.seen) ? parsed.story.seen : [],
+        },
         career: {
           ...structuredClone(INITIAL_STATE.career),
           ...parsed.career,

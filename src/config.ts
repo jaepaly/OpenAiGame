@@ -1,4 +1,4 @@
-import type { CloudDefinition, CloudKind, FlightRouteDefinition, FlightRouteId, GrowthMissionDefinition, InfiniteResearchDefinition, InfiniteResearchId, ProcessingContract, ProcessingJob, RankDefinition, ResearchDefinition, ResearchId, RunSkillCost, RunSkillDefinition, RunSkillId, SkillTreeBranch, UpgradeDefinition } from "./types";
+import type { CloudDefinition, CloudKind, FlightRouteDefinition, FlightRouteId, GrowthMissionDefinition, InfiniteResearchDefinition, InfiniteResearchId, ProcessingContract, ProcessingJob, RankDefinition, ResearchDefinition, ResearchId, RunSkillCost, RunSkillDefinition, RunSkillId, SkillTreeBranch, StorySceneId, UpgradeDefinition } from "./types";
 
 export const GROWTH_MISSIONS: GrowthMissionDefinition[] = [
   { id: "collect", code: "JOB 01", title: "첫 수확을 시작하세요", description: "뭉게구름 6개를 수확", target: 6, reward: { money: 4 }, rewardLabel: "◈ 4" },
@@ -364,6 +364,7 @@ export const INITIAL_STATE = {
   },
   growthMission: { step: 0, safeReturns: 0, contractsSigned: 0, shipmentsClaimed: 0, rainHarvested: 0 },
   infiniteResearch: { speed: 0, power: 0, fuel: 0, drone: 0, yield: 0 },
+  story: { seen: [] as StorySceneId[] },
   career: {
     day: 1, level: 1, xp: 0, xpNext: 6, pendingPicks: 0,
     skills: {
