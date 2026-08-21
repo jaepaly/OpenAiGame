@@ -68,7 +68,34 @@ export interface UpgradeDefinition {
   maxLevel: number;
 }
 
-export type UpgradeId = "power" | "radius" | "value" | "drone" | "insulation";
+export type UpgradeId = "power" | "radius" | "value" | "drone" | "insulation" | "conveyor" | "processingLine" | "hopper";
+
+export interface ProcessingJob {
+  id: number;
+  contractId: ContractId;
+  units: Record<CloudKind, number>;
+  payout: number;
+  workRequired: number;
+  progress: number;
+}
+
+export interface ProcessingState {
+  jobs: ProcessingJob[];
+  completedCoins: number;
+  totalProcessed: number;
+  nextJobId: number;
+  lastUpdatedAt: number;
+}
+
+export interface ProcessingEstimate {
+  payout: number;
+  batches: number;
+  seconds: number;
+}
+
+export interface ProcessingEnqueueResult extends ProcessingEstimate {
+  materialsStored: number;
+}
 
 export interface GameState {
   money: number;
@@ -80,6 +107,7 @@ export interface GameState {
   bestCombo: number;
   sound: boolean;
   materials: Record<CloudKind, number>;
+  processing: ProcessingState;
   career: CareerProgress;
 }
 
@@ -142,6 +170,10 @@ export interface RunState {
   materials: Record<CloudKind, number>;
   routeId: FlightRouteId;
   skills: Record<RunSkillId, number>;
+  processing: ProcessingState;
+  processingLines: number;
+  processingSpeed: number;
+  processingBatchCapacity: number;
 }
 
 export interface ResearchDefinition {

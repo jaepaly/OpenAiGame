@@ -1,15 +1,15 @@
-import type { CloudDefinition, CloudKind, FlightRouteDefinition, FlightRouteId, ProcessingContract, RankDefinition, ResearchDefinition, ResearchId, RunSkillCost, RunSkillDefinition, RunSkillId, SkillTreeBranch, UpgradeDefinition } from "./types";
+import type { CloudDefinition, CloudKind, FlightRouteDefinition, FlightRouteId, ProcessingContract, ProcessingJob, RankDefinition, ResearchDefinition, ResearchId, RunSkillCost, RunSkillDefinition, RunSkillId, SkillTreeBranch, UpgradeDefinition } from "./types";
 
 export const RESEARCH_PROJECTS: Record<ResearchId, ResearchDefinition> = {
   logistics: {
     id: "logistics", code: "CRG", name: "적운 물류망", color: "#71d8ef",
     description: "회수 동선을 표준화해 모든 항로의 기본 적재량을 늘립니다.",
-    effect: "영구 화물칸 +4",
+    effect: "영구 화물칸 +4 · 가공 묶음 +2",
   },
   refining: {
     id: "refining", code: "YLD", name: "초임계 정제", color: "#ffd15e",
-    description: "구름 압축 순도를 높여 모든 납품 계약의 원재료 가치를 올립니다.",
-    effect: "영구 판매가 +5%",
+    description: "구름 압축 순도를 높여 가공 판매가와 컨베이어 효율을 함께 올립니다.",
+    effect: "영구 판매가 +5% · 가공 속도 +4%",
   },
   forecasting: {
     id: "forecasting", code: "DNS", name: "고밀도 예보망", color: "#b695ff",
@@ -47,6 +47,15 @@ export const PROCESSING_CONTRACTS: ProcessingContract[] = [
   { id: "stellar", code: "SOL", name: "태양광 연성로", description: "태양구름을 고효율 광자 연료로 가공합니다.", multipliers: { cumulus: .68, rain: .76, electric: 1.08, ice: 1.05, solar: 2.2, aurora: 1.35 } },
   { id: "spectrum", code: "AUR", name: "오로라 스펙트럼국", description: "오로라구름의 희귀 입자를 최고가로 매입합니다.", multipliers: { cumulus: .62, rain: .7, electric: .92, ice: 1.1, solar: 1.35, aurora: 2.45 } },
 ];
+
+export const PROCESSING_SECONDS: Record<CloudKind, number> = {
+  cumulus: 1.1,
+  rain: 1.8,
+  electric: 3,
+  ice: 4.5,
+  solar: 6.8,
+  aurora: 10,
+};
 
 export const CLOUDS: Record<CloudKind, CloudDefinition> = {
   cumulus: {
@@ -191,6 +200,30 @@ export const UPGRADES: UpgradeDefinition[] = [
     baseCost: 230,
     maxLevel: 10,
   },
+  {
+    id: "conveyor",
+    name: "고속 컨베이어",
+    description: "비행 중에도 돌아가는 가공 라인의 처리 속도를 높입니다.",
+    icon: "CVR",
+    baseCost: 48,
+    maxLevel: 18,
+  },
+  {
+    id: "processingLine",
+    name: "병렬 응축 라인",
+    description: "동시에 처리할 수 있는 구름 묶음을 한 줄씩 늘립니다.",
+    icon: "LIN",
+    baseCost: 180,
+    maxLevel: 4,
+  },
+  {
+    id: "hopper",
+    name: "대형 적재 호퍼",
+    description: "한 묶음에 투입하는 구름 수를 늘려 대기열을 압축합니다.",
+    icon: "HPR",
+    baseCost: 70,
+    maxLevel: 14,
+  },
 ];
 
 export const RUN_SKILLS: Record<RunSkillId, RunSkillDefinition> = {
@@ -211,15 +244,15 @@ export const RUN_SKILLS: Record<RunSkillId, RunSkillDefinition> = {
   droneAI: { id: "droneAI", name: "드론 표적 AI", description: "드론 분해력과 탐색 효율을 강화합니다.", icon: "A-I", color: "#76dfbe", maxStacks: 1, category: "core", requirements: ["twinDrone"] },
   relayBurst: { id: "relayBurst", name: "폭발 중계기", description: "연쇄 폭발의 범위와 피해를 크게 높입니다.", icon: "RLY", color: "#ffbd61", maxStacks: 1, category: "core", requirements: ["chainBurst"] },
   salvageProtocol: { id: "salvageProtocol", name: "회수 프로토콜", description: "수집 가능 구름 수 +16과 추가 수확 가치를 얻습니다.", icon: "SLV", color: "#86e5bd", maxStacks: 1, category: "core", requirements: ["relayBurst"] },
-  swarmMatrix: { id: "swarmMatrix", name: "군집 매트릭스", description: "지원 드론 2대가 추가 출격합니다.", icon: "SWM", color: "#7ff5c4", maxStacks: 1, category: "core", requirements: ["nanoSwarm"] },
+  swarmMatrix: { id: "swarmMatrix", name: "군집 매트릭스", description: "지원 드론 2대와 무인 가공 라인 1개를 추가합니다.", icon: "SWM", color: "#7ff5c4", maxStacks: 1, category: "core", requirements: ["nanoSwarm"] },
   blackHole: { id: "blackHole", name: "블랙홀 압축기", description: "흡입장이 거대해지고 반 화면의 구름을 연속 붕괴시킵니다.", icon: "BLK", color: "#45e1df", maxStacks: 1, category: "evolution", requirements: ["massInduction"] },
   eventHorizon: { id: "eventHorizon", name: "사건의 지평선", description: "흡입장이 다시 확장되고 구름 수용량이 폭증합니다.", icon: "EVT", color: "#7afcff", maxStacks: 1, category: "evolution", requirements: ["blackHole"] },
   goldenStorm: { id: "goldenStorm", name: "황금 폭풍", description: "피버가 강화되고 피버 중 모든 구름 가치가 50% 증가합니다.", icon: "GLD", color: "#ffe05f", maxStacks: 1, category: "evolution", requirements: ["stormCatalyst"] },
   sunStorm: { id: "sunStorm", name: "태양 폭풍", description: "피버가 더 오래 지속되고 흡입력·가치가 다시 폭증합니다.", icon: "SUN", color: "#fff07a", maxStacks: 1, category: "evolution", requirements: ["goldenStorm"] },
   droneFleet: { id: "droneFleet", name: "과급 드론 편대", description: "과충전 드론 3대가 추가 출격해 구름을 집중 분해합니다.", icon: "FLT", color: "#79f0bd", maxStacks: 1, category: "evolution", requirements: ["salvageProtocol"] },
   nanoSwarm: { id: "nanoSwarm", name: "나노 구름 군집", description: "지원 드론 5대와 드론 분해력 50%를 추가합니다.", icon: "N-S", color: "#a0ffd0", maxStacks: 1, category: "evolution", requirements: ["droneFleet"] },
-  cargoBay: { id: "cargoBay", name: "초대형 화물 베이", description: "수집 가능 구름 수가 28칸 증가합니다.", icon: "CRG", color: "#71d8ef", maxStacks: 1, category: "overdrive", requirements: ["droneFleet"] },
-  yieldBoost: { id: "yieldBoost", name: "수익 오버드라이브", description: "모든 구름의 가치가 추가로 10% 증가합니다.", icon: "YLD+", color: "#ffd15e", maxStacks: 1, category: "overdrive", requirements: ["goldenStorm"] },
+  cargoBay: { id: "cargoBay", name: "초대형 화물 베이", description: "수집 가능 구름 +28칸과 가공 묶음 용량 +12를 얻습니다.", icon: "CRG", color: "#71d8ef", maxStacks: 1, category: "overdrive", requirements: ["droneFleet"] },
+  yieldBoost: { id: "yieldBoost", name: "수익 오버드라이브", description: "모든 구름 가치 +10%와 가공 속도 +25%를 얻습니다.", icon: "YLD+", color: "#ffd15e", maxStacks: 1, category: "overdrive", requirements: ["goldenStorm"] },
   denseRadar: { id: "denseRadar", name: "고밀도 레이더", description: "고밀도 구름 출현 확률이 추가로 3% 증가합니다.", icon: "DNS+", color: "#ff9b69", maxStacks: 1, category: "overdrive", requirements: ["blackHole"] },
   feverReserve: { id: "feverReserve", name: "피버 예비전력", description: "피버 지속시간이 추가로 0.8초 증가합니다.", icon: "FVR+", color: "#b695ff", maxStacks: 1, category: "overdrive", requirements: ["goldenStorm"] },
   cycloneCore: { id: "cycloneCore", name: "사이클론 코어", description: "피버 중 흡입장이 확장되고 구름 유입 속도가 45% 증가합니다.", icon: "CYC", color: "#73e8ff", maxStacks: 1, category: "synergy", requirements: ["pressureChamber", "feverInjector"] },
@@ -260,11 +293,14 @@ export const INITIAL_STATE = {
   totalEarned: 0,
   harvested: 0,
   rank: 0,
-  levels: { power: 0, radius: 0, value: 0, drone: 0, insulation: 0 },
+  levels: { power: 0, radius: 0, value: 0, drone: 0, insulation: 0, conveyor: 0, processingLine: 0, hopper: 0 },
   research: { logistics: 0, refining: 0, forecasting: 0 },
   bestCombo: 0,
   sound: true,
   materials: { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 },
+  processing: {
+    jobs: [] as ProcessingJob[], completedCoins: 0, totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now(),
+  },
   career: {
     day: 1, level: 1, xp: 0, xpNext: 6, pendingPicks: 0,
     skills: {

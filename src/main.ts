@@ -1,5 +1,5 @@
 import "./styles.css";
-import { CLOUDS, FLIGHT_ROUTES, PROCESSING_CONTRACTS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, upgradeCost } from "./config";
+import { CLOUDS, FLIGHT_ROUTES, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, upgradeCost } from "./config";
 import { CloudHarvestGame } from "./game";
 import type { ContractId, FlightRouteId, GameState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
@@ -42,6 +42,12 @@ app.innerHTML = `
       <div class="cloud-legend" id="cloudLegend"></div>
       <div class="toast" id="toast" aria-live="polite"></div>
 
+      <aside class="processing-widget" id="processingWidget" aria-label="구름 가공 진행 상황">
+        <header><span>FACTORY ONLINE</span><b id="processingSummary">1 LINE · 대기 없음</b></header>
+        <div class="processing-lanes" id="processingLanes"></div>
+        <button id="claimProcessingButton" disabled><span>완성품 출하</span><strong id="claimProcessingValue">◈ 0</strong></button>
+      </aside>
+
       <aside class="promotion-card">
         <div class="promotion-icon">↥</div>
         <div class="promotion-copy">
@@ -70,18 +76,18 @@ app.innerHTML = `
       <section class="factory-overlay" id="factoryOverlay" aria-label="구름 가공 공장">
         <div class="factory-panel">
           <header class="factory-heading">
-            <span>PROCESSING BAY // FLIGHT COMPLETE</span>
-            <h2>구름 가공 계약을 선택하세요</h2>
-            <p>화물 구성에 맞는 납품처를 고르면 코인이 정산되고 다음 비행이 시작됩니다.</p>
+            <span>PROCESSING BAY // CARGO ARRIVAL</span>
+            <h2>구름을 어느 가공 라인에 맡길까요?</h2>
+            <p>적재한 구름은 다음 비행 중에도 계속 가공되며, 완성품이 되어야 코인으로 출하할 수 있습니다.</p>
           </header>
           <div class="factory-manifest" id="factoryManifest"></div>
           <div class="contract-list" id="contractList"></div>
-          <div class="factory-tip">계약마다 구름 종류별 단가가 다릅니다. 현재 화물에서 가장 높은 정산액을 비교하세요.</div>
+          <div class="factory-tip">등급이 높은 구름은 더 오래 걸립니다. 정비소에서 처리 속도·동시 라인·묶음 용량을 영구 강화할 수 있습니다.</div>
           <section class="factory-receipt" id="factoryReceipt">
             <span id="receiptKicker">FLIGHT 1/3 COMPLETE</span>
-            <h3 id="receiptContract">납품 완료</h3>
+            <h3 id="receiptContract">가공 라인 적재 완료</h3>
             <strong id="receiptPayout">◈ 0</strong>
-            <p id="receiptDescription">레벨과 장비를 유지한 채 다음 비행으로 이어집니다.</p>
+            <p id="receiptDescription">가공기는 다음 비행 중에도 멈추지 않습니다.</p>
             <section class="day-research" id="dayResearch">
               <small>DAY COMPLETE // PERMANENT RESEARCH</small>
               <h4>오늘의 연구 성과를 하나 선택하세요</h4>
@@ -140,6 +146,11 @@ const promoteButton = required<HTMLButtonElement>("#promoteButton");
 const upgradeList = required<HTMLElement>("#upgradeList");
 const cloudLegend = required<HTMLElement>("#cloudLegend");
 const toast = required<HTMLElement>("#toast");
+const processingWidget = required<HTMLElement>("#processingWidget");
+const processingSummary = required<HTMLElement>("#processingSummary");
+const processingLanes = required<HTMLElement>("#processingLanes");
+const claimProcessingButton = required<HTMLButtonElement>("#claimProcessingButton");
+const claimProcessingValue = required<HTMLElement>("#claimProcessingValue");
 const soundButton = required<HTMLButtonElement>("#soundButton");
 const resetButton = required<HTMLButtonElement>("#resetButton");
 const tutorial = required<HTMLElement>("#tutorial");
@@ -288,16 +299,50 @@ function renderRunState(state: RunState): void {
   const cargoCount = (Object.values(state.cargo) as number[]).reduce((total, amount) => total + amount, 0);
   const estimatedValue = (Object.values(state.cargoValue) as number[]).reduce((total, amount) => total + amount, state.cargoBonus);
   harvested.textContent = `${cargoCount}/${state.cargoCapacity}`;
-  cargoValue.textContent = `예상 ◈${Math.floor(estimatedValue).toLocaleString()}`;
+  cargoValue.textContent = `가공 예상 ◈${Math.floor(estimatedValue).toLocaleString()}`;
   returnButton.disabled = cargoCount <= 0;
   garageButton.disabled = cargoCount > 0;
   returnButton.classList.toggle("full", cargoCount >= state.cargoCapacity);
   document.body.classList.toggle("fever-active", state.feverActive);
+  renderProcessing(state);
+}
+
+function processingTime(seconds: number): string {
+  const rounded = Math.max(0, Math.ceil(seconds));
+  if (rounded < 60) return `${rounded}초`;
+  const minutes = Math.floor(rounded / 60);
+  const remainder = rounded % 60;
+  return `${minutes}분 ${remainder.toString().padStart(2, "0")}초`;
+}
+
+function renderProcessing(state: RunState): void {
+  const jobs = state.processing.jobs;
+  const active = jobs.slice(0, state.processingLines);
+  const visibleActive = active.slice(0, 2);
+  const hiddenActive = Math.max(0, active.length - visibleActive.length);
+  const waiting = Math.max(0, jobs.length - active.length);
+  const completed = Math.floor(state.processing.completedCoins);
+  processingWidget.classList.toggle("idle", jobs.length === 0 && completed <= 0);
+  processingWidget.classList.toggle("ready", completed > 0);
+  processingSummary.textContent = `${state.processingLines} LINE · ${waiting > 0 ? `대기 ${waiting}묶음` : jobs.length > 0 ? "자동 가공 중" : "대기 없음"}`;
+  processingLanes.innerHTML = active.length > 0 ? visibleActive.map((job, index) => {
+    const dominantKind = CLOUD_ORDER.reduce((best, kind) => job.units[kind] > job.units[best] ? kind : best, CLOUD_ORDER[0]);
+    const cloud = CLOUDS[dominantKind];
+    const progress = Math.min(100, job.progress / job.workRequired * 100);
+    const remaining = (job.workRequired - job.progress) / state.processingSpeed;
+    const units = CLOUD_ORDER.reduce((total, kind) => total + job.units[kind], 0);
+    return `<div class="processing-lane ${dominantKind}">
+      <span>${cloud.icon}</span><div><small>LINE ${index + 1} · ${units} UNIT</small><b>${cloud.name} 중심 가공</b><i><em style="width:${progress}%"></em></i></div><strong>${processingTime(remaining)}</strong>
+    </div>`;
+  }).join("") + (hiddenActive > 0 ? `<div class="processing-more">+ ${hiddenActive}개 라인도 동시에 가동 중</div>` : "") : `<div class="processing-empty"><span>◇</span><b>가공 대기열 비어 있음</b><small>구름을 수확해 기지로 가져오세요.</small></div>`;
+  claimProcessingButton.disabled = completed <= 0;
+  claimProcessingValue.textContent = `◈ ${completed.toLocaleString()}`;
 }
 
 function showFactory(state: RunState): void {
   document.body.classList.remove("returning");
   document.body.classList.add("base-open");
+  factoryOverlay.scrollTop = 0;
   baseHub.classList.remove("show");
   factoryPanel.classList.remove("settled");
   factoryReceipt.classList.remove("show");
@@ -306,21 +351,24 @@ function showFactory(state: RunState): void {
       <span>${CLOUD_CODES[cloud.kind]}</span>
       <b>${cloud.name}</b>
       <strong>${state.cargo[cloud.kind]} UNIT</strong>
-      <small>기본 ◈${Math.floor(state.cargoValue[cloud.kind]).toLocaleString()}</small>
+      <small>기본 ◈${Math.floor(state.cargoValue[cloud.kind]).toLocaleString()} · 개당 ${PROCESSING_SECONDS[cloud.kind]}초</small>
     </div>
   `).join("") + `<div class="manifest-bonus"><span>FLIGHT BONUS</span><b>콤보·전선 운항 보너스</b><strong>+ ◈${Math.floor(state.cargoBonus).toLocaleString()}</strong></div>`;
   const availableContracts = PROCESSING_CONTRACTS.filter((_, index) => index < 3 || index <= game.getState().rank);
-  const payouts = availableContracts.map((contract) => game.getContractPayout(contract.id));
+  const estimates = availableContracts.map((contract) => game.getProcessingEstimate(contract.id));
+  const payouts = estimates.map((estimate) => estimate.payout);
   const bestPayout = Math.max(...payouts);
   const unlockedClouds = Object.values(CLOUDS).filter((cloud) => cloud.unlockRank <= game.getState().rank);
   contractList.innerHTML = availableContracts.map((contract) => {
-    const payout = game.getContractPayout(contract.id);
+    const estimate = game.getProcessingEstimate(contract.id);
+    const payout = estimate.payout;
     return `<button class="contract-card ${payout === bestPayout ? "best" : ""}" data-contract="${contract.id}">
       <span class="contract-code">${contract.code}</span>
       ${payout === bestPayout ? `<em class="best-offer">BEST OFFER</em>` : ""}
       <span class="contract-copy"><b>${contract.name}</b><small>${contract.description}</small></span>
       <span class="contract-rates">${unlockedClouds.map((cloud) => `${cloud.icon} ×${contract.multipliers[cloud.kind].toFixed(2)}`).join(" · ")}</span>
-      <strong class="contract-payout">◈ ${payout.toLocaleString()} 정산</strong>
+      <span class="contract-process"><b>${estimate.batches}묶음</b><small>예상 ${processingTime(estimate.seconds)}</small></span>
+      <strong class="contract-payout">예상 ◈ ${payout.toLocaleString()} · 가동 시작</strong>
     </button>`;
   }).join("");
   factoryOverlay.classList.add("show");
@@ -384,6 +432,9 @@ function equipmentEffect(id: UpgradeId, level: number): string {
     case "value": return `판매 보너스 +${level * 24}%`;
     case "drone": return level === 0 ? "드론 미배치" : `지원 드론 ${level}대`;
     case "insulation": return level === 0 ? "보호 장치 없음" : `절연 출력 ${level}단계`;
+    case "conveyor": return `가공 속도 +${level * 22}%`;
+    case "processingLine": return `동시 가공 ${1 + level}라인`;
+    case "hopper": return `묶음당 ${10 + level * 5}개`;
   }
 }
 
@@ -475,18 +526,19 @@ returnButton.addEventListener("click", () => {
 contractList.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-contract]");
   if (!button) return;
-  const payout = game.settleCargo(button.dataset.contract as ContractId);
-  if (payout > 0) {
-    receiptContract.textContent = `${button.querySelector(".contract-copy b")?.textContent ?? "가공 계약"} 납품 완료`;
-    receiptPayout.textContent = `◈ ${payout.toLocaleString()}`;
-    baseHubStatus.textContent = `${receiptContract.textContent} · ◈ ${payout.toLocaleString()} 확보`;
+  const result = game.queueCargoForProcessing(button.dataset.contract as ContractId);
+  if (result) {
+    const contractName = button.querySelector(".contract-copy b")?.textContent ?? "가공 계약";
+    receiptContract.textContent = `${contractName} 가동 시작`;
+    receiptPayout.textContent = `예상 ◈ ${result.payout.toLocaleString()}`;
+    baseHubStatus.textContent = `${result.batches}묶음 자동 가공 중 · 완성품 출하 대기`;
     const run = game.getRunState();
     const dayComplete = game.isDayComplete();
     const completedFlight = dayComplete ? 3 : run.flight - 1;
     receiptKicker.textContent = `DAY ${run.day} // FLIGHT ${completedFlight}/3 COMPLETE`;
     receiptDescription.textContent = dayComplete
-      ? "세 번의 출격을 마쳤습니다. 연구를 선택해도 레벨·구름 재고·스킬망은 그대로 다음 날까지 이어집니다."
-      : `레벨 ${run.level}과 선택한 장비를 유지한 채 FLIGHT ${run.flight}/3으로 이어집니다.`;
+      ? `${result.batches}묶음이 공장으로 이동했습니다. 연구를 고르는 동안에도 가공은 계속됩니다.`
+      : `${result.batches}묶음 · 예상 ${processingTime(result.seconds)}. FLIGHT ${run.flight}/3 중에도 공장이 계속 돌아갑니다.`;
     dayResearch.classList.toggle("show", dayComplete);
     if (dayComplete) {
       factoryPanel.classList.add("settled");
@@ -505,6 +557,7 @@ contractList.addEventListener("click", (event) => {
     }
   }
 });
+claimProcessingButton.addEventListener("click", () => game.claimProcessedCoins());
 researchList.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-research]");
   if (!button || !game.completeDay(button.dataset.research as ResearchId)) return;

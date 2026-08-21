@@ -116,6 +116,46 @@ body { min-width: 320px; background: #92ddf7; }
 .toast.success { background: rgba(16,139,109,.94); }
 .toast.warning { background: rgba(211,106,48,.94); }
 
+.processing-widget {
+  position: absolute; z-index: 6; right: 28px; bottom: 142px; width: 292px; padding: 13px;
+  color: #eaffff; background: linear-gradient(155deg,rgba(12,51,66,.94),rgba(7,31,43,.96));
+  border: 2px solid rgba(127,245,223,.72); border-radius: 18px; box-shadow: 0 7px 0 rgba(8,35,48,.35),0 18px 34px rgba(18,64,81,.2);
+  backdrop-filter: blur(9px); transition: opacity .2s ease,transform .2s ease;
+}
+.processing-widget header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.processing-widget header span { color: #7ff5df; font: 900 11px "Outfit",sans-serif; letter-spacing: .12em; }
+.processing-widget header b { font-size: 12px; }
+.processing-lanes { margin-top: 9px; display: grid; gap: 7px; }
+.processing-lane { min-height: 48px; padding: 7px 8px; display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 8px; background: rgba(224,252,252,.08); border: 1px solid rgba(127,245,223,.2); border-radius: 11px; }
+.processing-lane > span { width: 34px; height: 34px; display: grid; place-items: center; color: #17394a; background: #ecfeff; border-radius: 9px; font-size: 18px; }
+.processing-lane.rain > span { color: white; background: #6486a4; }
+.processing-lane.electric > span { color: #fff16c; background: #5e4ba2; }
+.processing-lane.ice > span { background: #b9f3ff; }
+.processing-lane.solar > span { background: #ffd86a; }
+.processing-lane.aurora > span { background: linear-gradient(135deg,#8fffd2,#8cc8ff 52%,#c69cff); }
+.processing-lane > div { min-width: 0; }
+.processing-lane small { display: block; color: #78d7d3; font: 900 9px "Outfit",sans-serif; letter-spacing: .08em; }
+.processing-lane b { display: block; margin: 1px 0 4px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.processing-lane i { display: block; height: 6px; overflow: hidden; background: rgba(1,19,28,.55); border-radius: 99px; }
+.processing-lane i em { display: block; height: 100%; background: linear-gradient(90deg,#50d7e2,#fff36f); border-radius: inherit; transition: width .15s linear; }
+.processing-lane > strong { color: #fff36f; font: 900 11px "Outfit",sans-serif; white-space: nowrap; }
+.processing-empty { min-height: 52px; display: grid; grid-template-columns: 36px 1fr; align-items: center; color: #9eb8c2; }
+.processing-empty span { grid-row: 1/3; font-size: 26px; }
+.processing-empty b { font-size: 11px; }
+.processing-empty small { font-size: 9px; }
+.processing-more { padding: 6px 9px; color: #91ddd7; background: rgba(127,245,223,.08); border-radius: 8px; text-align: center; font-size: 10px; font-weight: 900; }
+.processing-widget > button { width: 100%; min-height: 40px; margin-top: 9px; padding: 7px 11px; display: flex; align-items: center; justify-content: space-between; color: #17394a; background: #fff36f; border: 0; border-radius: 10px; box-shadow: 0 4px 0 #b98c32; cursor: pointer; }
+.processing-widget > button span { font-size: 12px; font-weight: 900; }
+.processing-widget > button strong { font: 900 16px "Outfit",sans-serif; }
+.processing-widget > button:disabled { color: #718792; background: #afc2c6; box-shadow: 0 4px 0 #71858b; cursor: default; }
+.processing-widget.ready { border-color: #fff36f; box-shadow: 0 7px 0 rgba(8,35,48,.35),0 0 28px rgba(255,243,111,.36); }
+.processing-widget.ready > button { animation: processing-ready .65s ease-in-out infinite alternate; }
+@keyframes processing-ready { to { filter: brightness(1.1); transform: translateY(-2px); } }
+body.base-open .processing-widget { top: 24px; right: auto; bottom: auto; left: 28px; }
+body.garage-open .processing-widget,
+.returning .processing-widget,
+.launching .processing-widget { opacity: 0; pointer-events: none; transform: translateY(10px); }
+
 .promotion-card {
   position: absolute; z-index: 5; right: 22px; top: 90px; width: 292px; min-height: 88px; padding: 9px 10px;
   display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 8px; background: rgba(33,83,105,.78);
@@ -338,6 +378,9 @@ body.base-open .garage-button { opacity: 0 !important; pointer-events: none !imp
 .contract-copy b { color: white; font-size: 18px; }
 .contract-copy small { min-height: 38px; margin-top: 4px; color: #a7c0c9; font-size: 12px; line-height: 1.45; }
 .contract-rates { margin-top: 9px; padding: 7px 8px; color: #a6dfe0; background: rgba(5,29,40,.34); border-radius: 9px; font-size: 11px; font-weight: 900; }
+.contract-process { margin-top: 8px; display: flex; align-items: center; justify-content: space-between; color: #d8f4f3; }
+.contract-process b { font-size: 12px; }
+.contract-process small { color: #8fded8; font-size: 11px; font-weight: 900; }
 .contract-payout { margin-top: auto; padding: 10px; color: #17394a; background: #fff06f; border-radius: 11px; text-align: center; font-size: 17px; }
 .factory-tip { margin-top: 18px; padding: 11px 14px; color: #a6c3ca; background: rgba(255,255,255,.06); border-radius: 12px; font-size: 12px; font-weight: 800; }
 .factory-receipt { display: none; min-height: 390px; padding: 28px 20px 12px; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
@@ -904,6 +947,8 @@ body.base-open .garage-button { opacity: 0 !important; pointer-events: none !imp
 .garage-heading, .garage-tip { flex-shrink: 0; }
 .garage-panel .upgrade-list { min-height: 0; padding: 7px 7px 16px; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .garage-panel .equipment-slot { height: auto; min-height: 350px; }
+.factory-overlay { overflow-y: auto; place-items: start center; }
+.factory-panel { max-height: calc(100dvh - 32px); margin: auto; overflow-y: auto; overscroll-behavior: contain; }
 
 @media (max-width: 680px) {
   .garage-overlay { padding: 8px; }
@@ -930,4 +975,22 @@ body.base-open .garage-button { opacity: 0 !important; pointer-events: none !imp
   .base-facility em { margin-top: 7px; }
   .garage-panel { max-height: calc(100dvh - 20px); }
   .garage-panel .equipment-slot { min-height: 330px; }
+}
+
+@media (min-width: 681px) {
+  .contract-process b { font-size: 15px; }
+  .contract-process small { font-size: 14px; }
+}
+
+@media (max-width: 680px) {
+  .processing-widget { right: 10px; bottom: 98px; width: 248px; padding: 10px; }
+  body.base-open .processing-widget { top: 9px; left: 9px; }
+  .processing-widget header span { font-size: 10px; }
+  .processing-widget header b { font-size: 11px; }
+  .processing-lane { min-height: 45px; grid-template-columns: 31px 1fr auto; gap: 6px; }
+  .processing-lane > span { width: 31px; height: 31px; }
+  .processing-lane b { font-size: 11px; }
+  .processing-lane > strong { font-size: 10px; }
+  .processing-widget > button { min-height: 37px; }
+  .contract-process b, .contract-process small { font-size: 13px; }
 }

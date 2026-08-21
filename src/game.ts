@@ -1,5 +1,5 @@
-import { CLOUDS, FLIGHT_ROUTES, INITIAL_STATE, PROCESSING_CONTRACTS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
-import type { Cloud, CloudFormationKind, CloudKind, ContractId, FlightRouteId, FloatingText, GameState, Particle, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
+import { CLOUDS, FLIGHT_ROUTES, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, upgradeCost } from "./config";
+import type { Cloud, CloudFormationKind, CloudKind, ContractId, FlightRouteId, FloatingText, GameState, Particle, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RunSkillId, RunState, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
@@ -20,6 +20,8 @@ const MAX_SHOCKWAVES = 24;
 const MAX_HARVEST_LINKS = 24;
 
 const SAVE_KEY = "cloud-harvest-inc-save-v2";
+const emptyCloudStock = (): Record<CloudKind, number> => ({ cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 });
+const freshProcessingState = (): ProcessingState => ({ jobs: [], completedCoins: 0, totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now() });
 
 const freshRunState = (day = 1): RunState => ({
   day,
@@ -33,11 +35,11 @@ const freshRunState = (day = 1): RunState => ({
   combo: 0,
   comboTime: 0,
   pendingPicks: 0,
-  cargo: { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 },
-  cargoValue: { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 },
+  cargo: emptyCloudStock(),
+  cargoValue: emptyCloudStock(),
   cargoBonus: 0,
   cargoCapacity: 28,
-  materials: { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 },
+  materials: emptyCloudStock(),
   routeId: "tailwind",
   skills: {
     overclock: 0, intakeServo: 0, wideIntake: 0, pressureChamber: 0, massInduction: 0, vacuumMomentum: 0,
@@ -47,6 +49,10 @@ const freshRunState = (day = 1): RunState => ({
     cargoBay: 0, yieldBoost: 0, denseRadar: 0, feverReserve: 0,
     cycloneCore: 0, cascadeGrid: 0, stormDrones: 0, goldenVacuum: 0, chainReactor: 0, cargoCyclone: 0,
   },
+  processing: freshProcessingState(),
+  processingLines: 1,
+  processingSpeed: 1,
+  processingBatchCapacity: 10,
 });
 
 export class CloudHarvestGame {
@@ -111,6 +117,7 @@ export class CloudHarvestGame {
   private dayComplete = false;
   private harvestDrones: HarvestDrone[] = [];
   private runEmitTimer = 0;
+  private processingEmitTimer = 0;
   private audioContext?: AudioContext;
   private lastHarvestToneAt = 0;
   private discoveredCloudKinds = new Set<CloudKind>(["cumulus"]);
@@ -135,6 +142,9 @@ export class CloudHarvestGame {
     this.onToast = onToast;
     this.state = this.loadState();
     this.restoreCareerProgress();
+    const offlineSeconds = Math.min(60 * 60 * 4, Math.max(0, (Date.now() - this.state.processing.lastUpdatedAt) / 1000));
+    this.advanceProcessing(offlineSeconds, false);
+    this.state.processing.lastUpdatedAt = Date.now();
     this.bindInput();
     this.resize();
     window.addEventListener("resize", () => this.resize());
@@ -148,6 +158,10 @@ export class CloudHarvestGame {
     const state = structuredClone(this.run);
     state.cargoCapacity = this.getCargoCapacity();
     state.materials = structuredClone(this.state.materials);
+    state.processing = structuredClone(this.state.processing);
+    state.processingLines = this.getProcessingLineCount();
+    state.processingSpeed = this.getProcessingSpeed();
+    state.processingBatchCapacity = this.getProcessingBatchCapacity();
     return state;
   }
 
@@ -161,6 +175,20 @@ export class CloudHarvestGame {
     if (!contract) return 0;
     return Math.round((Object.keys(this.run.cargoValue) as CloudKind[])
       .reduce((total, kind) => total + this.run.cargoValue[kind] * contract.multipliers[kind], this.run.cargoBonus));
+  }
+
+  getProcessingEstimate(id: ContractId): ProcessingEstimate {
+    const jobs = this.buildProcessingJobs(id, false);
+    const laneLoads = Array.from({ length: this.getProcessingLineCount() }, () => 0);
+    for (const job of jobs) {
+      const lane = laneLoads.indexOf(Math.min(...laneLoads));
+      laneLoads[lane] += job.workRequired / this.getProcessingSpeed();
+    }
+    return {
+      payout: jobs.reduce((total, job) => total + job.payout, 0),
+      batches: jobs.length,
+      seconds: Math.max(0, ...laneLoads),
+    };
   }
 
   getSkillCost(id: RunSkillId) { return { ...RUN_SKILL_COSTS[id] }; }
@@ -188,19 +216,22 @@ export class CloudHarvestGame {
   isAtFactory(): boolean { return this.atFactory; }
   isDayComplete(): boolean { return this.dayComplete; }
 
-  settleCargo(id: ContractId): number {
-    if (!this.atFactory) return 0;
+  queueCargoForProcessing(id: ContractId): ProcessingEnqueueResult | null {
+    if (!this.atFactory) return null;
     const contract = PROCESSING_CONTRACTS.find((item) => item.id === id);
-    if (!contract) return 0;
-    const payout = this.getContractPayout(id);
-    this.state.money += payout;
-    this.state.totalEarned += payout;
+    if (!contract || this.getCargoCount() <= 0) return null;
+    const jobs = this.buildProcessingJobs(id, true);
+    if (jobs.length === 0) return null;
+    const payout = jobs.reduce((total, job) => total + job.payout, 0);
+    const materialsStored = this.getCargoCount();
+    const seconds = this.getProcessingEstimate(id).seconds;
+    this.state.processing.jobs.push(...jobs);
     (Object.keys(this.run.cargo) as CloudKind[]).forEach((kind) => {
       this.state.materials[kind] += this.run.cargo[kind];
     });
     const finalFlight = this.run.flight >= 3;
-    this.run.cargo = { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 };
-    this.run.cargoValue = { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 };
+    this.run.cargo = emptyCloudStock();
+    this.run.cargoValue = emptyCloudStock();
     this.run.cargoBonus = 0;
     this.run.fever = 0;
     this.run.feverActive = false;
@@ -214,7 +245,113 @@ export class CloudHarvestGame {
     this.clearCascade();
     this.commit();
     this.onRunChange(this.getRunState());
-    return payout;
+    this.onToast(`${jobs.length}개 가공 묶음 적재 — 비행 중에도 자동 처리됩니다.`, "success");
+    return { payout, batches: jobs.length, seconds, materialsStored };
+  }
+
+  claimProcessedCoins(): number {
+    const coins = Math.floor(this.state.processing.completedCoins);
+    if (coins <= 0) return 0;
+    this.state.processing.completedCoins = 0;
+    this.state.money += coins;
+    this.state.totalEarned += coins;
+    this.commit();
+    this.onRunChange(this.getRunState());
+    this.playChord();
+    this.onToast(`완성품 출하! ◈ ${coins.toLocaleString()} 정산`, "success");
+    return coins;
+  }
+
+  private buildProcessingJobs(id: ContractId, reserveIds: boolean): ProcessingJob[] {
+    const contract = PROCESSING_CONTRACTS.find((item) => item.id === id);
+    const totalUnits = this.getCargoCount();
+    if (!contract || totalUnits <= 0) return [];
+    const remaining = { ...this.run.cargo };
+    const averageValues = Object.fromEntries(CLOUD_ORDER.map((kind) => [kind,
+      this.run.cargo[kind] > 0 ? this.run.cargoValue[kind] / this.run.cargo[kind] : 0,
+    ])) as Record<CloudKind, number>;
+    const jobs: ProcessingJob[] = [];
+    const batchCapacity = this.getProcessingBatchCapacity();
+    let unitsLeft = totalUnits;
+    while (unitsLeft > 0) {
+      const units = emptyCloudStock();
+      let space = batchCapacity;
+      for (const kind of [...CLOUD_ORDER].reverse()) {
+        const amount = Math.min(remaining[kind], space);
+        units[kind] = amount;
+        remaining[kind] -= amount;
+        unitsLeft -= amount;
+        space -= amount;
+        if (space <= 0) break;
+      }
+      const batchUnits = CLOUD_ORDER.reduce((total, kind) => total + units[kind], 0);
+      if (batchUnits <= 0) break;
+      const cargoPayout = CLOUD_ORDER.reduce((total, kind) =>
+        total + units[kind] * averageValues[kind] * contract.multipliers[kind], 0);
+      const bonusShare = this.run.cargoBonus * batchUnits / totalUnits;
+      const workRequired = CLOUD_ORDER.reduce((total, kind) => total + units[kind] * PROCESSING_SECONDS[kind], 0);
+      jobs.push({
+        id: reserveIds ? this.state.processing.nextJobId++ : -(jobs.length + 1),
+        contractId: id,
+        units,
+        payout: Math.max(1, Math.round(cargoPayout + bonusShare)),
+        workRequired: Math.max(.5, workRequired),
+        progress: 0,
+      });
+    }
+    return jobs;
+  }
+
+  private getProcessingSpeed(): number {
+    return 1 + this.state.levels.conveyor * .22 + this.state.research.refining * .04 + this.run.skills.yieldBoost * .25;
+  }
+
+  private getProcessingLineCount(): number {
+    return Math.min(6, 1 + this.state.levels.processingLine + this.run.skills.swarmMatrix);
+  }
+
+  private getProcessingBatchCapacity(): number {
+    return 10 + this.state.levels.hopper * 5 + this.state.research.logistics * 2 + this.run.skills.cargoBay * 12;
+  }
+
+  private advanceProcessing(seconds: number, notify: boolean): number {
+    let remainingSeconds = Math.max(0, seconds);
+    let completedJobs = 0;
+    let completedCoins = 0;
+    const speed = this.getProcessingSpeed();
+    const lineCount = this.getProcessingLineCount();
+    while (remainingSeconds > .0001 && this.state.processing.jobs.length > 0) {
+      const activeJobs = this.state.processing.jobs.slice(0, lineCount);
+      const nextCompletion = Math.min(...activeJobs.map((job) => Math.max(0, job.workRequired - job.progress) / speed));
+      const step = Math.min(remainingSeconds, nextCompletion);
+      activeJobs.forEach((job) => { job.progress = Math.min(job.workRequired, job.progress + step * speed); });
+      remainingSeconds -= step;
+      const completedIds = new Set(activeJobs.filter((job) => job.progress >= job.workRequired - .0001).map((job) => job.id));
+      if (completedIds.size === 0) break;
+      this.state.processing.jobs = this.state.processing.jobs.filter((job) => {
+        if (!completedIds.has(job.id)) return true;
+        completedJobs += 1;
+        completedCoins += job.payout;
+        this.state.processing.totalProcessed += CLOUD_ORDER.reduce((total, kind) => total + job.units[kind], 0);
+        return false;
+      });
+    }
+    this.state.processing.completedCoins += completedCoins;
+    this.state.processing.lastUpdatedAt = Date.now();
+    if (notify && completedJobs > 0) {
+      this.onToast(`가공 ${completedJobs}묶음 완료 · ◈ ${completedCoins.toLocaleString()} 출하 대기`, "success");
+    }
+    return completedJobs;
+  }
+
+  private updateProcessing(dt: number): void {
+    const completed = this.advanceProcessing(dt, true);
+    this.processingEmitTimer -= dt;
+    if (completed > 0) this.commit();
+    if (completed > 0 || this.processingEmitTimer <= 0) {
+      this.onRunChange(this.getRunState());
+      this.processingEmitTimer = .15;
+    }
   }
 
   launchFlight(routeId: FlightRouteId): boolean {
@@ -391,6 +528,7 @@ export class CloudHarvestGame {
   reset(): void {
     localStorage.removeItem(SAVE_KEY);
     this.state = structuredClone(INITIAL_STATE);
+    this.state.processing = freshProcessingState();
     this.run = freshRunState();
     this.pointer = { x: this.width * .7, y: this.height * .55, active: false, visible: false };
     this.touchDirect = false;
@@ -420,7 +558,11 @@ export class CloudHarvestGame {
     this.onToast("새로운 수확 비행선이 출격했습니다.");
   }
 
-  destroy(): void { this.running = false; }
+  destroy(): void {
+    this.state.processing.lastUpdatedAt = Date.now();
+    this.commit();
+    this.running = false;
+  }
 
   private bindInput(): void {
     const point = (event: PointerEvent) => {
@@ -588,6 +730,7 @@ export class CloudHarvestGame {
     if (!this.running) return;
     const dt = Math.min((time - this.lastTime) / 1000 || 0, 0.033);
     this.lastTime = time;
+    this.updateProcessing(dt);
     if (this.impactFreeze > 0) this.impactFreeze -= dt;
     else if (!this.pausedForLevel && (!this.atFactory || this.launching || this.returning)) this.update(dt);
     this.render(time / 1000);
@@ -2264,6 +2407,12 @@ export class CloudHarvestGame {
         levels: { ...INITIAL_STATE.levels, ...parsed.levels },
         research: { ...INITIAL_STATE.research, ...parsed.research },
         materials: { ...INITIAL_STATE.materials, ...parsed.materials },
+        processing: {
+          ...structuredClone(INITIAL_STATE.processing),
+          ...parsed.processing,
+          jobs: Array.isArray(parsed.processing?.jobs) ? parsed.processing.jobs : [],
+          lastUpdatedAt: parsed.processing?.lastUpdatedAt ?? Date.now(),
+        },
         career: {
           ...structuredClone(INITIAL_STATE.career),
           ...parsed.career,
