@@ -107,6 +107,7 @@ app.innerHTML = `
             <section class="processing-machine" aria-label="구름 응축 캡슐">
               <div class="processing-rail"><span><i></i> RAW CLOUD FEED</span><b>자동 응축 설비 가동 중</b><span>OUTPUT <i></i></span></div>
               <div class="processing-lanes" id="processingLanes"></div>
+              <div class="processing-conveyor"><span>PRODUCT TRANSFER</span><div class="conveyor-belt"></div><div class="conveyor-products" id="processingConveyorProducts"></div><b>→ STORAGE</b></div>
             </section>
             <aside class="processing-console">
               <div class="processing-console-head"><span>LINE CONTROL</span><i></i><i></i><i></i></div>
@@ -114,6 +115,7 @@ app.innerHTML = `
               <button class="processing-claim" id="claimProcessingButton" disabled><span>완성품 일괄 출하</span><strong id="claimProcessingValue">◈ 0</strong></button>
             </aside>
           </div>
+          <div class="processing-shipping-burst" id="processingShippingBurst" aria-hidden="true"></div>
           <div class="processing-facility-tip">정비소의 고속 컨베이어·병렬 응축 라인·대형 적재 호퍼로 공장 처리량을 확장할 수 있습니다.</div>
         </div>
       </section>
@@ -175,6 +177,8 @@ const processingOverlay = required<HTMLElement>("#processingOverlay");
 const processingSummary = required<HTMLElement>("#processingSummary");
 const processingLanes = required<HTMLElement>("#processingLanes");
 const processingOutput = required<HTMLElement>("#processingOutput");
+const processingConveyorProducts = required<HTMLElement>("#processingConveyorProducts");
+const processingShippingBurst = required<HTMLElement>("#processingShippingBurst");
 const claimProcessingButton = required<HTMLButtonElement>("#claimProcessingButton");
 const claimProcessingValue = required<HTMLElement>("#claimProcessingValue");
 const processingCloseButton = required<HTMLButtonElement>("#processingCloseButton");
@@ -235,6 +239,8 @@ const CLOUD_CODES: Record<keyof GameState["materials"], string> = {
 };
 let processingLayoutKey = "";
 let processingOutputKey = "";
+let previousProcessingJobs: { id: number; line: number; kind: keyof GameState["materials"] }[] | null = null;
+let previousCompletedCoins: number | null = null;
 
 const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast);
 if (import.meta.env.DEV) {
@@ -360,11 +366,49 @@ function processingTime(seconds: number): string {
   return `${minutes}분 ${remainder.toString().padStart(2, "0")}초`;
 }
 
+function emitProcessedProduct(lineIndex: number, kind: keyof GameState["materials"]): void {
+  if (!processingOverlay.classList.contains("show")) return;
+  const product = document.createElement("span");
+  product.className = `conveyor-product ${kind}`;
+  product.style.setProperty("--product-start", `${Math.min(72, 10 + lineIndex * 29)}%`);
+  product.innerHTML = `<i>${CLOUDS[kind].icon}</i><b>OK</b>`;
+  processingConveyorProducts.append(product);
+  const outputWindow = processingOutput.querySelector<HTMLElement>(".output-window");
+  window.setTimeout(() => outputWindow?.classList.add("receiving"), 760);
+  window.setTimeout(() => outputWindow?.classList.remove("receiving"), 1450);
+  window.setTimeout(() => product.remove(), 1550);
+}
+
+function emitShippingBurst(coins: number): void {
+  processingShippingBurst.replaceChildren();
+  const vectors = [[-118,-72],[-82,-128],[-28,-112],[34,-136],[88,-94],[128,-42],[-132,-18],[-94,48],[-36,72],[25,82],[79,53],[122,12]];
+  vectors.forEach(([x, y], index) => {
+    const coin = document.createElement("span");
+    coin.textContent = "◈";
+    coin.style.setProperty("--burst-x", `${x}px`);
+    coin.style.setProperty("--burst-y", `${y}px`);
+    coin.style.setProperty("--burst-delay", `${index * 28}ms`);
+    processingShippingBurst.append(coin);
+  });
+  const payout = document.createElement("b");
+  payout.textContent = `출하 + ◈ ${coins.toLocaleString()}`;
+  processingShippingBurst.append(payout);
+  processingShippingBurst.classList.remove("active");
+  requestAnimationFrame(() => processingShippingBurst.classList.add("active"));
+  window.setTimeout(() => {
+    processingShippingBurst.classList.remove("active");
+    processingShippingBurst.replaceChildren();
+  }, 1500);
+}
+
 function renderProcessing(state: RunState): void {
   const jobs = state.processing.jobs;
   const active = jobs.slice(0, state.processingLines);
   const waiting = Math.max(0, jobs.length - active.length);
   const completed = Math.floor(state.processing.completedCoins);
+  const finishedProducts = previousProcessingJobs && previousCompletedCoins !== null && completed > previousCompletedCoins
+    ? previousProcessingJobs.filter((previous) => !jobs.some((job) => job.id === previous.id))
+    : [];
   processingFacilityButton.classList.toggle("ready", completed > 0);
   const processingCode = processingFacilityButton.querySelector<HTMLElement>("b");
   if (processingCode) processingCode.textContent = completed > 0 ? "PROC! · FACILITY 03" : "PROC · FACILITY 03";
@@ -406,6 +450,7 @@ function renderProcessing(state: RunState): void {
     if (timer) timer.textContent = processingTime(remaining);
     if (detail) detail.textContent = `${PROCESSING_CONTRACTS.find((item) => item.id === job.contractId)?.code ?? "PROC"} · ${Math.floor(progress)}% 응축`;
     if (progressFill) progressFill.style.width = `${progress}%`;
+    vat.classList.toggle("finishing", progress >= 90);
   });
   const nextOutputKey = `${waiting}|${completed}|${jobs.length > 0}`;
   if (processingOutputKey !== nextOutputKey) {
@@ -415,6 +460,13 @@ function renderProcessing(state: RunState): void {
   }
   claimProcessingButton.disabled = completed <= 0;
   claimProcessingValue.textContent = `◈ ${completed.toLocaleString()}`;
+  finishedProducts.forEach((product) => emitProcessedProduct(product.line, product.kind));
+  previousProcessingJobs = active.map((job, line) => ({
+    id: job.id,
+    line,
+    kind: CLOUD_ORDER.reduce((best, kind) => job.units[kind] > job.units[best] ? kind : best, CLOUD_ORDER[0]),
+  }));
+  previousCompletedCoins = completed;
 }
 
 function showFactory(state: RunState): void {
@@ -652,7 +704,10 @@ contractList.addEventListener("click", (event) => {
     }
   }
 });
-claimProcessingButton.addEventListener("click", () => game.claimProcessedCoins());
+claimProcessingButton.addEventListener("click", () => {
+  const coins = game.claimProcessedCoins();
+  if (coins > 0) emitShippingBurst(coins);
+});
 processingFacilityButton.addEventListener("click", () => processingOverlay.classList.add("show"));
 processingCloseButton.addEventListener("click", () => processingOverlay.classList.remove("show"));
 processingOverlay.addEventListener("click", (event) => {

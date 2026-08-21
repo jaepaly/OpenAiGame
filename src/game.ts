@@ -402,6 +402,9 @@ export class CloudHarvestGame {
     this.state.processing.lastUpdatedAt = Date.now();
     if (notify && completedJobs > 0) {
       this.onToast(`가공 ${completedJobs}묶음 완료 · ◈ ${completedCoins.toLocaleString()} 출하 대기`, "success");
+      [440, 660, 880].slice(0, Math.min(3, completedJobs + 1)).forEach((frequency, index) => {
+        window.setTimeout(() => this.playTone(frequency, .08), index * 65);
+      });
     }
     return completedJobs;
   }
