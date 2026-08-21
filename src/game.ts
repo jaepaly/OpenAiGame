@@ -122,6 +122,7 @@ export class CloudHarvestGame {
   private returnTimer = 0;
   private launching = false;
   private launchTimer = 0;
+  private transitionWhooshPlayed = false;
   private dayComplete = false;
   private harvestDrones: HarvestDrone[] = [];
   private runEmitTimer = 0;
@@ -214,6 +215,7 @@ export class CloudHarvestGame {
     this.run.emergencyReturn = false;
     this.returning = true;
     this.returnTimer = 0;
+    this.transitionWhooshPlayed = false;
     this.pointer.active = false;
     this.pointer.visible = false;
     this.touchDirect = false;
@@ -254,6 +256,7 @@ export class CloudHarvestGame {
     this.run.emergencyReturn = true;
     this.returning = true;
     this.returnTimer = 0;
+    this.transitionWhooshPlayed = false;
     this.pointer.active = false;
     this.pointer.visible = false;
     this.touchDirect = false;
@@ -430,6 +433,7 @@ export class CloudHarvestGame {
     this.fuelPickupFlash = 0;
     this.launching = true;
     this.launchTimer = 0;
+    this.transitionWhooshPlayed = false;
     this.pausedForLevel = false;
     this.pointer.active = false;
     this.pointer.visible = false;
@@ -961,6 +965,10 @@ export class CloudHarvestGame {
 
   private updateLaunchSequence(dt: number): void {
     this.launchTimer += dt;
+    if (!this.transitionWhooshPlayed && this.launchTimer >= .42) {
+      this.transitionWhooshPlayed = true;
+      this.playTransitionWhoosh(true);
+    }
     const baseCenterX = this.width * .5;
     const worldCenterX = this.getWorldWidth() * .5;
     const worldCenterY = this.getWorldHeight() * .55;
@@ -1021,6 +1029,10 @@ export class CloudHarvestGame {
 
   private updateReturnSequence(dt: number): void {
     this.returnTimer += dt;
+    if (!this.transitionWhooshPlayed && this.returnTimer >= .66) {
+      this.transitionWhooshPlayed = true;
+      this.playTransitionWhoosh(false);
+    }
     const centerX = this.getWorldWidth() * .5;
     const centerY = this.getWorldHeight() * .53;
     if (this.atFactory) {
@@ -2576,6 +2588,36 @@ export class CloudHarvestGame {
   }
 
   private ensureAudio(): void { if (this.state.sound && !this.audioContext) this.audioContext = new AudioContext(); }
+  private playTransitionWhoosh(rising: boolean): void {
+    if (!this.state.sound) return;
+    this.ensureAudio();
+    if (!this.audioContext) return;
+    const context = this.audioContext;
+    const duration = .58;
+    const now = context.currentTime;
+    const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
+    const samples = buffer.getChannelData(0);
+    for (let index = 0; index < samples.length; index += 1) {
+      const progress = index / samples.length;
+      const envelope = Math.sin(Math.PI * progress) * (1 - progress * .28);
+      samples[index] = (Math.random() * 2 - 1) * envelope;
+    }
+    const source = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const gain = context.createGain();
+    source.buffer = buffer;
+    filter.type = "bandpass";
+    filter.Q.value = .72;
+    filter.frequency.setValueAtTime(rising ? 260 : 1750, now);
+    filter.frequency.exponentialRampToValueAtTime(rising ? 1900 : 280, now + duration);
+    gain.gain.setValueAtTime(.0001, now);
+    gain.gain.exponentialRampToValueAtTime(.105, now + .1);
+    gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
+    source.connect(filter).connect(gain).connect(context.destination);
+    source.start(now);
+    source.stop(now + duration);
+    source.addEventListener("ended", () => { source.disconnect(); filter.disconnect(); gain.disconnect(); }, { once: true });
+  }
   private playHarvestTone(kind: CloudKind, cascadeDepth: number): void {
     const now = performance.now();
     const minimumGap = cascadeDepth > 0 ? 58 : 38;

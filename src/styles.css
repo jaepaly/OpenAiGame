@@ -481,7 +481,7 @@ body.base-open .promotion-card { top: 28px; }
 .route-back:hover { color: white; }
 
 .levelup-overlay {
-  position: absolute; z-index: 30; inset: 0; display: grid; place-items: center; padding: 24px;
+  position: absolute; z-index: 30; inset: 0; display: grid; place-items: center; padding: 8px;
   background: rgba(20,48,68,.38); backdrop-filter: blur(0); opacity: 0; pointer-events: none; transition: .22s ease;
 }
 .levelup-overlay.show { opacity: 1; pointer-events: auto; backdrop-filter: blur(8px); }
@@ -518,7 +518,7 @@ body.base-open .promotion-card { top: 28px; }
 .skill-card.overdrive::before { content: "∞"; position: absolute; top: 10px; right: 15px; color: var(--skill-color); font: 900 28px "Outfit",sans-serif; }
 .skill-requirement { min-height: 30px; margin: -4px 0 10px; padding: 6px 8px; display: grid; place-items: center; color: #17394a; background: var(--skill-color); border-radius: 8px; font-size: 9px; font-weight: 900; text-align: center; }
 
-.skill-tree-panel { width: min(1540px,calc(100% - 28px)); max-height: 96vh; overflow: auto; padding: 24px 26px 20px; background: linear-gradient(180deg,#f7fbf8,#dfeeed); }
+.skill-tree-panel { width: min(1770px,calc(100vw - 16px)); max-width: none; max-height: 98vh; overflow: auto; padding: 24px 26px 20px; background: linear-gradient(180deg,#f7fbf8,#dfeeed); }
 .skill-tree-panel > h2 { color: #14394b; font-size: clamp(28px,3vw,42px); }
 .skill-tree-panel > p { color: #58727e; font-size: 15px; font-weight: 800; }
 .skill-point-bank { position: sticky; top: -1px; z-index: 12; margin: 14px auto 16px; padding: 10px 16px; display: grid; grid-template-columns: auto minmax(260px,1fr) 1.2fr; align-items: center; gap: 14px; color: #d9edf0; background: rgba(12,42,57,.96); border: 2px solid #75c8d2; border-radius: 17px; text-align: left; box-shadow: 0 7px 18px rgba(9,35,47,.24); backdrop-filter: blur(8px); }
@@ -943,7 +943,7 @@ body.base-open .promotion-card { top: 28px; }
 .skill-tree-branch, .skill-node-copy { min-width: 0; }
 
 @media (min-width: 681px) {
-  .levelup-panel.skill-tree-panel { width: min(1180px,calc(100% - 24px)); padding: 28px 30px 24px; }
+  .levelup-panel.skill-tree-panel { width: min(1770px,calc(100vw - 16px)); max-width: none; padding: 28px 30px 24px; }
 }
 
 @media (max-width: 680px) {
