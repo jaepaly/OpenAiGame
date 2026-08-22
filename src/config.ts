@@ -402,7 +402,7 @@ export const INITIAL_STATE = {
   },
   growthMission: { step: 0, safeReturns: 0, contractsSigned: 0, shipmentsClaimed: 0, rainHarvested: 0 },
   infiniteResearch: { speed: 0, power: 0, fuel: 0, drone: 0, yield: 0 },
-  story: { seen: [] as StorySceneId[], rivalBeaten: false, electricSignalCleared: false, iceArchiveRecovered: false },
+  story: { seen: [] as StorySceneId[], rivalBeaten: false, electricSignalCleared: false, iceArchiveRecovered: false, solarEngineDisabled: false },
   career: {
     day: 1, level: 1, xp: 0, xpNext: 6, pendingPicks: 0,
     skills: {

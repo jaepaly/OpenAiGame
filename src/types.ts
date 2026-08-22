@@ -43,6 +43,7 @@ export interface Cloud {
   formationKind?: CloudFormationKind;
   signalTarget?: boolean;
   archiveShard?: boolean;
+  solarCore?: boolean;
 }
 
 export interface Particle {
@@ -162,6 +163,7 @@ export interface StoryProgress {
   rivalBeaten: boolean;
   electricSignalCleared: boolean;
   iceArchiveRecovered: boolean;
+  solarEngineDisabled: boolean;
 }
 
 export type RivalRaceStatus = "inactive" | "active" | "won" | "lost";
@@ -195,6 +197,22 @@ export interface ArchiveRelayState {
   chainTarget: number;
   chainTimeLeft: number;
   chainWindow: number;
+  timeLeft: number;
+  timeLimit: number;
+  waveDelay: number;
+  reward: number;
+}
+
+export type SolarEngineStatus = "inactive" | "active" | "won" | "lost";
+
+export interface SolarEngineState {
+  status: SolarEngineStatus;
+  charge: number;
+  chargeTarget: number;
+  heat: number;
+  heatLimit: number;
+  lockTime: number;
+  ventReady: boolean;
   timeLeft: number;
   timeLimit: number;
   waveDelay: number;
@@ -275,6 +293,7 @@ export interface RunState {
   rivalRace: RivalRaceState;
   signalTrace: SignalTraceState;
   archiveRelay: ArchiveRelayState;
+  solarEngine: SolarEngineState;
 }
 
 export interface InfiniteResearchDefinition {

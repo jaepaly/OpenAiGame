@@ -1,5 +1,5 @@
 import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
-import type { ArchiveRelayState, Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, Particle, ProcessingClaimResult, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RivalRaceState, RunSkillId, RunState, SignalTraceState, StorySceneId, UpgradeId } from "./types";
+import type { ArchiveRelayState, Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, Particle, ProcessingClaimResult, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RivalRaceState, RunSkillId, RunState, SignalTraceState, SolarEngineState, StorySceneId, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
@@ -40,6 +40,12 @@ const ARCHIVE_CHAIN_TARGET = 3;
 const ARCHIVE_CHAIN_WINDOW = 4;
 const ARCHIVE_RELAY_SECONDS = 60;
 const ARCHIVE_RELAY_REWARD = 350;
+const SOLAR_ENGINE_CHARGE_TARGET = 100;
+const SOLAR_CORE_CHARGE = 25;
+const SOLAR_CORE_HEAT = 34;
+const SOLAR_ENGINE_SECONDS = 75;
+const SOLAR_ENGINE_REWARD = 700;
+const SOLAR_OVERLOAD_LOCK = 3;
 const PACING_TARGETS = {
   firstHarvest: 10,
   firstReturn: 75,
@@ -60,6 +66,11 @@ const freshArchiveRelay = (): ArchiveRelayState => ({
   status: "inactive", fragments: 0, fragmentTarget: ARCHIVE_FRAGMENT_TARGET, streak: 0, chainTarget: ARCHIVE_CHAIN_TARGET,
   chainTimeLeft: 0, chainWindow: ARCHIVE_CHAIN_WINDOW, timeLeft: ARCHIVE_RELAY_SECONDS, timeLimit: ARCHIVE_RELAY_SECONDS,
   waveDelay: .7, reward: ARCHIVE_RELAY_REWARD,
+});
+const freshSolarEngine = (): SolarEngineState => ({
+  status: "inactive", charge: 0, chargeTarget: SOLAR_ENGINE_CHARGE_TARGET, heat: 0, heatLimit: 100,
+  lockTime: 0, ventReady: false, timeLeft: SOLAR_ENGINE_SECONDS, timeLimit: SOLAR_ENGINE_SECONDS,
+  waveDelay: .7, reward: SOLAR_ENGINE_REWARD,
 });
 
 const freshRunState = (day = 1): RunState => ({
@@ -104,6 +115,7 @@ const freshRunState = (day = 1): RunState => ({
   rivalRace: freshRivalRace(),
   signalTrace: freshSignalTrace(),
   archiveRelay: freshArchiveRelay(),
+  solarEngine: freshSolarEngine(),
 });
 
 export class CloudHarvestGame {
@@ -174,6 +186,9 @@ export class CloudHarvestGame {
   private signalTargetId?: number;
   private archiveWaveIndex = 0;
   private archiveRelayPulse = 0;
+  private solarWaveIndex = 0;
+  private solarEnginePulse = 0;
+  private solarOverloadWarned = false;
   private runEmitTimer = 0;
   private processingEmitTimer = 0;
   private fuelWarningStage = 0;
@@ -218,6 +233,7 @@ export class CloudHarvestGame {
     this.prepareRivalRace(this.run.mapRank);
     this.prepareSignalTrace(this.run.mapRank);
     this.prepareArchiveRelay(this.run.mapRank);
+    this.prepareSolarEngine(this.run.mapRank);
     window.addEventListener("resize", () => this.resize());
     for (let i = 0; i < Math.min(18, this.getMaxClouds()); i += 1) this.spawnCloud(true);
     this.emitAll();
@@ -338,6 +354,7 @@ export class CloudHarvestGame {
     if (this.atFactory || this.returning || this.launching) return false;
     if (this.run.signalTrace.status === "active") this.finishSignalTrace(false, "return");
     if (this.run.archiveRelay.status === "active") this.finishArchiveRelay(false, "return");
+    if (this.run.solarEngine.status === "active") this.finishSolarEngine(false, "return");
     this.run.emergencyReturn = false;
     this.returning = true;
     this.returnTimer = 0;
@@ -377,6 +394,7 @@ export class CloudHarvestGame {
     if (this.atFactory || this.returning) return;
     if (this.run.signalTrace.status === "active") this.finishSignalTrace(false, "fuel");
     if (this.run.archiveRelay.status === "active") this.finishArchiveRelay(false, "fuel");
+    if (this.run.solarEngine.status === "active") this.finishSolarEngine(false, "fuel");
     const discarded = this.getCargoCount();
     this.run.cargo = emptyCloudStock();
     this.run.cargoValue = emptyCloudStock();
@@ -409,6 +427,10 @@ export class CloudHarvestGame {
     }
     if (id === "cryogenic" && !this.state.story.iceArchiveRecovered) {
       this.onToast("빙정 중계기의 관측 기록을 먼저 복원해야 합니다.", "warning");
+      return null;
+    }
+    if (id === "stellar" && !this.state.story.solarEngineDisabled) {
+      this.onToast("태양구름 층의 기압 엔진을 먼저 정지해야 합니다.", "warning");
       return null;
     }
     const contract = PROCESSING_CONTRACTS.find((item) => item.id === id);
@@ -627,6 +649,16 @@ export class CloudHarvestGame {
     this.run.archiveRelay = { ...freshArchiveRelay(), status: startsArchiveRelay ? "active" : "inactive" };
   }
 
+  private prepareSolarEngine(mapRank: number): void {
+    const startsSolarEngine = mapRank === 4
+      && this.state.story.seen.includes("solarFrontier")
+      && !this.state.story.solarEngineDisabled;
+    this.solarWaveIndex = 0;
+    this.solarEnginePulse = 0;
+    this.solarOverloadWarned = false;
+    this.run.solarEngine = { ...freshSolarEngine(), status: startsSolarEngine ? "active" : "inactive" };
+  }
+
   launchFlight(mapRank: number): boolean {
     if (!this.atFactory || this.launching || this.returning || this.dayComplete) return false;
     if (!Number.isInteger(mapRank) || mapRank < 0 || mapRank > this.state.rank || !RANKS[mapRank]) return false;
@@ -643,6 +675,7 @@ export class CloudHarvestGame {
     this.prepareRivalRace(mapRank);
     this.prepareSignalTrace(mapRank);
     this.prepareArchiveRelay(mapRank);
+    this.prepareSolarEngine(mapRank);
     this.fuelWarningStage = 0;
     this.fuelPity = 0;
     this.fuelPickupFlash = 0;
@@ -1082,6 +1115,7 @@ export class CloudHarvestGame {
     }
     this.updateSignalTrace(dt);
     this.updateArchiveRelay(dt);
+    this.updateSolarEngine(dt);
 
     const worldZoom = this.getWorldZoom();
     this.player.targetX = Math.max(55 / worldZoom, Math.min(this.getWorldWidth() - 55 / worldZoom, this.player.targetX));
@@ -1296,6 +1330,16 @@ export class CloudHarvestGame {
             text: "중계기 기록이 세 조각으로 얼어붙어 있어요. 청록 표식 파편 세 개를 빠르게 이어서 한 조각씩 해동하세요. 공명이 끊기면 그 묶음은 다시 얼어붙습니다!",
           });
           this.playTone(520, .14);
+        } else if (this.run.solarEngine.status === "active") {
+          this.onToast("소나: 기압 엔진 접속! 광자핵으로 출력 100%를 만들고 과열 전에 흡입을 놓으세요.", "warning");
+          this.onRadio({
+            speaker: "관측 연구원 소나",
+            role: "PRESSURE ENGINE // CONTROLLED OVERCHARGE",
+            tone: "sona",
+            portrait: "sona-serious",
+            text: "주황 표식 광자핵을 수확하면 엔진 출력과 열이 함께 올라갑니다. 열이 높아지면 흡입을 놓고 28%까지 식히세요. 100% 과열되면 출력 한 단계가 날아가요!",
+          });
+          this.playTone(690, .13);
         } else {
           this.onToast("기상 항로 진입 — 수확 비행 시작!", "success");
         }
@@ -1737,6 +1781,188 @@ export class CloudHarvestGame {
     this.onRunChange(this.getRunState());
   }
 
+  private solarEnginePosition(): { x: number; y: number } {
+    return { x: this.getWorldWidth() * .52, y: this.getWorldHeight() * .4 };
+  }
+
+  private clearSolarCores(remove: boolean): void {
+    const coreIds = new Set(this.clouds.filter((cloud) => cloud.solarCore).map((cloud) => cloud.id));
+    if (remove && coreIds.size > 0) {
+      for (const cloud of this.clouds) {
+        if (!coreIds.has(cloud.id)) continue;
+        this.burst(cloud.x, cloud.y, "#ffd36b", 12, 175);
+        this.queuedCascadeIds.delete(cloud.id);
+      }
+      this.clouds = this.clouds.filter((cloud) => !coreIds.has(cloud.id));
+      this.cascadeQueue = this.cascadeQueue.filter((item) => !coreIds.has(item.cloudId));
+      return;
+    }
+    for (const cloud of this.clouds) if (cloud.solarCore) cloud.solarCore = false;
+  }
+
+  private spawnSolarCoreWave(): void {
+    if (this.run.solarEngine.status !== "active" || this.run.solarEngine.lockTime > 0) return;
+    this.clearSolarCores(true);
+    const engine = this.solarEnginePosition();
+    const waveAngle = -.72 + this.solarWaveIndex * .8;
+    this.solarWaveIndex += 1;
+    for (let index = 0; index < 2; index += 1) {
+      this.spawnCloud(false, "solar");
+      const core = this.clouds[this.clouds.length - 1];
+      if (!core) continue;
+      const angle = waveAngle + index * Math.PI;
+      const health = CLOUDS.solar.health * (1 + this.run.mapRank * .12) * .4;
+      core.x = Math.max(78, Math.min(this.getWorldWidth() - 78, engine.x + Math.cos(angle) * 195));
+      core.y = Math.max(195, Math.min(this.getWorldHeight() - 128, engine.y + Math.sin(angle) * 118));
+      core.vx = Math.cos(angle + Math.PI / 2) * 4;
+      core.vy = Math.sin(angle + Math.PI / 2) * 3;
+      core.radius = Math.min(36, Math.max(29, core.radius));
+      core.health = health;
+      core.maxHealth = health;
+      core.dense = false;
+      core.front = false;
+      core.formationId = undefined;
+      core.formationCore = false;
+      core.formationKind = undefined;
+      core.solarCore = true;
+    }
+    this.addShockwave({ x: engine.x, y: engine.y, radius: 42, life: .8, maxLife: .8, color: "#ffbd4a" });
+    this.addFloatingText({ x: engine.x, y: engine.y - 78, text: "PHOTON CORE EJECTED", color: "#fff1ad", life: 1.15 });
+    this.playTone(720 + this.run.solarEngine.charge * 1.5, .075);
+  }
+
+  private updateSolarEngine(dt: number): void {
+    this.solarEnginePulse = Math.max(0, this.solarEnginePulse - dt * 2.3);
+    const engine = this.run.solarEngine;
+    if (engine.status !== "active") return;
+    engine.timeLeft = Math.max(0, engine.timeLeft - dt);
+    if (engine.timeLeft <= 0) {
+      this.finishSolarEngine(false, "time");
+      return;
+    }
+
+    const suctionActive = this.isSuctionActive();
+    const coolingRate = engine.lockTime > 0 ? 30 : suctionActive ? 2.5 : 22;
+    engine.heat = Math.max(0, engine.heat - coolingRate * dt);
+    if (engine.heat >= 65 && engine.lockTime <= 0) engine.ventReady = true;
+    if (engine.ventReady && !suctionActive && engine.lockTime <= 0 && engine.heat <= 28) {
+      engine.ventReady = false;
+      const recovered = Math.min(1.5, this.getFuelCapacity() - this.run.fuel);
+      if (recovered > 0) this.run.fuel += recovered;
+      const position = this.solarEnginePosition();
+      this.addFloatingText({ x: position.x, y: position.y - 88, text: `PERFECT VENT${recovered > 0 ? `  ·  FUEL +${recovered.toFixed(1)}` : ""}`, color: "#baffdf", life: 1.45 });
+      this.addShockwave({ x: position.x, y: position.y, radius: 54, life: .8, maxLife: .8, color: "#8fffe4" });
+      this.playTone(920, .08);
+    }
+
+    if (engine.lockTime > 0) {
+      engine.lockTime = Math.max(0, engine.lockTime - dt);
+      if (engine.lockTime <= 0) engine.waveDelay = .35;
+      return;
+    }
+    if (engine.waveDelay > 0) {
+      engine.waveDelay = Math.max(0, engine.waveDelay - dt);
+      if (engine.waveDelay <= 0) this.spawnSolarCoreWave();
+      return;
+    }
+    if (!this.clouds.some((cloud) => cloud.solarCore)) this.spawnSolarCoreWave();
+  }
+
+  private registerSolarCore(cloud: Cloud): void {
+    const engine = this.run.solarEngine;
+    if (engine.status !== "active" || engine.lockTime > 0) return;
+    const position = this.solarEnginePosition();
+    engine.charge = Math.min(engine.chargeTarget, engine.charge + SOLAR_CORE_CHARGE);
+    engine.heat = Math.min(engine.heatLimit, engine.heat + SOLAR_CORE_HEAT);
+    if (engine.heat >= 65) engine.ventReady = true;
+    this.solarEnginePulse = 1;
+    this.addHarvestLink({ x: cloud.x, y: cloud.y, targetX: position.x, targetY: position.y, life: .72, maxLife: .72, color: "#ffd36b" });
+    this.addFloatingText({ x: cloud.x, y: cloud.y - 44, text: `OUTPUT ${engine.charge}%  ·  HEAT ${Math.round(engine.heat)}%`, color: "#fff1ad", life: 1.3 });
+    this.addShockwave({ x: cloud.x, y: cloud.y, radius: 22, life: .64, maxLife: .64, color: "#ffbd4a" });
+    this.playTone(660 + engine.charge * 2.2, .065);
+    if (engine.heat >= engine.heatLimit) {
+      this.overloadSolarEngine();
+      return;
+    }
+    if (engine.charge >= engine.chargeTarget) {
+      this.finishSolarEngine(true);
+      return;
+    }
+    if (!this.clouds.some((item) => item.solarCore)) engine.waveDelay = .38;
+  }
+
+  private overloadSolarEngine(): void {
+    const engine = this.run.solarEngine;
+    if (engine.status !== "active") return;
+    const position = this.solarEnginePosition();
+    engine.charge = Math.max(0, engine.charge - SOLAR_CORE_CHARGE);
+    engine.heat = engine.heatLimit;
+    engine.lockTime = SOLAR_OVERLOAD_LOCK;
+    engine.ventReady = false;
+    this.clearSolarCores(true);
+    this.solarEnginePulse = 1.4;
+    this.shake = Math.min(3.2, Math.max(this.shake, 3.2));
+    this.addFloatingText({ x: position.x, y: position.y - 92, text: "THERMAL OVERLOAD  ·  OUTPUT -25%", color: "#ff8b69", life: 1.8 });
+    this.addShockwave({ x: position.x, y: position.y, radius: 78, life: 1.1, maxLife: 1.1, color: "#ff6e4b" });
+    this.burst(position.x, position.y, "#ff8b48", 48, 330);
+    this.playTone(105, .24);
+    if (!this.solarOverloadWarned) {
+      this.solarOverloadWarned = true;
+      this.onRadio({
+        speaker: "정비사 모카",
+        role: "THERMAL LOCK // 3 SEC",
+        tone: "moka",
+        portrait: "moka-worried",
+        text: "과열 잠금 걸렸어요! 출력이 25% 떨어졌지만 아직 끝난 건 아니에요. 3초 냉각이 끝나면 다시 광자핵을 밀어 넣죠!",
+      });
+    } else {
+      this.onToast("기압 엔진 과열 — 출력 25% 손실 · 3초 강제 냉각", "warning");
+    }
+  }
+
+  private finishSolarEngine(success: boolean, reason: "time" | "return" | "fuel" = "time"): void {
+    const engine = this.run.solarEngine;
+    if (engine.status !== "active") return;
+    this.clearSolarCores(false);
+    if (success) {
+      engine.status = "won";
+      engine.charge = engine.chargeTarget;
+      engine.heat = Math.min(engine.heat, 72);
+      this.state.story.solarEngineDisabled = true;
+      this.state.money += engine.reward;
+      this.state.totalEarned += engine.reward;
+      this.state.materials.solar += 5;
+      const position = this.solarEnginePosition();
+      this.addFloatingText({ x: position.x, y: position.y - 94, text: `ENGINE APERTURE OPEN  +◈${engine.reward}`, color: "#ffffff", life: 2.1 });
+      this.addShockwave({ x: position.x, y: position.y, radius: 94, life: 1.25, maxLife: 1.25, color: "#fff1ad" });
+      this.burst(position.x, position.y, "#ffd36b", 78, 440);
+      this.onToast(`기압 엔진 정지! ◈ ${engine.reward} · 태양 재료 5 · SOL 광자 가공 라인 해금`, "success");
+      this.onRadio({
+        speaker: "관측 연구원 소나",
+        role: "PRESSURE ENGINE // APERTURE OPEN",
+        tone: "sona",
+        portrait: "sona-serious",
+        text: "엔진 출력이 역전됐습니다. 독점 항로를 밀어내던 압력이 풀리고 있어요. 열린 배기구 너머에서 오로라 핵심 좌표가 잡힙니다.",
+      });
+      this.playChord();
+      this.commit();
+      this.onRunChange(this.getRunState());
+      return;
+    }
+    engine.status = "lost";
+    const reasonText = reason === "fuel" ? "연료가 먼저 바닥났어요." : reason === "return" ? "귀환 항로로 이탈했어요." : "제어 시간이 끝났어요.";
+    this.onToast("기압 엔진 제어 중단 — 화물 손실 없음 · 태양구름 항로에서 재시도", "warning");
+    this.onRadio({
+      speaker: "정비사 모카",
+      role: "ENGINE RETRY // CARGO SAFE",
+      tone: "moka",
+      portrait: "moka-worried",
+      text: `${reasonText} 엔진 출력은 초기화됐지만 수확 화물은 그대로예요. 다음 태양구름 항로에서 냉각 타이밍만 다시 맞춰보죠.`,
+    });
+    this.playTone(112, .22);
+    this.onRunChange(this.getRunState());
+  }
+
   private updateDrones(dt: number): boolean {
     this.droneBeams = [];
     let harvested = false;
@@ -1754,11 +1980,11 @@ export class CloudHarvestGame {
 
     for (const drone of this.harvestDrones) {
       drone.phase += dt * (.7 + (drone.phase % 1) * .25);
-      let target = this.clouds.find((cloud) => cloud.id === drone.targetId && !cloud.signalTarget && !cloud.archiveShard && !claimedTargets.has(cloud.id) && !this.queuedCascadeIds.has(cloud.id));
+      let target = this.clouds.find((cloud) => cloud.id === drone.targetId && !cloud.signalTarget && !cloud.archiveShard && !cloud.solarCore && !claimedTargets.has(cloud.id) && !this.queuedCascadeIds.has(cloud.id));
       if (!target) {
         let nearest = Number.POSITIVE_INFINITY;
         for (const cloud of this.clouds) {
-          if (cloud.signalTarget || cloud.archiveShard || claimedTargets.has(cloud.id) || this.queuedCascadeIds.has(cloud.id)) continue;
+          if (cloud.signalTarget || cloud.archiveShard || cloud.solarCore || claimedTargets.has(cloud.id) || this.queuedCascadeIds.has(cloud.id)) continue;
           const approachX = cloud.x + Math.cos(drone.phase) * (34 + cloud.radius * .35);
           const approachY = cloud.y + Math.sin(drone.phase) * (28 + cloud.radius * .28);
           const distance = Math.hypot(approachX - drone.x, approachY - drone.y);
@@ -1839,6 +2065,7 @@ export class CloudHarvestGame {
     const countsForRivalRace = this.run.rivalRace.status === "active" && cloud.kind === "rain";
     const countsForSignalTrace = this.run.signalTrace.status === "active" && source !== "drone" && cloud.id === this.signalTargetId && cloud.signalTarget;
     const countsForArchiveRelay = this.run.archiveRelay.status === "active" && source !== "drone" && cloud.archiveShard;
+    const countsForSolarEngine = this.run.solarEngine.status === "active" && source !== "drone" && cloud.solarCore;
     this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
     this.comboTimer = 3.4 + FLIGHT_ROUTES[this.run.routeId].comboWindowBonus + this.run.skills.comboCapacitor * .35 + this.run.skills.vacuumMomentum * .22;
     this.state.bestCombo = Math.max(this.state.bestCombo, this.combo);
@@ -1912,6 +2139,7 @@ export class CloudHarvestGame {
       else this.ensureSignalTarget();
     }
     if (countsForArchiveRelay) this.registerArchiveShard(cloud);
+    if (countsForSolarEngine) this.registerSolarCore(cloud);
 
     if (cascadeDepth > 0 && this.cascadeCount % 5 === 0) {
       const milestone = this.cascadeCount >= 30 ? "MEGA HARVEST" : this.cascadeCount >= 20 ? "SUPER CASCADE" : this.cascadeCount >= 10 ? "CHAIN REACTION" : "CASCADE";
@@ -1932,7 +2160,7 @@ export class CloudHarvestGame {
       const chainRadius = 105 + chainStacks * 35 + this.run.skills.relayBurst * 42 + this.run.skills.blackHole * 120
         + this.run.skills.cascadeGrid * 95 + this.run.skills.chainReactor * 145;
       for (const nearby of this.clouds) {
-        if (source === "drone" && nearby.archiveShard) continue;
+        if (source === "drone" && (nearby.archiveShard || nearby.solarCore)) continue;
         const distance = Math.hypot(nearby.x - cloud.x, nearby.y - cloud.y);
         if (distance < chainRadius) {
           nearby.health -= 11 + chainStacks * 12 + this.run.skills.relayBurst * 15 + this.run.skills.blackHole * 25
@@ -2157,7 +2385,7 @@ export class CloudHarvestGame {
     this.onLevelUp(0);
   }
 
-  private triggerPressureSurge(x: number, y: number, protectArchive = false): void {
+  private triggerPressureSurge(x: number, y: number, protectEventTargets = false): void {
     const bonus = this.combo * 3;
     this.run.cargoBonus += bonus;
     if (!this.run.feverActive) {
@@ -2165,7 +2393,7 @@ export class CloudHarvestGame {
       if (this.run.fever >= 100) this.startFever();
     }
     for (const nearby of this.clouds) {
-      if (protectArchive && nearby.archiveShard) continue;
+      if (protectEventTargets && (nearby.archiveShard || nearby.solarCore)) continue;
       const distance = Math.hypot(nearby.x - x, nearby.y - y);
       if (distance > 250) continue;
       const force = 1 - distance / 250;
@@ -2391,6 +2619,7 @@ export class CloudHarvestGame {
     this.drawCascadeLinks(ctx, time);
     for (const cloud of this.clouds) this.drawCloud(ctx, cloud, time);
     this.drawArchiveRelay(ctx, time);
+    this.drawSolarEngine(ctx, time);
     this.drawRivalHarvester(ctx, time);
     this.drawStormDroneBeams(ctx, time);
     this.drawHarvestLinks(ctx, time);
@@ -2664,6 +2893,70 @@ export class CloudHarvestGame {
     }
   }
 
+  private drawSolarEngine(ctx: CanvasRenderingContext2D, time: number): void {
+    const engine = this.run.solarEngine;
+    if (engine.status === "inactive") return;
+    const { x, y } = this.solarEnginePosition();
+    const heatRatio = engine.heat / Math.max(1, engine.heatLimit);
+    const chargeRatio = engine.charge / Math.max(1, engine.chargeTarget);
+    const locked = engine.lockTime > 0;
+    const pulse = 1 + Math.sin(time * (locked ? 8 : 3.8)) * (.025 + heatRatio * .045) + this.solarEnginePulse * .08;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(pulse, pulse);
+    ctx.globalAlpha = engine.status === "lost" ? .58 : 1;
+
+    const glow = ctx.createRadialGradient(0, 0, 8, 0, 0, 92);
+    glow.addColorStop(0, `rgba(255,244,171,${.38 + heatRatio * .35})`);
+    glow.addColorStop(.48, `rgba(255,151,45,${.18 + heatRatio * .28})`);
+    glow.addColorStop(1, "rgba(255,100,37,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, 0, 92, 0, Math.PI * 2); ctx.fill();
+
+    ctx.save();
+    ctx.rotate(time * (locked ? -.35 : .7 + chargeRatio * 1.4));
+    ctx.strokeStyle = locked ? "#ff7158" : "#ffcc63";
+    ctx.lineWidth = 7;
+    ctx.setLineDash([24, 10]);
+    ctx.beginPath(); ctx.arc(0, 0, 61, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.rotate(-time * (locked ? .24 : 1.05 + chargeRatio));
+    ctx.strokeStyle = "rgba(255,246,193,.82)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 9]);
+    ctx.beginPath(); ctx.arc(0, 0, 48, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+
+    ctx.shadowColor = locked ? "#ff5b44" : "#ffb329";
+    ctx.shadowBlur = 26 + heatRatio * 24;
+    ctx.fillStyle = locked ? "#8e2f2a" : "#633b24";
+    ctx.strokeStyle = "#fff0a3";
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(0, 0, 35, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.shadowColor = "transparent";
+    for (let blade = 0; blade < 6; blade += 1) {
+      const angle = blade * Math.PI / 3 + time * (locked ? .25 : 1.8 + chargeRatio * 2.2);
+      ctx.save(); ctx.rotate(angle);
+      ctx.fillStyle = locked ? "#ff745b" : "#ffd36b";
+      ctx.beginPath(); ctx.moveTo(5, -4); ctx.lineTo(29, -10); ctx.lineTo(22, 7); ctx.lineTo(5, 5); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle = "#fff8d5";
+    ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = "rgba(35,25,23,.88)";
+    ctx.strokeStyle = locked ? "#ff8b69" : "#ffd36b";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(-73, 75, 146, 31, 10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = locked ? "#ffb09c" : "#fff1ad";
+    ctx.font = "900 11px Outfit, sans-serif";
+    ctx.textAlign = "center";
+    const label = engine.status === "won" ? "ENGINE APERTURE OPEN" : engine.status === "lost" ? "ENGINE RESET" : locked ? `THERMAL LOCK ${engine.lockTime.toFixed(1)}s` : `PRESSURE ENGINE ${Math.round(engine.charge)}%`;
+    ctx.fillText(label, 0, 95);
+    ctx.restore();
+  }
+
   private drawArchiveRelay(ctx: CanvasRenderingContext2D, time: number): void {
     const archive = this.run.archiveRelay;
     if (archive.status === "inactive") return;
@@ -2819,6 +3112,22 @@ export class CloudHarvestGame {
       ctx.font = `900 ${Math.max(10, cloud.radius * .28)}px Outfit, sans-serif`;
       ctx.textAlign = "center";
       ctx.fillText("MEMORY SHARD", 0, -cloud.radius * 1.38);
+      ctx.shadowColor = "transparent";
+    }
+    if (cloud.solarCore) {
+      const corePulse = 1 + Math.sin(time * 8 + cloud.phase) * .08;
+      ctx.shadowColor = reducedEffects ? "transparent" : "#ffb329";
+      ctx.shadowBlur = reducedEffects ? 0 : 30;
+      ctx.strokeStyle = "#fff0a3";
+      ctx.lineWidth = 5;
+      ctx.setLineDash([12, 6, 3, 6]);
+      ctx.lineDashOffset = -time * 72;
+      ctx.beginPath(); ctx.arc(0, 0, cloud.radius * 1.38 * corePulse, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#fff8d5";
+      ctx.font = `900 ${Math.max(11, cloud.radius * .29)}px Outfit, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText("PHOTON CORE", 0, -cloud.radius * 1.46);
       ctx.shadowColor = "transparent";
     }
     if (cloud.kind === "rain") { ctx.fillStyle = "#3d8cca"; for (let i = -1; i <= 1; i += 1) { ctx.beginPath(); ctx.ellipse(i * 13, cloud.radius * .65, 3, 7, .4, 0, Math.PI * 2); ctx.fill(); } }

@@ -73,6 +73,15 @@ app.innerHTML = `
         <footer id="archiveRelayMessage">청록 표식 빙정 파편 3개를 4초 안에 연속 수확하세요</footer>
       </aside>
 
+      <aside class="solar-engine" id="solarEngine" aria-live="polite" aria-hidden="true">
+        <header><span>LIVE PRESSURE ENGINE</span><strong id="solarEngineTitle">CONTROLLED OVERCHARGE</strong><em id="solarEngineTimer">75.0s</em></header>
+        <div class="solar-engine-board">
+          <section><small>ENGINE CHARGE</small><div><i id="solarChargeFill"></i></div><strong id="solarChargeText">0%</strong></section>
+          <section class="solar-heat"><small>CORE HEAT</small><div><i id="solarHeatFill"></i></div><strong id="solarHeatText">0%</strong></section>
+        </div>
+        <footer><b id="solarVentState">VENT STANDBY</b><span id="solarEngineMessage">광자핵을 수확하고 흡입을 놓아 열을 식히세요</span></footer>
+      </aside>
+
       <div class="tutorial" id="tutorial"><b>WASD 이동 · 마우스 조준</b><span>좌클릭 흡입 · SPACE 기지 귀환 · 연료 0% 전 복귀</span></div>
       <aside class="growth-mission" id="growthMission" aria-live="polite">
         <span class="growth-mission-code" id="growthMissionCode">JOB 01</span>
@@ -116,6 +125,14 @@ app.innerHTML = `
         <p>얼어붙은 관측 파일 세 조각을 되살려 회사가 폐업했던 진짜 이유와 태양구름 층 좌표를 확보했습니다.</p>
         <div><span><b id="archiveResultReward">◈ 350</b> 기록 복원 지원금</span><span><b>CRY + ◆4</b> 빙정 결정 추출 해금</span></div>
         <footer><b>NEXT SKY</b><span>태양구름 층 · 인공 기압 엔진 추적</span></footer>
+      </section>
+
+      <section class="rival-result solar-result" id="solarResult" aria-live="polite" aria-hidden="true">
+        <small>CHAPTER 6 CLEAR // FALSE SUN</small>
+        <h2>기압 엔진 정지!</h2>
+        <p>광자핵의 출력을 역전시켜 독점 항로를 밀어내던 엔진을 멈추고 오로라 핵심 좌표를 열었습니다.</p>
+        <div><span><b id="solarResultReward">◈ 700</b> 엔진 제어 지원금</span><span><b>SOL + ◆5</b> 광자 가공 라인 해금</span></div>
+        <footer><b>NEXT SKY</b><span>오로라 핵심 항로 · 인공 기압장의 중심</span></footer>
       </section>
 
       <aside class="promotion-card">
@@ -279,6 +296,8 @@ const signalResult = required<HTMLElement>("#signalResult");
 const signalResultReward = required<HTMLElement>("#signalResultReward");
 const archiveResult = required<HTMLElement>("#archiveResult");
 const archiveResultReward = required<HTMLElement>("#archiveResultReward");
+const solarResult = required<HTMLElement>("#solarResult");
+const solarResultReward = required<HTMLElement>("#solarResultReward");
 const altitude = required<HTMLElement>("#altitude");
 const rankName = required<HTMLElement>("#rankName");
 const promotionTitle = required<HTMLElement>("#promotionTitle");
@@ -337,6 +356,15 @@ const archiveFragmentScore = required<HTMLElement>("#archiveFragmentScore");
 const archiveChainFill = required<HTMLElement>("#archiveChainFill");
 const archiveChainScore = required<HTMLElement>("#archiveChainScore");
 const archiveRelayMessage = required<HTMLElement>("#archiveRelayMessage");
+const solarEngine = required<HTMLElement>("#solarEngine");
+const solarEngineTitle = required<HTMLElement>("#solarEngineTitle");
+const solarEngineTimer = required<HTMLElement>("#solarEngineTimer");
+const solarChargeFill = required<HTMLElement>("#solarChargeFill");
+const solarChargeText = required<HTMLElement>("#solarChargeText");
+const solarHeatFill = required<HTMLElement>("#solarHeatFill");
+const solarHeatText = required<HTMLElement>("#solarHeatText");
+const solarVentState = required<HTMLElement>("#solarVentState");
+const solarEngineMessage = required<HTMLElement>("#solarEngineMessage");
 const levelUpOverlay = required<HTMLElement>("#levelUpOverlay");
 const skillChoices = required<HTMLElement>("#skillChoices");
 const levelUpTitle = required<HTMLElement>("#levelUpTitle");
@@ -442,9 +470,11 @@ let radioTimer = 0;
 let rivalResultTimer = 0;
 let signalResultTimer = 0;
 let archiveResultTimer = 0;
+let solarResultTimer = 0;
 let previousRivalRaceStatus: RunState["rivalRace"]["status"] = "inactive";
 let previousSignalTraceStatus: RunState["signalTrace"]["status"] = "inactive";
 let previousArchiveRelayStatus: RunState["archiveRelay"]["status"] = "inactive";
+let previousSolarEngineStatus: RunState["solarEngine"]["status"] = "inactive";
 
 function enqueueRadioCall(call: RadioCall): void {
   radioQueue.push(call);
@@ -513,6 +543,18 @@ function showArchiveResult(reward: number): void {
   }, 5200);
 }
 
+function showSolarResult(reward: number): void {
+  window.clearTimeout(solarResultTimer);
+  solarResultReward.textContent = `◈ ${reward}`;
+  solarResult.classList.remove("show");
+  solarResult.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => solarResult.classList.add("show"));
+  solarResultTimer = window.setTimeout(() => {
+    solarResult.classList.remove("show");
+    solarResult.setAttribute("aria-hidden", "true");
+  }, 5600);
+}
+
 const STORY_SCENES: Record<StorySceneId, StoryScene> = {
   prologue: {
     chapter: "CHAPTER 0 // THE LAST SMALL COMPANY",
@@ -579,7 +621,7 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
     beats: [
       { speaker: "소나", name: "관측 연구원 소나", role: "CLIMATE ENGINE VISUAL", mark: "SN", tone: "sona", portrait: "sona-worried", text: "확인했습니다. 쾌청산업은 태양구름의 에너지로 거대한 기압 엔진을 돌리고 있어요. 주변 구름을 독점 항로로 밀어내는 장치입니다." },
       { speaker: "쾌청산업 관제", name: "쾌청산업", role: "CORPORATE WEATHER AUTHORITY", mark: "QS", tone: "rival", text: "기후는 관리 가능한 자원이다. 소형 수확사가 개입하면 공급 안정성이 훼손된다. 즉시 추적을 중단하라." },
-      { speaker: "모카", name: "정비사 모카", role: "FULL THROTTLE", mark: "MK", tone: "moka", portrait: "moka-serious", text: "공급 안정성 같은 소리 하네요. 아래 도시는 43일째 비를 기다리고 있어요. 오로라층까지 올라가 엔진의 중심을 찾죠." },
+      { speaker: "모카", name: "정비사 모카", role: "CONTROLLED OVERCHARGE", mark: "MK", tone: "moka", portrait: "moka-serious", text: "아래 도시는 43일째 비를 기다리고 있어요. 광자핵으로 출력을 밀어 올리되, 열이 차면 흡입을 놓고 식혀요. 엔진을 역전시키면 오로라층으로 가는 배기구가 열릴 겁니다." },
     ],
   },
   auroraFrontier: {
@@ -918,6 +960,45 @@ function renderRunState(state: RunState): void {
   }
   if (archive.status === "won" && previousArchiveRelayStatus !== "won") showArchiveResult(archive.reward);
   previousArchiveRelayStatus = archive.status;
+  const solar = state.solarEngine;
+  const solarVisible = solar.status !== "inactive";
+  solarEngine.classList.toggle("show", solarVisible);
+  solarEngine.classList.toggle("won", solar.status === "won");
+  solarEngine.classList.toggle("lost", solar.status === "lost");
+  solarEngine.classList.toggle("hot", solar.heat >= 65);
+  solarEngine.classList.toggle("critical", solar.heat >= 85 || solar.lockTime > 0);
+  solarEngine.setAttribute("aria-hidden", String(!solarVisible));
+  document.body.classList.toggle("solar-engine-active", solarVisible);
+  solarEngineTimer.textContent = solar.status === "active" ? `${Math.max(0, solar.timeLeft).toFixed(1)}s` : solar.status === "won" ? "OPEN" : "RESET";
+  const chargePercent = Math.min(100, solar.charge / Math.max(1, solar.chargeTarget) * 100);
+  const heatPercent = Math.min(100, solar.heat / Math.max(1, solar.heatLimit) * 100);
+  solarChargeFill.style.width = `${chargePercent}%`;
+  solarChargeText.textContent = `${Math.round(chargePercent)}%`;
+  solarHeatFill.style.width = `${heatPercent}%`;
+  solarHeatText.textContent = `${Math.round(heatPercent)}%`;
+  if (solar.status === "won") {
+    solarEngineTitle.textContent = "ENGINE APERTURE OPEN";
+    solarVentState.textContent = "SOL ONLINE";
+    solarEngineMessage.textContent = `SOL 광자 가공 라인 해금 · 엔진 제어 지원금 ◈ ${solar.reward}`;
+  } else if (solar.status === "lost") {
+    solarEngineTitle.textContent = "ENGINE RESET";
+    solarVentState.textContent = "RETRY READY";
+    solarEngineMessage.textContent = "화물 손실 없음 · 태양구름 항로에서 출력 0%부터 재시도";
+  } else if (solar.lockTime > 0) {
+    solarEngineTitle.textContent = "THERMAL OVERLOAD";
+    solarVentState.textContent = `LOCK ${solar.lockTime.toFixed(1)}s`;
+    solarEngineMessage.textContent = "출력 25% 손실 · 강제 냉각 후 광자핵이 다시 방출됩니다";
+  } else if (solar.ventReady) {
+    solarEngineTitle.textContent = "RELEASE TO VENT";
+    solarVentState.textContent = heatPercent <= 28 ? "PERFECT VENT" : "COOL TO 28%";
+    solarEngineMessage.textContent = "좌클릭을 놓고 열을 28%까지 낮추면 연료를 회수합니다";
+  } else {
+    solarEngineTitle.textContent = "CONTROLLED OVERCHARGE";
+    solarVentState.textContent = "VENT STANDBY";
+    solarEngineMessage.textContent = "주황 표식 광자핵을 수확하세요 · 열 65%부터 냉각 권장";
+  }
+  if (solar.status === "won" && previousSolarEngineStatus !== "won") showSolarResult(solar.reward);
+  previousSolarEngineStatus = solar.status;
   renderProcessing(state);
 }
 
@@ -1076,16 +1157,21 @@ function showFactory(state: RunState): void {
     const rewardLabel = materialUnits > 0 ? `◈ ${payout.toLocaleString()} + ◆${materialUnits}` : `◈ ${payout.toLocaleString()}`;
     const signalLocked = contract.id === "energy" && !company.story.electricSignalCleared;
     const archiveLocked = contract.id === "cryogenic" && !company.story.iceArchiveRecovered;
-    const eventLocked = signalLocked || archiveLocked;
+    const solarLocked = contract.id === "stellar" && !company.story.solarEngineDisabled;
+    const eventLocked = signalLocked || archiveLocked || solarLocked;
     const disabled = eventLocked || estimate.units <= 0;
+    const eventRequirement = signalLocked ? "LIVE THUNDER TRACE 성공 시 해금"
+      : archiveLocked ? "FROZEN ARCHIVE 복원 시 해금"
+        : "PRESSURE ENGINE 정지 시 해금";
+    const eventPurpose = signalLocked ? "신호 좌표 필요" : archiveLocked ? "관측 기록 필요" : "엔진 배기구 필요";
     const payoutLabel = eventLocked
-      ? signalLocked ? "LIVE THUNDER TRACE 성공 시 해금" : "FROZEN ARCHIVE 복원 시 해금"
+      ? eventRequirement
       : estimate.units > 0
         ? `예상 ${rewardLabel} · 배정`
         : contract.flightLimit && estimate.quotaRemaining === 0 ? "이번 비행 주문 완료" : "맞는 화물 없음";
     return `<button class="contract-card ${contract.outputKind} ${eventLocked ? "event-locked" : ""}" data-contract="${contract.id}" ${disabled ? "disabled" : ""}>
       <span class="contract-code">${contract.code}</span>
-      <em class="contract-purpose">${eventLocked ? signalLocked ? "신호 좌표 필요" : "관측 기록 필요" : contract.outputLabel}</em>
+      <em class="contract-purpose">${eventLocked ? eventPurpose : contract.outputLabel}</em>
       <span class="contract-copy"><b>${contract.name}</b><small>${contract.description}</small></span>
       <span class="contract-rates">투입 ${acceptedClouds.map((cloud) => cloud.icon).join(" ")} · ${quotaLabel}</span>
       <span class="contract-process"><b>${estimate.units} UNIT · ${estimate.batches}묶음</b><small>예상 ${processingTime(estimate.seconds)}</small></span>
@@ -1272,11 +1358,13 @@ function renderState(state: GameState): void {
   const rivalEventReady = state.rank >= 1 && state.story.seen.includes("rainFrontier") && !state.story.rivalBeaten;
   const signalEventReady = state.rank >= 2 && state.story.seen.includes("electricFrontier") && !state.story.electricSignalCleared;
   const archiveEventReady = state.rank >= 3 && state.story.seen.includes("iceFrontier") && !state.story.iceArchiveRecovered;
+  const solarEventReady = state.rank >= 4 && state.story.seen.includes("solarFrontier") && !state.story.solarEngineDisabled;
   launchButton.classList.toggle("rival-ready", rivalEventReady);
   launchButton.classList.toggle("signal-ready", signalEventReady);
   launchButton.classList.toggle("archive-ready", archiveEventReady);
+  launchButton.classList.toggle("solar-ready", solarEventReady);
   const launchFacilityCode = launchButton.querySelector<HTMLElement>("b");
-  if (launchFacilityCode) launchFacilityCode.textContent = archiveEventReady ? "GO! · FROZEN ARCHIVE" : signalEventReady ? "GO! · SIGNAL TRACE" : rivalEventReady ? "GO! · LIVE RACE" : "GO · FACILITY 04";
+  if (launchFacilityCode) launchFacilityCode.textContent = solarEventReady ? "GO! · PRESSURE ENGINE" : archiveEventReady ? "GO! · FROZEN ARCHIVE" : signalEventReady ? "GO! · SIGNAL TRACE" : rivalEventReady ? "GO! · LIVE RACE" : "GO · FACILITY 04";
   renderGrowthMission(state);
 
   cloudLegend.innerHTML = (Object.values(CLOUDS))
@@ -1461,6 +1549,7 @@ function renderRouteList(): void {
     const rivalEvent = mapRank === 1 && !locked && company.story.seen.includes("rainFrontier") && !company.story.rivalBeaten;
     const signalEvent = mapRank === 2 && !locked && company.story.seen.includes("electricFrontier") && !company.story.electricSignalCleared;
     const archiveEvent = mapRank === 3 && !locked && company.story.seen.includes("iceFrontier") && !company.story.iceArchiveRecovered;
+    const solarEvent = mapRank === 4 && !locked && company.story.seen.includes("solarFrontier") && !company.story.solarEngineDisabled;
     const cardContents = `
       <span class="route-visual">${locked ? "🔒" : map.icon}</span>
       <span class="route-code">${map.code}</span>
@@ -1472,6 +1561,7 @@ function renderRouteList(): void {
       ${rivalEvent ? `<span class="route-rival-event"><i>LIVE EVENT</i> 비구름 5개 선점 경쟁 · 전용 계약 보상</span>` : ""}
       ${signalEvent ? `<span class="route-rival-event signal"><i>LIVE TRACE</i> 표식 전기구름 5개 · 45초 · NRG 라인 해금</span>` : ""}
       ${archiveEvent ? `<span class="route-rival-event archive"><i>FROZEN FILE</i> 3연속 수확 × 3회 · 60초 · CRY 라인 해금</span>` : ""}
+      ${solarEvent ? `<span class="route-rival-event solar"><i>PRESSURE ENGINE</i> 광자핵 과충전 · 흡입 해제 냉각 · SOL 라인 해금</span>` : ""}
       <span class="route-identity">${map.identity}</span>`;
 
     if (locked) {
