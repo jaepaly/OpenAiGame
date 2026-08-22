@@ -188,6 +188,36 @@ body { min-width: 320px; background: #92ddf7; }
 .solar-engine-active .toast { top: 312px; }
 @keyframes solar-critical { to { filter:brightness(1.2); box-shadow:0 7px 0 rgba(73,35,22,.55),0 0 54px rgba(255,74,48,.68); } }
 
+.open-sky { position: absolute; z-index: 7; left: 50%; top: 150px; width: min(740px,calc(100% - 18px)); padding: 12px 15px 13px; color: white; background: radial-gradient(circle at 50% 0,rgba(153,241,255,.2),transparent 44%),linear-gradient(145deg,rgba(25,31,70,.98),rgba(55,31,84,.98)); border: 3px solid #bdefff; border-radius: 21px; box-shadow: 0 7px 0 rgba(20,23,57,.58),-15px 0 34px rgba(109,229,255,.2),15px 0 38px rgba(221,139,255,.22); opacity: 0; pointer-events: none; transform: translate(-50%,-12px) scale(.96); transition: opacity .2s ease,transform .2s ease,border-color .16s ease,box-shadow .16s ease; }
+.open-sky.show { opacity: 1; transform: translate(-50%,0) scale(1); }
+.open-sky header { display: flex; align-items: center; gap: 9px; }
+.open-sky header span { color: #a9f4ff; font: 900 9px "Outfit",sans-serif; letter-spacing: .14em; }
+.open-sky header strong { margin-left: auto; color: #f1e6ff; font: 900 14px "Outfit",sans-serif; letter-spacing: .06em; }
+.open-sky header em { min-width: 60px; padding: 5px 8px; color: #232652; background: linear-gradient(90deg,#a9f4ff,#e4c2ff); border-radius: 7px; font: 900 10px "Outfit",sans-serif; font-style: normal; text-align: center; }
+.open-sky-board { margin-top: 9px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.open-sky-board section { min-width: 0; padding: 8px 9px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 5px 8px; background: rgba(13,18,53,.62); border: 1px solid rgba(189,239,255,.24); border-radius: 11px; }
+.open-sky-board small { grid-column: 1/3; color: #9cb4d7; font: 900 8px "Outfit",sans-serif; letter-spacing: .11em; }
+.open-sky-board section > div { height: 11px; display: flex; gap: 5px; overflow: hidden; background: #27284e; border: 2px solid #565a8c; border-radius: 8px; }
+.open-sky-circuits > div { overflow: visible !important; background: transparent !important; border: 0 !important; }
+.open-sky-circuits i { flex: 1 1 0; height: 11px; display: block; background: #31335d; border: 2px solid #666b9e; border-radius: 4px; transition: .18s ease; }
+.open-sky-circuits i.filled { background: linear-gradient(90deg,#8fffe4,#d8b8ff,#ffb3df); border-color: white; box-shadow: 0 0 14px rgba(189,239,255,.82); transform: scaleY(1.15); }
+.open-sky-chain > div i { width: 0; height: 100%; display: block; background: linear-gradient(90deg,#8fffe4,#bdefff); box-shadow: 0 0 14px rgba(143,255,228,.72); opacity: calc(.45 + var(--link-time,.8) * .55); transition: width .14s ease; }
+.open-sky-stability > div i { width: 0; height: 100%; display: block; background: linear-gradient(90deg,#8fffe4,#d8b8ff 58%,#ff6fbd); box-shadow: 0 0 14px rgba(218,139,255,.68); transition: width .14s ease; }
+.open-sky-board section > strong { color: #e8edff; font: 900 17px/1 "Outfit",sans-serif; }
+.open-sky footer { margin-top: 8px; padding-top: 7px; display: flex; justify-content: center; align-items: center; gap: 9px; color: #d8dff2; border-top: 1px solid rgba(189,239,255,.23); font-size: 10px; font-weight: 900; text-align: center; }
+.open-sky footer b { padding: 3px 7px; color: #232652; background: linear-gradient(90deg,#a9f4ff,#e4c2ff); border-radius: 5px; font: 900 8px "Outfit",sans-serif; letter-spacing: .06em; }
+.open-sky.hot { border-color: #d8a8ff; box-shadow: 0 7px 0 rgba(20,23,57,.58),0 0 48px rgba(210,118,255,.42); }
+.open-sky.hot .open-sky-stability > strong { color: #e6b3ff; }
+.open-sky.critical { border-color: #ff83c9; animation: open-sky-critical .38s ease-in-out infinite alternate; }
+.open-sky.critical header strong,.open-sky.critical .open-sky-stability > strong { color: #ffb3df; }
+.open-sky.critical footer b { color: white; background: #d84795; }
+.open-sky.won { border-color: white; box-shadow: 0 7px 0 rgba(20,23,57,.45),-20px 0 48px rgba(116,240,255,.42),20px 0 52px rgba(234,144,255,.46); }
+.open-sky.lost { filter: saturate(.45); border-color: #878cae; }
+.returning .open-sky,.launching .open-sky,body.base-open .open-sky,body.garage-open .open-sky,body.story-open .open-sky { opacity: 0 !important; transform: translate(-50%,-12px) scale(.96); }
+.open-sky-active .promotion-card { top: 318px; }
+.open-sky-active .toast { top: 314px; }
+@keyframes open-sky-critical { to { filter:brightness(1.2); box-shadow:0 7px 0 rgba(20,23,57,.58),0 0 58px rgba(255,82,181,.64); } }
+
 .radio-call { position: absolute; z-index: 10; right: 172px; bottom: 26px; width: min(510px,calc(100% - 210px)); min-height: 136px; padding: 11px 16px 12px 11px; display: grid; grid-template-columns: 112px minmax(0,1fr); gap: 15px; align-items: center; color: white; background: linear-gradient(145deg,rgba(7,31,44,.97),rgba(15,53,65,.98)); border: 3px solid #7ff5df; border-radius: 23px; box-shadow: 0 8px 0 rgba(5,26,36,.48),0 18px 38px rgba(7,31,44,.34); opacity: 0; pointer-events: none; transform: translateX(30px) scale(.96); transition: opacity .2s ease,transform .24s cubic-bezier(.2,.85,.3,1.12); }
 .radio-call.show { opacity: 1; transform: translateX(0) scale(1); }
 .radio-call.moka { border-color: #ffad72; background: linear-gradient(145deg,rgba(49,31,29,.98),rgba(74,43,35,.98)); }
@@ -225,6 +255,10 @@ body { min-width: 320px; background: #92ddf7; }
 .solar-result > small,.solar-result > div b { color: #fff0a3; }
 .solar-result footer { border-color: rgba(255,230,148,.3); }
 .solar-result footer b { color: #ffd36b; }
+.open-sky-result { background: radial-gradient(circle at 30% 0,rgba(139,242,255,.3),transparent 42%),radial-gradient(circle at 70% 0,rgba(225,153,255,.28),transparent 44%),linear-gradient(150deg,rgba(24,32,72,.99),rgba(53,31,84,.99)); border-color: #bdefff; box-shadow: 0 11px 0 rgba(24,24,67,.6),-22px 0 72px rgba(116,240,255,.32),22px 0 78px rgba(225,140,255,.36),0 30px 80px rgba(0,0,0,.46); }
+.open-sky-result > small,.open-sky-result > div b { color: #e8dcff; }
+.open-sky-result footer { border-color: rgba(197,235,255,.3); }
+.open-sky-result footer b { color: #a9f4ff; }
 
 .tutorial {
   position: absolute; z-index: 4; left: 50%; top: 150px; transform: translateX(-50%); display: flex; flex-direction: column;
@@ -712,6 +746,10 @@ body.base-open .promotion-card { top: 28px; }
 .base-facility.launch.solar-ready b { color: #fff0a3; }
 .base-facility.launch.solar-ready::before,.base-facility.launch.solar-ready em { background: #ffd36b; }
 @keyframes solar-facility-ready { to { filter:brightness(1.22); box-shadow:0 0 44px rgba(255,179,41,.76),0 8px 0 rgba(5,25,34,.42); } }
+.base-facility.launch.open-sky-ready { border-color: #bdefff; animation: open-sky-facility-ready .62s ease-in-out infinite alternate; }
+.base-facility.launch.open-sky-ready b { color: #e8dcff; }
+.base-facility.launch.open-sky-ready::before,.base-facility.launch.open-sky-ready em { background: linear-gradient(90deg,#8fffe4,#d8b8ff,#ffb3df); }
+@keyframes open-sky-facility-ready { to { filter:brightness(1.24); box-shadow:-14px 0 36px rgba(116,240,255,.55),14px 0 40px rgba(225,140,255,.58),0 8px 0 rgba(5,25,34,.42); } }
 
 .route-overlay {
   position: absolute; z-index: 32; inset: 0; padding: 24px; display: grid; place-items: center;
@@ -754,6 +792,8 @@ body.base-open .promotion-card { top: 28px; }
 .route-rival-event.archive i { color: #123448; background: #d8fbff; }
 .route-rival-event.solar { color: #fff0b8; background: rgba(83,43,23,.84); border-color: #ffd36b; }
 .route-rival-event.solar i { color: #4b2b1f; background: #ffd36b; }
+.route-rival-event.open-sky { color: #eef7ff; background: linear-gradient(90deg,rgba(22,66,92,.86),rgba(65,38,91,.86)); border-color: #bdefff; }
+.route-rival-event.open-sky i { color: #222650; background: linear-gradient(90deg,#9bf5ff,#e3bdff); }
 .route-card em { width: 100%; margin-top: auto; padding-top: 17px; color: white; text-align: center; font-size: 15px; font-style: normal; font-weight: 900; }
 .route-unlock-requirements { width: 100%; margin-top: 13px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
 .route-unlock-requirements span { min-height: 40px; padding: 7px 5px; display: grid; place-items: center; color: #d7e5e8; background: rgba(3,20,29,.58); border: 1px solid #476978; border-radius: 9px; font-size: 11px; font-weight: 900; text-align: center; line-height: 1.25; }
@@ -1002,6 +1042,20 @@ body.base-open .promotion-card { top: 28px; }
   .solar-engine footer b { font-size: 7px; }
   .solar-engine-active .promotion-card { top: 280px; }
   .solar-engine-active .toast { top: 278px; }
+  .open-sky { top: 158px; padding: 9px 10px 10px; border-radius: 16px; }
+  .open-sky header span { font-size: 8px; }
+  .open-sky header strong { font-size: 10px; }
+  .open-sky header em { min-width: 48px; font-size: 8px; }
+  .open-sky-board { margin-top: 6px; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .open-sky-circuits { grid-column: 1/3; }
+  .open-sky-board section { padding: 5px; gap: 4px; }
+  .open-sky-board small { font-size: 7px; }
+  .open-sky-board section > div,.open-sky-circuits i { height: 8px; }
+  .open-sky-board section > strong { font-size: 13px; }
+  .open-sky footer { margin-top: 5px; gap: 5px; font-size: 8px; }
+  .open-sky footer b { font-size: 7px; }
+  .open-sky-active .promotion-card { top: 326px; }
+  .open-sky-active .toast { top: 322px; }
   .radio-call { right: 9px; bottom: 105px; width: calc(100% - 18px); min-height: 106px; padding: 8px 11px 9px 8px; grid-template-columns: 84px minmax(0,1fr); gap: 10px; border-radius: 18px; }
   .radio-call-portrait { width: 84px; height: 84px; border-radius: 14px 14px 31px 14px; }
   .radio-call-copy > span { font-size: 8px; }

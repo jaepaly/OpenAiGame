@@ -82,6 +82,16 @@ app.innerHTML = `
         <footer><b id="solarVentState">VENT STANDBY</b><span id="solarEngineMessage">광자핵을 수확하고 흡입을 놓아 열을 식히세요</span></footer>
       </aside>
 
+      <aside class="open-sky" id="openSky" aria-live="polite" aria-hidden="true">
+        <header><span>FINAL // OPEN SKY PROTOCOL</span><strong id="openSkyTitle">SKYLOOP CIRCUIT</strong><em id="openSkyTimer">90.0s</em></header>
+        <div class="open-sky-board">
+          <section class="open-sky-circuits"><small>RESTORED CIRCUITS</small><div id="openSkyCircuitPips"></div><strong id="openSkyCircuitScore">0 / 3</strong></section>
+          <section class="open-sky-chain"><small>LIVE LINK</small><div><i id="openSkyChainFill"></i></div><strong id="openSkyChainScore">0 / 3</strong></section>
+          <section class="open-sky-stability"><small>INSTABILITY</small><div><i id="openSkyStabilityFill"></i></div><strong id="openSkyStabilityText">0%</strong></section>
+        </div>
+        <footer><b id="openSkyState">LINK STANDBY</b><span id="openSkyMessage">이동 노드 3개를 4초 안에 연결하세요</span></footer>
+      </aside>
+
       <div class="tutorial" id="tutorial"><b>WASD 이동 · 마우스 조준</b><span>좌클릭 흡입 · SPACE 기지 귀환 · 연료 0% 전 복귀</span></div>
       <aside class="growth-mission" id="growthMission" aria-live="polite">
         <span class="growth-mission-code" id="growthMissionCode">JOB 01</span>
@@ -133,6 +143,14 @@ app.innerHTML = `
         <p>광자핵의 출력을 역전시켜 독점 항로를 밀어내던 엔진을 멈추고 오로라 핵심 좌표를 열었습니다.</p>
         <div><span><b id="solarResultReward">◈ 700</b> 엔진 제어 지원금</span><span><b>SOL + ◆5</b> 광자 가공 라인 해금</span></div>
         <footer><b>NEXT SKY</b><span>오로라 핵심 항로 · 인공 기압장의 중심</span></footer>
+      </section>
+
+      <section class="rival-result open-sky-result" id="openSkyResult" aria-live="polite" aria-hidden="true">
+        <small>CHAPTER 7 CLEAR // OPEN SKY</small>
+        <h2>하늘 순환 복구!</h2>
+        <p>세 개의 오로라 회로를 안정화해 인공 기압장을 무너뜨리고 도시로 향하는 구름의 흐름을 되돌렸습니다.</p>
+        <div><span><b id="openSkyResultReward">◈ 1,200</b> 기상 복구 지원금</span><span><b>AUR + ◆8</b> 스펙트럼 가공 해금</span></div>
+        <footer><b>ENDLESS SKY</b><span>무한 연구 · 끝없이 성장하는 기상 복구 회사</span></footer>
       </section>
 
       <aside class="promotion-card">
@@ -298,6 +316,8 @@ const archiveResult = required<HTMLElement>("#archiveResult");
 const archiveResultReward = required<HTMLElement>("#archiveResultReward");
 const solarResult = required<HTMLElement>("#solarResult");
 const solarResultReward = required<HTMLElement>("#solarResultReward");
+const openSkyResult = required<HTMLElement>("#openSkyResult");
+const openSkyResultReward = required<HTMLElement>("#openSkyResultReward");
 const altitude = required<HTMLElement>("#altitude");
 const rankName = required<HTMLElement>("#rankName");
 const promotionTitle = required<HTMLElement>("#promotionTitle");
@@ -365,6 +385,17 @@ const solarHeatFill = required<HTMLElement>("#solarHeatFill");
 const solarHeatText = required<HTMLElement>("#solarHeatText");
 const solarVentState = required<HTMLElement>("#solarVentState");
 const solarEngineMessage = required<HTMLElement>("#solarEngineMessage");
+const openSky = required<HTMLElement>("#openSky");
+const openSkyTitle = required<HTMLElement>("#openSkyTitle");
+const openSkyTimer = required<HTMLElement>("#openSkyTimer");
+const openSkyCircuitPips = required<HTMLElement>("#openSkyCircuitPips");
+const openSkyCircuitScore = required<HTMLElement>("#openSkyCircuitScore");
+const openSkyChainFill = required<HTMLElement>("#openSkyChainFill");
+const openSkyChainScore = required<HTMLElement>("#openSkyChainScore");
+const openSkyStabilityFill = required<HTMLElement>("#openSkyStabilityFill");
+const openSkyStabilityText = required<HTMLElement>("#openSkyStabilityText");
+const openSkyState = required<HTMLElement>("#openSkyState");
+const openSkyMessage = required<HTMLElement>("#openSkyMessage");
 const levelUpOverlay = required<HTMLElement>("#levelUpOverlay");
 const skillChoices = required<HTMLElement>("#skillChoices");
 const levelUpTitle = required<HTMLElement>("#levelUpTitle");
@@ -471,10 +502,12 @@ let rivalResultTimer = 0;
 let signalResultTimer = 0;
 let archiveResultTimer = 0;
 let solarResultTimer = 0;
+let openSkyResultTimer = 0;
 let previousRivalRaceStatus: RunState["rivalRace"]["status"] = "inactive";
 let previousSignalTraceStatus: RunState["signalTrace"]["status"] = "inactive";
 let previousArchiveRelayStatus: RunState["archiveRelay"]["status"] = "inactive";
 let previousSolarEngineStatus: RunState["solarEngine"]["status"] = "inactive";
+let previousOpenSkyStatus: RunState["openSky"]["status"] = "inactive";
 
 function enqueueRadioCall(call: RadioCall): void {
   radioQueue.push(call);
@@ -555,6 +588,18 @@ function showSolarResult(reward: number): void {
   }, 5600);
 }
 
+function showOpenSkyResult(reward: number): void {
+  window.clearTimeout(openSkyResultTimer);
+  openSkyResultReward.textContent = `◈ ${reward.toLocaleString()}`;
+  openSkyResult.classList.remove("show");
+  openSkyResult.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => openSkyResult.classList.add("show"));
+  openSkyResultTimer = window.setTimeout(() => {
+    openSkyResult.classList.remove("show");
+    openSkyResult.setAttribute("aria-hidden", "true");
+  }, 6200);
+}
+
 const STORY_SCENES: Record<StorySceneId, StoryScene> = {
   prologue: {
     chapter: "CHAPTER 0 // THE LAST SMALL COMPANY",
@@ -626,12 +671,12 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
   },
   auroraFrontier: {
     chapter: "CHAPTER 7 // OPEN SKY",
-    title: "회사의 다음 하늘",
+    title: "마지막 순환 회로",
     beats: [
       { speaker: "NARRATION", name: "오로라 핵심 항로", role: "IONOSPHERE INDUSTRIAL ZONE", mark: "AUR", tone: "narrator", text: "여섯 종류의 구름이 한 항로에서 빛났다. 작은 수확 회사의 비행선은 마침내 인공 기압장의 중심과 같은 고도에 도달했다." },
-      { speaker: "소나", name: "관측 연구원 소나", role: "WEATHER RESTORATION PLAN", mark: "SN", tone: "sona", portrait: "sona-serious", text: "엔진을 멈추는 것만으로는 부족합니다. 모은 구름을 다시 순환시켜야 해요. 가공 라인과 무한 특성망이 복구 작업의 기반이 될 겁니다." },
-      { speaker: "모카", name: "정비사 모카", role: "CO-FOUNDER // OPEN SKY", mark: "MK", tone: "moka", portrait: "moka-neutral", text: "처음엔 빚 독촉장과 낡은 배 한 대뿐이었죠. 이제는 우리가 얼마나 높이 성장할지 정해진 천장도 없어요. 사장님, 다음 비행 준비됐습니다." },
-      { speaker: "NARRATION", name: "구름 수확 회사", role: "ENDLESS RESTORATION BEGINS", mark: "∞", tone: "narrator", text: "회사의 첫 목표는 생존이었다. 이제 목표는 하늘을 되돌리는 일이다. 수확선은 더 빠르게, 더 멀리, 끝없이 성장하며 다시 출격했다." },
+      { speaker: "소나", name: "관측 연구원 소나", role: "OPEN SKY PROTOCOL", mark: "SN", tone: "sona", portrait: "sona-serious", text: "태양 엔진은 멈췄지만 기압장이 아직 관성으로 돌고 있어요. 중심 순환핵에 세 개의 오로라 회로를 연결하면 구름의 흐름을 도시 쪽으로 되돌릴 수 있습니다." },
+      { speaker: "모카", name: "정비사 모카", role: "FINAL CIRCUIT CHECK", mark: "MK", tone: "moka", portrait: "moka-serious", text: "이동 노드 세 개를 빠르게 연결하고, 회로 하나가 닫힐 때마다 흡입을 놓아 안정화해요. 과부하되면 완성 회로까지 끊어지니까 마지막까지 박자를 지켜야 합니다." },
+      { speaker: "NARRATION", name: "구름 수확 회사", role: "FINAL SORTIE // READY", mark: "∞", tone: "narrator", text: "생존을 위해 시작한 첫 비행은 하늘을 되돌리기 위한 마지막 작전이 되었다. 수확선이 오로라 순환핵을 향해 기수를 돌렸다." },
     ],
   },
 };
@@ -999,6 +1044,51 @@ function renderRunState(state: RunState): void {
   }
   if (solar.status === "won" && previousSolarEngineStatus !== "won") showSolarResult(solar.reward);
   previousSolarEngineStatus = solar.status;
+  const finale = state.openSky;
+  const finaleVisible = finale.status !== "inactive";
+  openSky.classList.toggle("show", finaleVisible);
+  openSky.classList.toggle("won", finale.status === "won");
+  openSky.classList.toggle("lost", finale.status === "lost");
+  openSky.classList.toggle("hot", finale.instability >= 60);
+  openSky.classList.toggle("critical", finale.instability >= 85 || finale.lockTime > 0);
+  openSky.setAttribute("aria-hidden", String(!finaleVisible));
+  document.body.classList.toggle("open-sky-active", finaleVisible);
+  openSkyTimer.textContent = finale.status === "active" ? `${Math.max(0, finale.timeLeft).toFixed(1)}s` : finale.status === "won" ? "OPEN" : "RESET";
+  openSkyCircuitScore.textContent = `${finale.circuits} / ${finale.circuitTarget}`;
+  openSkyCircuitPips.innerHTML = Array.from({ length: finale.circuitTarget }, (_, index) => `<i class="${index < finale.circuits ? "filled" : ""}"></i>`).join("");
+  openSkyChainScore.textContent = `${finale.chain} / ${finale.chainTarget}`;
+  openSkyChainFill.style.width = `${Math.min(100, finale.chain / Math.max(1, finale.chainTarget) * 100)}%`;
+  openSkyChainFill.style.setProperty("--link-time", `${Math.min(1, finale.chainTimeLeft / Math.max(.01, finale.chainWindow))}`);
+  const instabilityPercent = Math.min(100, finale.instability / Math.max(1, finale.instabilityLimit) * 100);
+  openSkyStabilityFill.style.width = `${instabilityPercent}%`;
+  openSkyStabilityText.textContent = `${Math.round(instabilityPercent)}%`;
+  if (finale.status === "won") {
+    openSkyTitle.textContent = "WEATHER CYCLE ONLINE";
+    openSkyState.textContent = "OPEN SKY";
+    openSkyMessage.textContent = `AUR 스펙트럼 가공 라인 해금 · 기상 복구 지원금 ◈ ${finale.reward.toLocaleString()}`;
+  } else if (finale.status === "lost") {
+    openSkyTitle.textContent = "SKYLOOP RESET";
+    openSkyState.textContent = "RETRY READY";
+    openSkyMessage.textContent = "화물 손실 없음 · 오로라 항로에서 회로 0개부터 재시도";
+  } else if (finale.lockTime > 0) {
+    openSkyTitle.textContent = "SKYLOOP OVERLOAD";
+    openSkyState.textContent = `LOCK ${finale.lockTime.toFixed(1)}s`;
+    openSkyMessage.textContent = "완성 회로 1개 손실 · 강제 안정화 후 노드가 다시 방출됩니다";
+  } else if (finale.coolingRequired) {
+    openSkyTitle.textContent = "RELEASE TO STABILIZE";
+    openSkyState.textContent = instabilityPercent <= 25 ? "CIRCUIT STABLE" : "COOL TO 25%";
+    openSkyMessage.textContent = "흡입을 놓고 불안정도를 25%까지 낮추세요 · 안정화 시 연료 +2";
+  } else if (finale.chain > 0) {
+    openSkyTitle.textContent = "LIVE CIRCUIT LINK";
+    openSkyState.textContent = `${finale.chainTimeLeft.toFixed(1)}s WINDOW`;
+    openSkyMessage.textContent = `남은 이동 노드 ${finale.chainTarget - finale.chain}개를 제한 시간 안에 연결하세요`;
+  } else {
+    openSkyTitle.textContent = "SKYLOOP CIRCUIT";
+    openSkyState.textContent = "LINK STANDBY";
+    openSkyMessage.textContent = "빛나는 이동 노드 3개를 4초 안에 연결하세요";
+  }
+  if (finale.status === "won" && previousOpenSkyStatus !== "won") showOpenSkyResult(finale.reward);
+  previousOpenSkyStatus = finale.status;
   renderProcessing(state);
 }
 
@@ -1158,12 +1248,14 @@ function showFactory(state: RunState): void {
     const signalLocked = contract.id === "energy" && !company.story.electricSignalCleared;
     const archiveLocked = contract.id === "cryogenic" && !company.story.iceArchiveRecovered;
     const solarLocked = contract.id === "stellar" && !company.story.solarEngineDisabled;
-    const eventLocked = signalLocked || archiveLocked || solarLocked;
+    const openSkyLocked = contract.id === "spectrum" && !company.story.skyRestored;
+    const eventLocked = signalLocked || archiveLocked || solarLocked || openSkyLocked;
     const disabled = eventLocked || estimate.units <= 0;
     const eventRequirement = signalLocked ? "LIVE THUNDER TRACE 성공 시 해금"
       : archiveLocked ? "FROZEN ARCHIVE 복원 시 해금"
-        : "PRESSURE ENGINE 정지 시 해금";
-    const eventPurpose = signalLocked ? "신호 좌표 필요" : archiveLocked ? "관측 기록 필요" : "엔진 배기구 필요";
+        : solarLocked ? "PRESSURE ENGINE 정지 시 해금"
+          : "OPEN SKY PROTOCOL 성공 시 해금";
+    const eventPurpose = signalLocked ? "신호 좌표 필요" : archiveLocked ? "관측 기록 필요" : solarLocked ? "엔진 배기구 필요" : "순환망 복구 필요";
     const payoutLabel = eventLocked
       ? eventRequirement
       : estimate.units > 0
@@ -1359,12 +1451,14 @@ function renderState(state: GameState): void {
   const signalEventReady = state.rank >= 2 && state.story.seen.includes("electricFrontier") && !state.story.electricSignalCleared;
   const archiveEventReady = state.rank >= 3 && state.story.seen.includes("iceFrontier") && !state.story.iceArchiveRecovered;
   const solarEventReady = state.rank >= 4 && state.story.seen.includes("solarFrontier") && !state.story.solarEngineDisabled;
+  const openSkyEventReady = state.rank >= 5 && state.story.seen.includes("auroraFrontier") && state.story.solarEngineDisabled && !state.story.skyRestored;
   launchButton.classList.toggle("rival-ready", rivalEventReady);
   launchButton.classList.toggle("signal-ready", signalEventReady);
   launchButton.classList.toggle("archive-ready", archiveEventReady);
   launchButton.classList.toggle("solar-ready", solarEventReady);
+  launchButton.classList.toggle("open-sky-ready", openSkyEventReady);
   const launchFacilityCode = launchButton.querySelector<HTMLElement>("b");
-  if (launchFacilityCode) launchFacilityCode.textContent = solarEventReady ? "GO! · PRESSURE ENGINE" : archiveEventReady ? "GO! · FROZEN ARCHIVE" : signalEventReady ? "GO! · SIGNAL TRACE" : rivalEventReady ? "GO! · LIVE RACE" : "GO · FACILITY 04";
+  if (launchFacilityCode) launchFacilityCode.textContent = openSkyEventReady ? "GO! · OPEN SKY" : solarEventReady ? "GO! · PRESSURE ENGINE" : archiveEventReady ? "GO! · FROZEN ARCHIVE" : signalEventReady ? "GO! · SIGNAL TRACE" : rivalEventReady ? "GO! · LIVE RACE" : "GO · FACILITY 04";
   renderGrowthMission(state);
 
   cloudLegend.innerHTML = (Object.values(CLOUDS))
@@ -1550,6 +1644,7 @@ function renderRouteList(): void {
     const signalEvent = mapRank === 2 && !locked && company.story.seen.includes("electricFrontier") && !company.story.electricSignalCleared;
     const archiveEvent = mapRank === 3 && !locked && company.story.seen.includes("iceFrontier") && !company.story.iceArchiveRecovered;
     const solarEvent = mapRank === 4 && !locked && company.story.seen.includes("solarFrontier") && !company.story.solarEngineDisabled;
+    const openSkyEvent = mapRank === 5 && !locked && company.story.seen.includes("auroraFrontier") && company.story.solarEngineDisabled && !company.story.skyRestored;
     const cardContents = `
       <span class="route-visual">${locked ? "🔒" : map.icon}</span>
       <span class="route-code">${map.code}</span>
@@ -1562,6 +1657,7 @@ function renderRouteList(): void {
       ${signalEvent ? `<span class="route-rival-event signal"><i>LIVE TRACE</i> 표식 전기구름 5개 · 45초 · NRG 라인 해금</span>` : ""}
       ${archiveEvent ? `<span class="route-rival-event archive"><i>FROZEN FILE</i> 3연속 수확 × 3회 · 60초 · CRY 라인 해금</span>` : ""}
       ${solarEvent ? `<span class="route-rival-event solar"><i>PRESSURE ENGINE</i> 광자핵 과충전 · 흡입 해제 냉각 · SOL 라인 해금</span>` : ""}
+      ${openSkyEvent ? `<span class="route-rival-event open-sky"><i>FINAL PROTOCOL</i> 3연속 노드 × 3회 · 회로 안정화 · AUR 해금</span>` : ""}
       <span class="route-identity">${map.identity}</span>`;
 
     if (locked) {

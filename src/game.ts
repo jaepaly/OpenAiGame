@@ -1,5 +1,5 @@
 import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
-import type { ArchiveRelayState, Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, Particle, ProcessingClaimResult, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RivalRaceState, RunSkillId, RunState, SignalTraceState, SolarEngineState, StorySceneId, UpgradeId } from "./types";
+import type { ArchiveRelayState, Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, OpenSkyState, Particle, ProcessingClaimResult, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RivalRaceState, RunSkillId, RunState, SignalTraceState, SolarEngineState, StorySceneId, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
@@ -46,6 +46,13 @@ const SOLAR_CORE_HEAT = 34;
 const SOLAR_ENGINE_SECONDS = 75;
 const SOLAR_ENGINE_REWARD = 700;
 const SOLAR_OVERLOAD_LOCK = 3;
+const OPEN_SKY_CIRCUIT_TARGET = 3;
+const OPEN_SKY_CHAIN_TARGET = 3;
+const OPEN_SKY_CHAIN_WINDOW = 4;
+const OPEN_SKY_SECONDS = 90;
+const OPEN_SKY_REWARD = 1200;
+const OPEN_SKY_NODE_INSTABILITY = 22;
+const OPEN_SKY_OVERLOAD_LOCK = 3.5;
 const PACING_TARGETS = {
   firstHarvest: 10,
   firstReturn: 75,
@@ -71,6 +78,12 @@ const freshSolarEngine = (): SolarEngineState => ({
   status: "inactive", charge: 0, chargeTarget: SOLAR_ENGINE_CHARGE_TARGET, heat: 0, heatLimit: 100,
   lockTime: 0, ventReady: false, timeLeft: SOLAR_ENGINE_SECONDS, timeLimit: SOLAR_ENGINE_SECONDS,
   waveDelay: .7, reward: SOLAR_ENGINE_REWARD,
+});
+const freshOpenSky = (): OpenSkyState => ({
+  status: "inactive", circuits: 0, circuitTarget: OPEN_SKY_CIRCUIT_TARGET, chain: 0, chainTarget: OPEN_SKY_CHAIN_TARGET,
+  chainTimeLeft: 0, chainWindow: OPEN_SKY_CHAIN_WINDOW, instability: 0, instabilityLimit: 100,
+  lockTime: 0, coolingRequired: false, timeLeft: OPEN_SKY_SECONDS, timeLimit: OPEN_SKY_SECONDS,
+  waveDelay: .7, reward: OPEN_SKY_REWARD,
 });
 
 const freshRunState = (day = 1): RunState => ({
@@ -116,6 +129,7 @@ const freshRunState = (day = 1): RunState => ({
   signalTrace: freshSignalTrace(),
   archiveRelay: freshArchiveRelay(),
   solarEngine: freshSolarEngine(),
+  openSky: freshOpenSky(),
 });
 
 export class CloudHarvestGame {
@@ -189,6 +203,9 @@ export class CloudHarvestGame {
   private solarWaveIndex = 0;
   private solarEnginePulse = 0;
   private solarOverloadWarned = false;
+  private openSkyWaveIndex = 0;
+  private openSkyPulse = 0;
+  private openSkyOverloadWarned = false;
   private runEmitTimer = 0;
   private processingEmitTimer = 0;
   private fuelWarningStage = 0;
@@ -234,6 +251,7 @@ export class CloudHarvestGame {
     this.prepareSignalTrace(this.run.mapRank);
     this.prepareArchiveRelay(this.run.mapRank);
     this.prepareSolarEngine(this.run.mapRank);
+    this.prepareOpenSky(this.run.mapRank);
     window.addEventListener("resize", () => this.resize());
     for (let i = 0; i < Math.min(18, this.getMaxClouds()); i += 1) this.spawnCloud(true);
     this.emitAll();
@@ -355,6 +373,7 @@ export class CloudHarvestGame {
     if (this.run.signalTrace.status === "active") this.finishSignalTrace(false, "return");
     if (this.run.archiveRelay.status === "active") this.finishArchiveRelay(false, "return");
     if (this.run.solarEngine.status === "active") this.finishSolarEngine(false, "return");
+    if (this.run.openSky.status === "active") this.finishOpenSky(false, "return");
     this.run.emergencyReturn = false;
     this.returning = true;
     this.returnTimer = 0;
@@ -395,6 +414,7 @@ export class CloudHarvestGame {
     if (this.run.signalTrace.status === "active") this.finishSignalTrace(false, "fuel");
     if (this.run.archiveRelay.status === "active") this.finishArchiveRelay(false, "fuel");
     if (this.run.solarEngine.status === "active") this.finishSolarEngine(false, "fuel");
+    if (this.run.openSky.status === "active") this.finishOpenSky(false, "fuel");
     const discarded = this.getCargoCount();
     this.run.cargo = emptyCloudStock();
     this.run.cargoValue = emptyCloudStock();
@@ -431,6 +451,10 @@ export class CloudHarvestGame {
     }
     if (id === "stellar" && !this.state.story.solarEngineDisabled) {
       this.onToast("태양구름 층의 기압 엔진을 먼저 정지해야 합니다.", "warning");
+      return null;
+    }
+    if (id === "spectrum" && !this.state.story.skyRestored) {
+      this.onToast("오로라 핵심 항로의 기상 순환망을 먼저 복구해야 합니다.", "warning");
       return null;
     }
     const contract = PROCESSING_CONTRACTS.find((item) => item.id === id);
@@ -659,6 +683,17 @@ export class CloudHarvestGame {
     this.run.solarEngine = { ...freshSolarEngine(), status: startsSolarEngine ? "active" : "inactive" };
   }
 
+  private prepareOpenSky(mapRank: number): void {
+    const startsOpenSky = mapRank === 5
+      && this.state.story.seen.includes("auroraFrontier")
+      && this.state.story.solarEngineDisabled
+      && !this.state.story.skyRestored;
+    this.openSkyWaveIndex = 0;
+    this.openSkyPulse = 0;
+    this.openSkyOverloadWarned = false;
+    this.run.openSky = { ...freshOpenSky(), status: startsOpenSky ? "active" : "inactive" };
+  }
+
   launchFlight(mapRank: number): boolean {
     if (!this.atFactory || this.launching || this.returning || this.dayComplete) return false;
     if (!Number.isInteger(mapRank) || mapRank < 0 || mapRank > this.state.rank || !RANKS[mapRank]) return false;
@@ -676,6 +711,7 @@ export class CloudHarvestGame {
     this.prepareSignalTrace(mapRank);
     this.prepareArchiveRelay(mapRank);
     this.prepareSolarEngine(mapRank);
+    this.prepareOpenSky(mapRank);
     this.fuelWarningStage = 0;
     this.fuelPity = 0;
     this.fuelPickupFlash = 0;
@@ -1116,6 +1152,7 @@ export class CloudHarvestGame {
     this.updateSignalTrace(dt);
     this.updateArchiveRelay(dt);
     this.updateSolarEngine(dt);
+    this.updateOpenSky(dt);
 
     const worldZoom = this.getWorldZoom();
     this.player.targetX = Math.max(55 / worldZoom, Math.min(this.getWorldWidth() - 55 / worldZoom, this.player.targetX));
@@ -1340,6 +1377,16 @@ export class CloudHarvestGame {
             text: "주황 표식 광자핵을 수확하면 엔진 출력과 열이 함께 올라갑니다. 열이 높아지면 흡입을 놓고 28%까지 식히세요. 100% 과열되면 출력 한 단계가 날아가요!",
           });
           this.playTone(690, .13);
+        } else if (this.run.openSky.status === "active") {
+          this.onToast("소나: OPEN SKY PROTOCOL 시작! 오로라 노드 3개를 4초 안에 연결하고 흡입을 놓아 순환망을 안정화하세요.", "warning");
+          this.onRadio({
+            speaker: "관측 연구원 소나",
+            role: "OPEN SKY PROTOCOL // FINAL CIRCUIT",
+            tone: "sona",
+            portrait: "sona-serious",
+            text: "중심 순환핵 주변의 오로라 노드 세 개를 4초 안에 연결하세요. 한 회로가 닫히면 불안정도가 크게 오릅니다. 흡입을 놓고 25%까지 식히며 세 회로를 완성해야 해요!",
+          });
+          this.playTone(860, .14);
         } else {
           this.onToast("기상 항로 진입 — 수확 비행 시작!", "success");
         }
@@ -1963,6 +2010,235 @@ export class CloudHarvestGame {
     this.onRunChange(this.getRunState());
   }
 
+  private openSkyPosition(): { x: number; y: number } {
+    return { x: this.getWorldWidth() * .5, y: this.getWorldHeight() * .4 };
+  }
+
+  private clearOpenSkyNodes(remove: boolean): void {
+    const nodeIds = new Set(this.clouds.filter((cloud) => cloud.auroraNode).map((cloud) => cloud.id));
+    if (remove && nodeIds.size > 0) {
+      for (const cloud of this.clouds) {
+        if (!nodeIds.has(cloud.id)) continue;
+        this.burst(cloud.x, cloud.y, "#aaf5ff", 12, 190, "ribbon");
+        this.queuedCascadeIds.delete(cloud.id);
+      }
+      this.clouds = this.clouds.filter((cloud) => !nodeIds.has(cloud.id));
+      this.cascadeQueue = this.cascadeQueue.filter((item) => !nodeIds.has(item.cloudId));
+      return;
+    }
+    for (const cloud of this.clouds) if (cloud.auroraNode) cloud.auroraNode = false;
+  }
+
+  private spawnOpenSkyWave(): void {
+    const finale = this.run.openSky;
+    if (finale.status !== "active" || finale.lockTime > 0) return;
+    this.clearOpenSkyNodes(true);
+    const core = this.openSkyPosition();
+    const waveAngle = -.9 + this.openSkyWaveIndex * .72;
+    this.openSkyWaveIndex += 1;
+    for (let index = 0; index < finale.chainTarget; index += 1) {
+      this.spawnCloud(false, "aurora");
+      const node = this.clouds[this.clouds.length - 1];
+      if (!node) continue;
+      const angle = waveAngle + index / finale.chainTarget * Math.PI * 2;
+      const radiusX = 205;
+      const radiusY = 126;
+      const health = CLOUDS.aurora.health * (1 + this.run.mapRank * .12) * .34;
+      node.x = Math.max(82, Math.min(this.getWorldWidth() - 82, core.x + Math.cos(angle) * radiusX));
+      node.y = Math.max(198, Math.min(this.getWorldHeight() - 130, core.y + Math.sin(angle) * radiusY));
+      node.vx = -Math.sin(angle) * 32;
+      node.vy = Math.cos(angle) * 22;
+      node.radius = Math.min(36, Math.max(28, node.radius));
+      node.health = health;
+      node.maxHealth = health;
+      node.dense = false;
+      node.front = false;
+      node.formationId = undefined;
+      node.formationCore = false;
+      node.formationKind = undefined;
+      node.auroraNode = true;
+    }
+    this.addShockwave({ x: core.x, y: core.y, radius: 46, life: .86, maxLife: .86, color: "#d8b8ff" });
+    this.addFloatingText({ x: core.x, y: core.y - 90, text: `CIRCUIT WAVE  ${finale.circuits + 1}/${finale.circuitTarget}`, color: "#f1e6ff", life: 1.2 });
+    this.playTone(760 + finale.circuits * 110, .08);
+  }
+
+  private updateOpenSkyNodes(dt: number): void {
+    const core = this.openSkyPosition();
+    for (const node of this.clouds) {
+      if (!node.auroraNode) continue;
+      const dx = node.x - core.x;
+      const dy = node.y - core.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      const targetRadius = 190;
+      const radialError = targetRadius - distance;
+      const tangentX = -dy / distance;
+      const tangentY = dx / distance;
+      const radialX = dx / distance;
+      const radialY = dy / distance;
+      node.vx += (tangentX * 46 + radialX * radialError * 1.15) * dt;
+      node.vy += (tangentY * 34 + radialY * radialError * .82) * dt;
+      const speed = Math.hypot(node.vx, node.vy);
+      if (speed > 72) { node.vx = node.vx / speed * 72; node.vy = node.vy / speed * 72; }
+    }
+  }
+
+  private updateOpenSky(dt: number): void {
+    this.openSkyPulse = Math.max(0, this.openSkyPulse - dt * 2.2);
+    const finale = this.run.openSky;
+    if (finale.status !== "active") return;
+    this.updateOpenSkyNodes(dt);
+    finale.timeLeft = Math.max(0, finale.timeLeft - dt);
+    if (finale.timeLeft <= 0) {
+      this.finishOpenSky(false, "time");
+      return;
+    }
+
+    const suctionActive = this.isSuctionActive();
+    const coolingRate = finale.lockTime > 0 ? 30 : suctionActive ? 1.5 : 24;
+    finale.instability = Math.max(0, finale.instability - coolingRate * dt);
+    if (finale.coolingRequired && !suctionActive && finale.lockTime <= 0 && finale.instability <= 25) {
+      finale.coolingRequired = false;
+      const recovered = Math.min(2, this.getFuelCapacity() - this.run.fuel);
+      if (recovered > 0) this.run.fuel += recovered;
+      const core = this.openSkyPosition();
+      this.addFloatingText({ x: core.x, y: core.y - 102, text: `CIRCUIT STABLE${recovered > 0 ? `  ·  FUEL +${recovered.toFixed(1)}` : ""}`, color: "#aaffdf", life: 1.5 });
+      this.addShockwave({ x: core.x, y: core.y, radius: 68, life: .9, maxLife: .9, color: "#8fffe4" });
+      this.playTone(980, .085);
+      if (finale.circuits >= finale.circuitTarget) {
+        this.finishOpenSky(true);
+        return;
+      }
+    }
+
+    if (finale.lockTime > 0) {
+      finale.lockTime = Math.max(0, finale.lockTime - dt);
+      if (finale.lockTime <= 0) finale.waveDelay = .4;
+      return;
+    }
+    if (finale.chain > 0) {
+      finale.chainTimeLeft = Math.max(0, finale.chainTimeLeft - dt);
+      if (finale.chainTimeLeft <= 0) {
+        const core = this.openSkyPosition();
+        finale.chain = 0;
+        finale.instability = Math.max(0, finale.instability - 12);
+        finale.waveDelay = .7;
+        this.clearOpenSkyNodes(true);
+        this.addFloatingText({ x: core.x, y: core.y - 86, text: "CIRCUIT BROKEN  ·  RELINK", color: "#c7bdd9", life: 1.35 });
+        this.playTone(145, .13);
+        return;
+      }
+    }
+    if (finale.waveDelay > 0) {
+      finale.waveDelay = Math.max(0, finale.waveDelay - dt);
+      if (finale.waveDelay <= 0) this.spawnOpenSkyWave();
+      return;
+    }
+    if (!this.clouds.some((cloud) => cloud.auroraNode)) this.spawnOpenSkyWave();
+  }
+
+  private registerOpenSkyNode(cloud: Cloud): void {
+    const finale = this.run.openSky;
+    if (finale.status !== "active" || finale.lockTime > 0) return;
+    const core = this.openSkyPosition();
+    finale.chain += 1;
+    finale.chainTimeLeft = finale.chainWindow;
+    finale.instability = Math.min(finale.instabilityLimit, finale.instability + OPEN_SKY_NODE_INSTABILITY);
+    this.openSkyPulse = 1;
+    this.addHarvestLink({ x: cloud.x, y: cloud.y, targetX: core.x, targetY: core.y, life: .76, maxLife: .76, color: "#d8b8ff" });
+    this.addFloatingText({ x: cloud.x, y: cloud.y - 46, text: `SKY LINK  ${finale.chain}/${finale.chainTarget}`, color: "#f1e6ff", life: 1.3 });
+    this.addShockwave({ x: cloud.x, y: cloud.y, radius: 24, life: .68, maxLife: .68, color: "#b8d6ff" });
+    this.playTone(700 + finale.chain * 110 + finale.circuits * 45, .06);
+    if (finale.instability >= finale.instabilityLimit) {
+      this.overloadOpenSky();
+      return;
+    }
+    if (finale.chain < finale.chainTarget) return;
+    finale.circuits += 1;
+    finale.chain = 0;
+    finale.chainTimeLeft = 0;
+    finale.coolingRequired = true;
+    this.clearOpenSkyNodes(true);
+    this.addFloatingText({ x: core.x, y: core.y - 106, text: `CIRCUIT CLOSED  ${finale.circuits}/${finale.circuitTarget}  ·  RELEASE TO STABILIZE`, color: "#ffffff", life: 1.75 });
+    this.addShockwave({ x: core.x, y: core.y, radius: 76, life: 1, maxLife: 1, color: "#d8b8ff" });
+    this.burst(core.x, core.y, "#c8f4ff", 50, 360, "ribbon");
+    finale.waveDelay = finale.circuits >= finale.circuitTarget ? 999 : .65;
+  }
+
+  private overloadOpenSky(): void {
+    const finale = this.run.openSky;
+    if (finale.status !== "active") return;
+    const core = this.openSkyPosition();
+    finale.circuits = Math.max(0, finale.circuits - 1);
+    finale.chain = 0;
+    finale.chainTimeLeft = 0;
+    finale.instability = finale.instabilityLimit;
+    finale.lockTime = OPEN_SKY_OVERLOAD_LOCK;
+    finale.coolingRequired = false;
+    this.clearOpenSkyNodes(true);
+    this.openSkyPulse = 1.4;
+    this.shake = Math.min(3.5, Math.max(this.shake, 3.5));
+    this.addFloatingText({ x: core.x, y: core.y - 108, text: "SKYLOOP OVERLOAD  ·  CIRCUIT -1", color: "#ff8fcf", life: 1.9 });
+    this.addShockwave({ x: core.x, y: core.y, radius: 98, life: 1.2, maxLife: 1.2, color: "#ff75c8" });
+    this.burst(core.x, core.y, "#ff9bd8", 60, 390, "ribbon");
+    this.playTone(98, .27);
+    if (!this.openSkyOverloadWarned) {
+      this.openSkyOverloadWarned = true;
+      this.onRadio({
+        speaker: "정비사 모카",
+        role: "SKYLOOP OVERLOAD // CIRCUIT LOST",
+        tone: "moka",
+        portrait: "moka-worried",
+        text: "순환핵이 역류했어요! 완성 회로 하나가 끊겼지만 아직 복구할 수 있어요. 잠금이 풀리면 이번에는 회로마다 꼭 흡입을 놓아주세요!",
+      });
+    } else {
+      this.onToast("순환핵 과부하 — 완성 회로 1개 손실 · 3.5초 강제 안정화", "warning");
+    }
+  }
+
+  private finishOpenSky(success: boolean, reason: "time" | "return" | "fuel" = "time"): void {
+    const finale = this.run.openSky;
+    if (finale.status !== "active") return;
+    this.clearOpenSkyNodes(false);
+    if (success) {
+      finale.status = "won";
+      finale.circuits = finale.circuitTarget;
+      finale.instability = Math.min(finale.instability, 70);
+      this.state.story.skyRestored = true;
+      this.state.money += finale.reward;
+      this.state.totalEarned += finale.reward;
+      this.state.materials.aurora += 8;
+      const core = this.openSkyPosition();
+      this.addFloatingText({ x: core.x, y: core.y - 112, text: `OPEN SKY  +◈${finale.reward}`, color: "#ffffff", life: 2.3 });
+      this.addShockwave({ x: core.x, y: core.y, radius: 124, life: 1.4, maxLife: 1.4, color: "#f1e6ff" });
+      this.burst(core.x, core.y, "#d8b8ff", 94, 490, "ribbon");
+      this.onToast(`하늘 순환 복구! ◈ ${finale.reward} · 오로라 재료 8 · AUR 스펙트럼 라인 해금`, "success");
+      this.onRadio({
+        speaker: "관측 연구원 소나",
+        role: "OPEN SKY // WEATHER CYCLE RESTORED",
+        tone: "sona",
+        portrait: "sona-serious",
+        text: "세 회로 모두 정상 연결. 인공 기압장이 무너지고 구름이 도시 쪽으로 다시 흐릅니다. 43일 만의 비가 시작될 거예요. 우리가 하늘을 되찾았습니다.",
+      });
+      this.playChord();
+      this.commit();
+      this.onRunChange(this.getRunState());
+      return;
+    }
+    finale.status = "lost";
+    const reasonText = reason === "fuel" ? "연료가 먼저 바닥났어요." : reason === "return" ? "귀환 항로로 이탈했어요." : "순환 동기화 시간이 끝났어요.";
+    this.onToast("OPEN SKY 중단 — 화물 손실 없음 · 오로라 항로에서 재시도", "warning");
+    this.onRadio({
+      speaker: "정비사 모카",
+      role: "FINAL PROTOCOL RETRY // CARGO SAFE",
+      tone: "moka",
+      portrait: "moka-worried",
+      text: `${reasonText} 연결 회로는 초기화됐지만 수확 화물은 그대로예요. 다음 오로라 항로에서 마지막 프로토콜을 다시 시작하죠.`,
+    });
+    this.playTone(108, .24);
+    this.onRunChange(this.getRunState());
+  }
+
   private updateDrones(dt: number): boolean {
     this.droneBeams = [];
     let harvested = false;
@@ -1980,11 +2256,11 @@ export class CloudHarvestGame {
 
     for (const drone of this.harvestDrones) {
       drone.phase += dt * (.7 + (drone.phase % 1) * .25);
-      let target = this.clouds.find((cloud) => cloud.id === drone.targetId && !cloud.signalTarget && !cloud.archiveShard && !cloud.solarCore && !claimedTargets.has(cloud.id) && !this.queuedCascadeIds.has(cloud.id));
+      let target = this.clouds.find((cloud) => cloud.id === drone.targetId && !cloud.signalTarget && !cloud.archiveShard && !cloud.solarCore && !cloud.auroraNode && !claimedTargets.has(cloud.id) && !this.queuedCascadeIds.has(cloud.id));
       if (!target) {
         let nearest = Number.POSITIVE_INFINITY;
         for (const cloud of this.clouds) {
-          if (cloud.signalTarget || cloud.archiveShard || cloud.solarCore || claimedTargets.has(cloud.id) || this.queuedCascadeIds.has(cloud.id)) continue;
+          if (cloud.signalTarget || cloud.archiveShard || cloud.solarCore || cloud.auroraNode || claimedTargets.has(cloud.id) || this.queuedCascadeIds.has(cloud.id)) continue;
           const approachX = cloud.x + Math.cos(drone.phase) * (34 + cloud.radius * .35);
           const approachY = cloud.y + Math.sin(drone.phase) * (28 + cloud.radius * .28);
           const distance = Math.hypot(approachX - drone.x, approachY - drone.y);
@@ -2066,6 +2342,7 @@ export class CloudHarvestGame {
     const countsForSignalTrace = this.run.signalTrace.status === "active" && source !== "drone" && cloud.id === this.signalTargetId && cloud.signalTarget;
     const countsForArchiveRelay = this.run.archiveRelay.status === "active" && source !== "drone" && cloud.archiveShard;
     const countsForSolarEngine = this.run.solarEngine.status === "active" && source !== "drone" && cloud.solarCore;
+    const countsForOpenSky = this.run.openSky.status === "active" && source !== "drone" && cloud.auroraNode;
     this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
     this.comboTimer = 3.4 + FLIGHT_ROUTES[this.run.routeId].comboWindowBonus + this.run.skills.comboCapacitor * .35 + this.run.skills.vacuumMomentum * .22;
     this.state.bestCombo = Math.max(this.state.bestCombo, this.combo);
@@ -2140,6 +2417,7 @@ export class CloudHarvestGame {
     }
     if (countsForArchiveRelay) this.registerArchiveShard(cloud);
     if (countsForSolarEngine) this.registerSolarCore(cloud);
+    if (countsForOpenSky) this.registerOpenSkyNode(cloud);
 
     if (cascadeDepth > 0 && this.cascadeCount % 5 === 0) {
       const milestone = this.cascadeCount >= 30 ? "MEGA HARVEST" : this.cascadeCount >= 20 ? "SUPER CASCADE" : this.cascadeCount >= 10 ? "CHAIN REACTION" : "CASCADE";
@@ -2160,7 +2438,7 @@ export class CloudHarvestGame {
       const chainRadius = 105 + chainStacks * 35 + this.run.skills.relayBurst * 42 + this.run.skills.blackHole * 120
         + this.run.skills.cascadeGrid * 95 + this.run.skills.chainReactor * 145;
       for (const nearby of this.clouds) {
-        if (source === "drone" && (nearby.archiveShard || nearby.solarCore)) continue;
+        if (source === "drone" && (nearby.archiveShard || nearby.solarCore || nearby.auroraNode)) continue;
         const distance = Math.hypot(nearby.x - cloud.x, nearby.y - cloud.y);
         if (distance < chainRadius) {
           nearby.health -= 11 + chainStacks * 12 + this.run.skills.relayBurst * 15 + this.run.skills.blackHole * 25
@@ -2393,7 +2671,7 @@ export class CloudHarvestGame {
       if (this.run.fever >= 100) this.startFever();
     }
     for (const nearby of this.clouds) {
-      if (protectEventTargets && (nearby.archiveShard || nearby.solarCore)) continue;
+      if (protectEventTargets && (nearby.archiveShard || nearby.solarCore || nearby.auroraNode)) continue;
       const distance = Math.hypot(nearby.x - x, nearby.y - y);
       if (distance > 250) continue;
       const force = 1 - distance / 250;
@@ -2620,6 +2898,7 @@ export class CloudHarvestGame {
     for (const cloud of this.clouds) this.drawCloud(ctx, cloud, time);
     this.drawArchiveRelay(ctx, time);
     this.drawSolarEngine(ctx, time);
+    this.drawOpenSkyCore(ctx, time);
     this.drawRivalHarvester(ctx, time);
     this.drawStormDroneBeams(ctx, time);
     this.drawHarvestLinks(ctx, time);
@@ -2893,6 +3172,67 @@ export class CloudHarvestGame {
     }
   }
 
+  private drawOpenSkyCore(ctx: CanvasRenderingContext2D, time: number): void {
+    const finale = this.run.openSky;
+    if (finale.status === "inactive") return;
+    const { x, y } = this.openSkyPosition();
+    const instabilityRatio = finale.instability / Math.max(1, finale.instabilityLimit);
+    const circuitRatio = finale.circuits / Math.max(1, finale.circuitTarget);
+    const locked = finale.lockTime > 0;
+    const pulse = 1 + Math.sin(time * (locked ? 8.5 : 3.4)) * (.03 + instabilityRatio * .04) + this.openSkyPulse * .08;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(pulse, pulse);
+    ctx.globalAlpha = finale.status === "lost" ? .55 : 1;
+
+    const glow = ctx.createRadialGradient(0, 0, 8, 0, 0, 112);
+    glow.addColorStop(0, `rgba(255,255,255,${.46 + circuitRatio * .3})`);
+    glow.addColorStop(.3, `rgba(137,234,255,${.32 + instabilityRatio * .26})`);
+    glow.addColorStop(.62, `rgba(204,137,255,${.2 + instabilityRatio * .24})`);
+    glow.addColorStop(1, "rgba(255,101,204,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, 0, 112, 0, Math.PI * 2); ctx.fill();
+
+    for (let ring = 0; ring < 3; ring += 1) {
+      ctx.save();
+      ctx.rotate((ring % 2 ? -1 : 1) * time * (.55 + ring * .25) + ring * .7);
+      ctx.strokeStyle = locked ? `rgba(255,112,196,${.9 - ring * .18})` : [`#9bf5ff`, "#d8b8ff", "#ffb3df"][ring];
+      ctx.lineWidth = 5 - ring;
+      ctx.setLineDash([15 + ring * 3, 8 + ring * 2]);
+      ctx.beginPath(); ctx.ellipse(0, 0, 49 + ring * 12, 32 + ring * 8, ring * .5, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.setLineDash([]);
+    ctx.shadowColor = locked ? "#ff67bc" : "#b9f7ff";
+    ctx.shadowBlur = 30 + instabilityRatio * 28;
+    const coreGradient = ctx.createLinearGradient(-28, -28, 28, 28);
+    coreGradient.addColorStop(0, "#a5f8ff");
+    coreGradient.addColorStop(.48, "#ffffff");
+    coreGradient.addColorStop(1, locked ? "#ff78bf" : "#d6a8ff");
+    ctx.fillStyle = coreGradient;
+    ctx.beginPath();
+    for (let point = 0; point < 8; point += 1) {
+      const angle = point * Math.PI / 4 + time * .22;
+      const radius = point % 2 ? 17 : 29;
+      const px = Math.cos(angle) * radius;
+      const py = Math.sin(angle) * radius;
+      if (point === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.shadowColor = "transparent";
+
+    ctx.fillStyle = "rgba(24,26,58,.9)";
+    ctx.strokeStyle = locked ? "#ff8fcf" : "#bdefff";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(-78, 82, 156, 32, 10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = locked ? "#ffb3df" : "#f1e6ff";
+    ctx.font = "900 11px Outfit, sans-serif";
+    ctx.textAlign = "center";
+    const label = finale.status === "won" ? "WEATHER CYCLE ONLINE" : finale.status === "lost" ? "SKYLOOP RESET" : locked ? `OVERLOAD LOCK ${finale.lockTime.toFixed(1)}s` : `SKYLOOP ${finale.circuits}/${finale.circuitTarget}`;
+    ctx.fillText(label, 0, 103);
+    ctx.restore();
+  }
+
   private drawSolarEngine(ctx: CanvasRenderingContext2D, time: number): void {
     const engine = this.run.solarEngine;
     if (engine.status === "inactive") return;
@@ -3128,6 +3468,23 @@ export class CloudHarvestGame {
       ctx.font = `900 ${Math.max(11, cloud.radius * .29)}px Outfit, sans-serif`;
       ctx.textAlign = "center";
       ctx.fillText("PHOTON CORE", 0, -cloud.radius * 1.46);
+      ctx.shadowColor = "transparent";
+    }
+    if (cloud.auroraNode) {
+      const nodePulse = 1 + Math.sin(time * 8.8 + cloud.phase) * .09;
+      const hue = 185 + (cloud.id * 47) % 120;
+      ctx.shadowColor = reducedEffects ? "transparent" : `hsl(${hue} 95% 76%)`;
+      ctx.shadowBlur = reducedEffects ? 0 : 32;
+      ctx.strokeStyle = `hsl(${hue} 95% 84%)`;
+      ctx.lineWidth = 5;
+      ctx.setLineDash([9, 5, 2, 5]);
+      ctx.lineDashOffset = -time * 76;
+      ctx.beginPath(); ctx.arc(0, 0, cloud.radius * 1.42 * nodePulse, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `900 ${Math.max(11, cloud.radius * .29)}px Outfit, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText(`SKY NODE ${this.run.openSky.chain + 1}/${this.run.openSky.chainTarget}`, 0, -cloud.radius * 1.5);
       ctx.shadowColor = "transparent";
     }
     if (cloud.kind === "rain") { ctx.fillStyle = "#3d8cca"; for (let i = -1; i <= 1; i += 1) { ctx.beginPath(); ctx.ellipse(i * 13, cloud.radius * .65, 3, 7, .4, 0, Math.PI * 2); ctx.fill(); } }
