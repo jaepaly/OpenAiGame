@@ -55,6 +55,15 @@ app.innerHTML = `
         <footer id="rivalRaceMessage">비구름을 먼저 확보해 우선 항로를 차지하세요</footer>
       </aside>
 
+      <aside class="signal-trace" id="signalTrace" aria-live="polite" aria-hidden="true">
+        <header><span>LIVE THUNDER TRACE</span><strong id="signalTraceTitle">MOVING COORDINATE</strong><em id="signalTraceTimer">45.0s</em></header>
+        <div class="signal-trace-board">
+          <div id="signalTracePips"></div>
+          <strong id="signalTraceScore">0 / 5</strong>
+        </div>
+        <footer id="signalTraceMessage">보라색 표식 전기구름을 순서대로 추적하세요</footer>
+      </aside>
+
       <div class="tutorial" id="tutorial"><b>WASD 이동 · 마우스 조준</b><span>좌클릭 흡입 · SPACE 기지 귀환 · 연료 0% 전 복귀</span></div>
       <aside class="growth-mission" id="growthMission" aria-live="polite">
         <span class="growth-mission-code" id="growthMissionCode">JOB 01</span>
@@ -82,6 +91,14 @@ app.innerHTML = `
         <p>쾌청산업보다 먼저 수확을 끝내 회사의 첫 우선 운항권을 따냈습니다.</p>
         <div><span><b id="rivalResultReward">◈ 80</b> 관제 지원금</span><span><b>P-1 ×1.92</b> 전용 가공 계약</span></div>
         <footer><b>NEXT SKY</b><span>전기구름 항로 · 전국 기상기업 승급 준비</span></footer>
+      </section>
+
+      <section class="rival-result signal-result" id="signalResult" aria-live="polite" aria-hidden="true">
+        <small>CHAPTER 4 CLEAR // THUNDER GRID</small>
+        <h2>전하 좌표 고정!</h2>
+        <p>움직이는 전기구름 신호를 연결해 인공 기압장이 향하는 북쪽 좌표를 확보했습니다.</p>
+        <div><span><b id="signalResultReward">◈ 180</b> 관측 지원금</span><span><b>NRG + ◆3</b> 전하 결정 추출 해금</span></div>
+        <footer><b>NEXT SKY</b><span>북부 빙정층 · 얼어붙은 관측 기록 추적</span></footer>
       </section>
 
       <aside class="promotion-card">
@@ -241,6 +258,8 @@ const radioCallRole = required<HTMLElement>("#radioCallRole");
 const radioCallText = required<HTMLElement>("#radioCallText");
 const rivalResult = required<HTMLElement>("#rivalResult");
 const rivalResultReward = required<HTMLElement>("#rivalResultReward");
+const signalResult = required<HTMLElement>("#signalResult");
+const signalResultReward = required<HTMLElement>("#signalResultReward");
 const altitude = required<HTMLElement>("#altitude");
 const rankName = required<HTMLElement>("#rankName");
 const promotionTitle = required<HTMLElement>("#promotionTitle");
@@ -285,6 +304,12 @@ const rivalRacePips = required<HTMLElement>("#rivalRacePips");
 const playerRaceScore = required<HTMLElement>("#playerRaceScore");
 const rivalRaceScore = required<HTMLElement>("#rivalRaceScore");
 const rivalRaceMessage = required<HTMLElement>("#rivalRaceMessage");
+const signalTrace = required<HTMLElement>("#signalTrace");
+const signalTraceTitle = required<HTMLElement>("#signalTraceTitle");
+const signalTraceTimer = required<HTMLElement>("#signalTraceTimer");
+const signalTracePips = required<HTMLElement>("#signalTracePips");
+const signalTraceScore = required<HTMLElement>("#signalTraceScore");
+const signalTraceMessage = required<HTMLElement>("#signalTraceMessage");
 const levelUpOverlay = required<HTMLElement>("#levelUpOverlay");
 const skillChoices = required<HTMLElement>("#skillChoices");
 const levelUpTitle = required<HTMLElement>("#levelUpTitle");
@@ -388,7 +413,9 @@ const radioQueue: RadioCall[] = [];
 let radioBusy = false;
 let radioTimer = 0;
 let rivalResultTimer = 0;
+let signalResultTimer = 0;
 let previousRivalRaceStatus: RunState["rivalRace"]["status"] = "inactive";
+let previousSignalTraceStatus: RunState["signalTrace"]["status"] = "inactive";
 
 function enqueueRadioCall(call: RadioCall): void {
   radioQueue.push(call);
@@ -433,12 +460,24 @@ function showRivalResult(reward: number): void {
   }, 4400);
 }
 
+function showSignalResult(reward: number): void {
+  window.clearTimeout(signalResultTimer);
+  signalResultReward.textContent = `◈ ${reward}`;
+  signalResult.classList.remove("show");
+  signalResult.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => signalResult.classList.add("show"));
+  signalResultTimer = window.setTimeout(() => {
+    signalResult.classList.remove("show");
+    signalResult.setAttribute("aria-hidden", "true");
+  }, 5000);
+}
+
 const STORY_SCENES: Record<StorySceneId, StoryScene> = {
   prologue: {
     chapter: "CHAPTER 0 // THE LAST SMALL COMPANY",
     title: "구름 없는 아침",
     beats: [
-      { speaker: "NARRATION", name: "서부 7구역", role: "43 DAYS WITHOUT RAIN", mark: "☁", tone: "narrator", text: "맑은 하늘은 한때 축복이었다. 비가 멎은 지 마흔셋째 날, 사람들은 구름 한 점에도 가격표를 붙였다." },
+      { speaker: "NARRATION", name: "서부 7구역", role: "43 DAYS WITHOUT RAIN", mark: "☁", tone: "narrator", text: "맑은 하늘은 한때 축복이었다. 비가 멎은 지 43일째, 사람들은 구름 한 점에도 가격표를 붙였다." },
       { speaker: "모카", name: "정비사 모카", role: "SHIP MECHANIC // CO-FOUNDER", mark: "MK", tone: "moka", portrait: "moka-neutral", text: "신임 사장님 맞죠? 물려받은 건 빚 독촉장 열두 장, 낡은 격납고 하나… 그리고 아직 뜨는 비행선 한 대예요." },
       { speaker: "모카", name: "정비사 모카", role: "SHIP MECHANIC // CO-FOUNDER", mark: "MK", tone: "moka", portrait: "moka-serious", text: "구름만 가져오면 회사는 돌아가요. 좌클릭으로 흡입하고, 연료가 바닥나기 전에 SPACE로 귀환하세요. 화물보다 목숨이 먼저니까." },
       { speaker: "소나 // 무전", name: "관측 연구원 소나", role: "WEATHER ANALYST // REMOTE", mark: "SN", tone: "sona", portrait: "sona-neutral", text: "관측팀 소나입니다. 첫 목표는 뭉게구름 여섯 개. 원재료를 확보하면 첫 가공 계약을 열 수 있어요." },
@@ -479,7 +518,7 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
     chapter: "CHAPTER 4 // THUNDER GRID",
     title: "번개 속의 좌표",
     beats: [
-      { speaker: "소나", name: "관측 연구원 소나", role: "ELECTRIC FRONT ANALYSIS", mark: "SN", tone: "sona", portrait: "sona-neutral", text: "전기구름 항로가 열렸습니다. 전하핵을 정밀 추출하면 코인 수익을 줄이는 대신 특성 연구 재료를 더 확보할 수 있어요." },
+      { speaker: "소나", name: "관측 연구원 소나", role: "ELECTRIC FRONT ANALYSIS", mark: "SN", tone: "sona", portrait: "sona-neutral", text: "전기구름 항로가 열렸습니다. 이동 전하 신호 다섯 개를 연결하면 기압장 좌표와 전하 결정 추출 라인을 함께 확보할 수 있어요." },
       { speaker: "소나", name: "관측 연구원 소나", role: "SIGNAL MATCH // 97%", mark: "97", tone: "sona", portrait: "sona-worried", text: "번개가 칠 때마다 같은 좌표가 반복됩니다. 쾌청산업의 인공 기압장이 북쪽 빙정층과 연결돼 있어요." },
       { speaker: "모카", name: "정비사 모카", role: "INSULATION CHECK", mark: "MK", tone: "moka", portrait: "moka-serious", text: "좋아요. 절연 코팅 확인했고 드론도 분산 운항으로 맞췄습니다. 번개가 길을 가리킨다면 그대로 쫓아가죠." },
     ],
@@ -788,6 +827,28 @@ function renderRunState(state: RunState): void {
   }
   if (race.status === "won" && previousRivalRaceStatus !== "won") showRivalResult(race.reward);
   previousRivalRaceStatus = race.status;
+  const signal = state.signalTrace;
+  const signalVisible = signal.status !== "inactive";
+  signalTrace.classList.toggle("show", signalVisible);
+  signalTrace.classList.toggle("won", signal.status === "won");
+  signalTrace.classList.toggle("lost", signal.status === "lost");
+  signalTrace.setAttribute("aria-hidden", String(!signalVisible));
+  document.body.classList.toggle("signal-trace-active", signalVisible);
+  signalTraceTimer.textContent = signal.status === "active" ? `${Math.max(0, signal.timeLeft).toFixed(1)}s` : signal.status === "won" ? "LOCKED" : "LOST";
+  signalTraceScore.textContent = `${signal.progress} / ${signal.target}`;
+  signalTracePips.innerHTML = Array.from({ length: signal.target }, (_, index) => `<i class="${index < signal.progress ? "filled" : ""}"></i>`).join("");
+  if (signal.status === "won") {
+    signalTraceTitle.textContent = "COORDINATE LOCKED";
+    signalTraceMessage.textContent = `NRG 전하 결정 추출 라인 해금 · 관측 지원금 ◈ ${signal.reward}`;
+  } else if (signal.status === "lost") {
+    signalTraceTitle.textContent = "SIGNAL LOST";
+    signalTraceMessage.textContent = "화물 손실 없음 · 전기구름 항로에서 다시 추적 가능";
+  } else {
+    signalTraceTitle.textContent = "MOVING COORDINATE";
+    signalTraceMessage.textContent = "보라색 표식 전기구름을 순서대로 추적하세요";
+  }
+  if (signal.status === "won" && previousSignalTraceStatus !== "won") showSignalResult(signal.reward);
+  previousSignalTraceStatus = signal.status;
   renderProcessing(state);
 }
 
@@ -944,13 +1005,20 @@ function showFactory(state: RunState): void {
     const acceptedClouds = contract.acceptedKinds.map((kind) => CLOUDS[kind]);
     const quotaLabel = contract.flightLimit === undefined ? "수량 제한 없음" : `이번 비행 ${estimate.quotaRemaining}/${contract.flightLimit}개 남음`;
     const rewardLabel = materialUnits > 0 ? `◈ ${payout.toLocaleString()} + ◆${materialUnits}` : `◈ ${payout.toLocaleString()}`;
-    return `<button class="contract-card ${contract.outputKind}" data-contract="${contract.id}" ${estimate.units <= 0 ? "disabled" : ""}>
+    const eventLocked = contract.id === "energy" && !company.story.electricSignalCleared;
+    const disabled = eventLocked || estimate.units <= 0;
+    const payoutLabel = eventLocked
+      ? "LIVE THUNDER TRACE 성공 시 해금"
+      : estimate.units > 0
+        ? `예상 ${rewardLabel} · 배정`
+        : contract.flightLimit && estimate.quotaRemaining === 0 ? "이번 비행 주문 완료" : "맞는 화물 없음";
+    return `<button class="contract-card ${contract.outputKind} ${eventLocked ? "event-locked" : ""}" data-contract="${contract.id}" ${disabled ? "disabled" : ""}>
       <span class="contract-code">${contract.code}</span>
-      <em class="contract-purpose">${contract.outputLabel}</em>
+      <em class="contract-purpose">${eventLocked ? "신호 좌표 필요" : contract.outputLabel}</em>
       <span class="contract-copy"><b>${contract.name}</b><small>${contract.description}</small></span>
       <span class="contract-rates">투입 ${acceptedClouds.map((cloud) => cloud.icon).join(" ")} · ${quotaLabel}</span>
       <span class="contract-process"><b>${estimate.units} UNIT · ${estimate.batches}묶음</b><small>예상 ${processingTime(estimate.seconds)}</small></span>
-      <strong class="contract-payout">${estimate.units > 0 ? `예상 ${rewardLabel} · 배정` : contract.flightLimit && estimate.quotaRemaining === 0 ? "이번 비행 주문 완료" : "맞는 화물 없음"}</strong>
+      <strong class="contract-payout">${payoutLabel}</strong>
     </button>`;
   }).join("");
   factoryOverlay.classList.add("show");
@@ -1131,9 +1199,11 @@ function renderState(state: GameState): void {
   soundButton.textContent = state.sound ? "🔊" : "🔇";
   if (state.harvested > 2) tutorial.classList.add("hidden");
   const rivalEventReady = state.rank >= 1 && state.story.seen.includes("rainFrontier") && !state.story.rivalBeaten;
+  const signalEventReady = state.rank >= 2 && state.story.seen.includes("electricFrontier") && !state.story.electricSignalCleared;
   launchButton.classList.toggle("rival-ready", rivalEventReady);
+  launchButton.classList.toggle("signal-ready", signalEventReady);
   const launchFacilityCode = launchButton.querySelector<HTMLElement>("b");
-  if (launchFacilityCode) launchFacilityCode.textContent = rivalEventReady ? "GO! · LIVE RACE" : "GO · FACILITY 04";
+  if (launchFacilityCode) launchFacilityCode.textContent = signalEventReady ? "GO! · SIGNAL TRACE" : rivalEventReady ? "GO! · LIVE RACE" : "GO · FACILITY 04";
   renderGrowthMission(state);
 
   cloudLegend.innerHTML = (Object.values(CLOUDS))
@@ -1316,6 +1386,7 @@ function renderRouteList(): void {
       .join(" · ");
     const payout = map.valueMultiplier * FLIGHT_ROUTES[map.routeId].valueMultiplier;
     const rivalEvent = mapRank === 1 && !locked && company.story.seen.includes("rainFrontier") && !company.story.rivalBeaten;
+    const signalEvent = mapRank === 2 && !locked && company.story.seen.includes("electricFrontier") && !company.story.electricSignalCleared;
     const cardContents = `
       <span class="route-visual">${locked ? "🔒" : map.icon}</span>
       <span class="route-code">${map.code}</span>
@@ -1325,6 +1396,7 @@ function renderRouteList(): void {
       <b>연료 소모 ×${map.fuelDrain.toFixed(2)} · 수익 ×${payout.toFixed(2)}</b>
       <span class="route-clouds">${clouds}</span>
       ${rivalEvent ? `<span class="route-rival-event"><i>LIVE EVENT</i> 비구름 5개 선점 경쟁 · 전용 계약 보상</span>` : ""}
+      ${signalEvent ? `<span class="route-rival-event signal"><i>LIVE TRACE</i> 표식 전기구름 5개 · 45초 · NRG 라인 해금</span>` : ""}
       <span class="route-identity">${map.identity}</span>`;
 
     if (locked) {

@@ -41,6 +41,7 @@ export interface Cloud {
   formationId?: number;
   formationCore?: boolean;
   formationKind?: CloudFormationKind;
+  signalTarget?: boolean;
 }
 
 export interface Particle {
@@ -158,6 +159,7 @@ export interface GameState {
 export interface StoryProgress {
   seen: StorySceneId[];
   rivalBeaten: boolean;
+  electricSignalCleared: boolean;
 }
 
 export type RivalRaceStatus = "inactive" | "active" | "won" | "lost";
@@ -167,6 +169,17 @@ export interface RivalRaceState {
   playerScore: number;
   rivalScore: number;
   target: number;
+  reward: number;
+}
+
+export type SignalTraceStatus = "inactive" | "active" | "won" | "lost";
+
+export interface SignalTraceState {
+  status: SignalTraceStatus;
+  progress: number;
+  target: number;
+  timeLeft: number;
+  timeLimit: number;
   reward: number;
 }
 
@@ -242,6 +255,7 @@ export interface RunState {
   processingBatchCapacity: number;
   processingUsage: Partial<Record<ContractId, number>>;
   rivalRace: RivalRaceState;
+  signalTrace: SignalTraceState;
 }
 
 export interface InfiniteResearchDefinition {

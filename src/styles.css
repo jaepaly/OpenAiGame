@@ -117,6 +117,26 @@ body { min-width: 320px; background: #92ddf7; }
 .rival-race-active .promotion-card { top: 306px; }
 .rival-race-active .toast { top: 298px; }
 
+.signal-trace { position: absolute; z-index: 7; left: 50%; top: 150px; width: min(540px,calc(100% - 18px)); padding: 11px 14px 12px; color: white; background: radial-gradient(circle at 50% 0,rgba(183,118,255,.2),transparent 48%),linear-gradient(145deg,rgba(18,21,53,.97),rgba(37,27,67,.98)); border: 3px solid #b776ff; border-radius: 20px; box-shadow: 0 7px 0 rgba(45,24,76,.5),0 0 34px rgba(183,118,255,.3); opacity: 0; pointer-events: none; transform: translate(-50%,-12px) scale(.96); transition: opacity .2s ease,transform .2s ease; }
+.signal-trace.show { opacity: 1; transform: translate(-50%,0) scale(1); }
+.signal-trace header { display: flex; align-items: center; gap: 9px; }
+.signal-trace header span { color: #d5a9ff; font: 900 9px "Outfit",sans-serif; letter-spacing: .14em; }
+.signal-trace header strong { margin-left: auto; font: 900 14px "Outfit",sans-serif; letter-spacing: .06em; }
+.signal-trace header em { min-width: 55px; padding: 5px 8px; color: #211634; background: #9ff8ff; border-radius: 7px; font: 900 10px "Outfit",sans-serif; font-style: normal; text-align: center; }
+.signal-trace-board { margin-top: 10px; display: grid; grid-template-columns: minmax(0,1fr) 64px; align-items: center; gap: 12px; }
+.signal-trace-board > div { display: flex; gap: 7px; }
+.signal-trace-board i { flex: 1 1 0; height: 14px; display: block; background: #302b53; border: 2px solid #685b91; border-radius: 99px; transition: .18s ease; }
+.signal-trace-board i.filled { background: linear-gradient(90deg,#b776ff,#9ff8ff); border-color: #e9d4ff; box-shadow: 0 0 14px rgba(183,118,255,.85); transform: scaleY(1.18); }
+.signal-trace-board > strong { color: #9ff8ff; font: 900 23px/1 "Outfit",sans-serif; text-align: right; }
+.signal-trace footer { margin-top: 9px; padding-top: 7px; color: #d9d3ec; border-top: 1px solid rgba(213,169,255,.28); font-size: 10px; font-weight: 900; text-align: center; }
+.signal-trace.won { border-color: #9ff8ff; box-shadow: 0 7px 0 rgba(24,68,76,.42),0 0 40px rgba(159,248,255,.4); }
+.signal-trace.won header strong,.signal-trace.won .signal-trace-board > strong { color: #9ff8ff; }
+.signal-trace.lost { border-color: #ff9a72; }
+.signal-trace.lost header strong { color: #ffc09e; }
+.returning .signal-trace,.launching .signal-trace,body.base-open .signal-trace,body.garage-open .signal-trace,body.story-open .signal-trace { opacity: 0 !important; transform: translate(-50%,-12px) scale(.96); }
+.signal-trace-active .promotion-card { top: 284px; }
+.signal-trace-active .toast { top: 280px; }
+
 .radio-call { position: absolute; z-index: 10; right: 172px; bottom: 26px; width: min(510px,calc(100% - 210px)); min-height: 136px; padding: 11px 16px 12px 11px; display: grid; grid-template-columns: 112px minmax(0,1fr); gap: 15px; align-items: center; color: white; background: linear-gradient(145deg,rgba(7,31,44,.97),rgba(15,53,65,.98)); border: 3px solid #7ff5df; border-radius: 23px; box-shadow: 0 8px 0 rgba(5,26,36,.48),0 18px 38px rgba(7,31,44,.34); opacity: 0; pointer-events: none; transform: translateX(30px) scale(.96); transition: opacity .2s ease,transform .24s cubic-bezier(.2,.85,.3,1.12); }
 .radio-call.show { opacity: 1; transform: translateX(0) scale(1); }
 .radio-call.moka { border-color: #ffad72; background: linear-gradient(145deg,rgba(49,31,29,.98),rgba(74,43,35,.98)); }
@@ -142,6 +162,10 @@ body { min-width: 320px; background: #92ddf7; }
 .rival-result footer { margin-top: 16px; padding-top: 13px; display: flex; justify-content: center; gap: 10px; border-top: 2px solid rgba(127,245,223,.26); font-size: 13px; font-weight: 900; }
 .rival-result footer b { color: #7ff5df; font-family: "Outfit",sans-serif; }
 .rival-result footer span { color: #d9edef; }
+.signal-result { background: radial-gradient(circle at 50% 0,rgba(183,118,255,.28),transparent 44%),linear-gradient(150deg,rgba(17,24,58,.99),rgba(41,28,68,.99)); border-color: #b776ff; box-shadow: 0 11px 0 rgba(45,24,76,.55),0 0 70px rgba(183,118,255,.42),0 30px 80px rgba(0,0,0,.46); }
+.signal-result > small,.signal-result > div b { color: #d5a9ff; }
+.signal-result footer { border-color: rgba(159,248,255,.3); }
+.signal-result footer b { color: #9ff8ff; }
 
 .tutorial {
   position: absolute; z-index: 4; left: 50%; top: 150px; transform: translateX(-50%); display: flex; flex-direction: column;
@@ -540,6 +564,9 @@ body.base-open .promotion-card { top: 28px; }
 .contract-card.material { border-color: #a98bff; background: linear-gradient(155deg,rgba(70,67,126,.88),rgba(31,44,76,.94)); }
 .contract-card.special { border-color: #ff7183; background: linear-gradient(155deg,rgba(111,55,69,.9),rgba(57,35,54,.96)); }
 .contract-card:disabled { filter: grayscale(.65); opacity: .48; cursor: default; transform: none; box-shadow: 0 4px 0 #081e2b; }
+.contract-card.event-locked:disabled { filter: none; opacity: .82; border-style: dashed; border-color: #b776ff; background: repeating-linear-gradient(135deg,rgba(70,67,126,.88) 0,rgba(70,67,126,.88) 12px,rgba(37,42,78,.94) 12px,rgba(37,42,78,.94) 24px); }
+.contract-card.event-locked .contract-purpose { color: #241738; background: #d5a9ff; }
+.contract-card.event-locked .contract-payout { color: white; background: #7650aa; }
 .contract-purpose { position: absolute; top: 17px; right: 17px; max-width: calc(100% - 96px); padding: 5px 8px; color: #17394a; background: #7ff5df; border-radius: 7px; font: 900 10px "Outfit",sans-serif; font-style: normal; letter-spacing: .04em; text-align: right; }
 .contract-card.bulk .contract-purpose { background: #fff06f; }
 .contract-card.material .contract-purpose { color: white; background: #8c74e9; }
@@ -614,6 +641,10 @@ body.base-open .promotion-card { top: 28px; }
 .base-facility.launch.rival-ready b { color: #ff8796; }
 .base-facility.launch.rival-ready::before,.base-facility.launch.rival-ready em { background: #ff6578; }
 @keyframes rival-facility-ready { to { filter:brightness(1.16); box-shadow:0 0 34px rgba(255,101,120,.6),0 8px 0 rgba(5,25,34,.42); } }
+.base-facility.launch.signal-ready { border-color: #b776ff; animation: signal-facility-ready .72s ease-in-out infinite alternate; }
+.base-facility.launch.signal-ready b { color: #d5a9ff; }
+.base-facility.launch.signal-ready::before,.base-facility.launch.signal-ready em { background: #b776ff; }
+@keyframes signal-facility-ready { to { filter:brightness(1.18); box-shadow:0 0 38px rgba(183,118,255,.68),0 8px 0 rgba(5,25,34,.42); } }
 
 .route-overlay {
   position: absolute; z-index: 32; inset: 0; padding: 24px; display: grid; place-items: center;
@@ -650,6 +681,8 @@ body.base-open .promotion-card { top: 28px; }
 .route-identity { width: 100%; margin-top: 8px; color: var(--route-color); font: 900 10px "Outfit",sans-serif; letter-spacing: .08em; text-align: center; }
 .route-rival-event { width: 100%; margin-top: 10px; padding: 9px 10px; display: block; color: #ffd5da; background: rgba(77,24,43,.72); border: 2px solid #ff6578; border-radius: 10px; font-size: 11px; font-weight: 900; text-align: center; }
 .route-rival-event i { margin-right: 5px; padding: 3px 5px; color: #291522; background: #ff6578; border-radius: 5px; font: 900 9px "Outfit",sans-serif; font-style: normal; }
+.route-rival-event.signal { color: #eadcff; background: rgba(49,31,86,.78); border-color: #b776ff; }
+.route-rival-event.signal i { color: #241738; background: #d5a9ff; }
 .route-card em { width: 100%; margin-top: auto; padding-top: 17px; color: white; text-align: center; font-size: 15px; font-style: normal; font-weight: 900; }
 .route-unlock-requirements { width: 100%; margin-top: 13px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
 .route-unlock-requirements span { min-height: 40px; padding: 7px 5px; display: grid; place-items: center; color: #d7e5e8; background: rgba(3,20,29,.58); border: 1px solid #476978; border-radius: 9px; font-size: 11px; font-weight: 900; text-align: center; line-height: 1.25; }
@@ -863,6 +896,16 @@ body.base-open .promotion-card { top: 28px; }
   .rival-race footer { margin-top: 6px; font-size: 8px; }
   .rival-race-active .promotion-card { top: 264px; }
   .rival-race-active .toast { top: 265px; }
+  .signal-trace { top: 158px; padding: 9px 10px 10px; border-radius: 16px; }
+  .signal-trace header span { font-size: 7px; }
+  .signal-trace header strong { font-size: 11px; }
+  .signal-trace header em { min-width: 48px; font-size: 8px; }
+  .signal-trace-board { margin-top: 7px; grid-template-columns: minmax(0,1fr) 52px; gap: 8px; }
+  .signal-trace-board i { height: 10px; }
+  .signal-trace-board > strong { font-size: 18px; }
+  .signal-trace footer { margin-top: 6px; font-size: 8px; }
+  .signal-trace-active .promotion-card { top: 258px; }
+  .signal-trace-active .toast { top: 258px; }
   .radio-call { right: 9px; bottom: 105px; width: calc(100% - 18px); min-height: 106px; padding: 8px 11px 9px 8px; grid-template-columns: 84px minmax(0,1fr); gap: 10px; border-radius: 18px; }
   .radio-call-portrait { width: 84px; height: 84px; border-radius: 14px 14px 31px 14px; }
   .radio-call-copy > span { font-size: 8px; }

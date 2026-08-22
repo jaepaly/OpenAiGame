@@ -1,5 +1,5 @@
 import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
-import type { Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, Particle, ProcessingClaimResult, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RivalRaceState, RunSkillId, RunState, StorySceneId, UpgradeId } from "./types";
+import type { Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, Particle, ProcessingClaimResult, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RivalRaceState, RunSkillId, RunState, SignalTraceState, StorySceneId, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
@@ -32,6 +32,9 @@ const MAX_HARVEST_LINKS = 24;
 const SAVE_KEY = "cloud-harvest-inc-save-v2";
 const RIVAL_RACE_TARGET = 5;
 const RIVAL_RACE_REWARD = 80;
+const SIGNAL_TRACE_TARGET = 5;
+const SIGNAL_TRACE_SECONDS = 45;
+const SIGNAL_TRACE_REWARD = 180;
 const PACING_TARGETS = {
   firstHarvest: 10,
   firstReturn: 75,
@@ -47,6 +50,7 @@ type PacingMilestone = keyof typeof PACING_TARGETS;
 const emptyCloudStock = (): Record<CloudKind, number> => ({ cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 });
 const freshProcessingState = (): ProcessingState => ({ jobs: [], completedCoins: 0, completedMaterials: emptyCloudStock(), totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now() });
 const freshRivalRace = (): RivalRaceState => ({ status: "inactive", playerScore: 0, rivalScore: 0, target: RIVAL_RACE_TARGET, reward: RIVAL_RACE_REWARD });
+const freshSignalTrace = (): SignalTraceState => ({ status: "inactive", progress: 0, target: SIGNAL_TRACE_TARGET, timeLeft: SIGNAL_TRACE_SECONDS, timeLimit: SIGNAL_TRACE_SECONDS, reward: SIGNAL_TRACE_REWARD });
 
 const freshRunState = (day = 1): RunState => ({
   day,
@@ -88,6 +92,7 @@ const freshRunState = (day = 1): RunState => ({
   processingBatchCapacity: 10,
   processingUsage: {},
   rivalRace: freshRivalRace(),
+  signalTrace: freshSignalTrace(),
 });
 
 export class CloudHarvestGame {
@@ -155,6 +160,7 @@ export class CloudHarvestGame {
   private dayComplete = false;
   private harvestDrones: HarvestDrone[] = [];
   private rivalHarvester: RivalHarvester = { x: 0, y: 0, vx: 0, vy: 0, angle: Math.PI, pulse: 0, delay: 0 };
+  private signalTargetId?: number;
   private runEmitTimer = 0;
   private processingEmitTimer = 0;
   private fuelWarningStage = 0;
@@ -197,6 +203,7 @@ export class CloudHarvestGame {
     this.bindInput();
     this.resize();
     this.prepareRivalRace(this.run.mapRank);
+    this.prepareSignalTrace(this.run.mapRank);
     window.addEventListener("resize", () => this.resize());
     for (let i = 0; i < Math.min(18, this.getMaxClouds()); i += 1) this.spawnCloud(true);
     this.emitAll();
@@ -315,6 +322,7 @@ export class CloudHarvestGame {
 
   requestReturn(): boolean {
     if (this.atFactory || this.returning || this.launching) return false;
+    if (this.run.signalTrace.status === "active") this.finishSignalTrace(false, "return");
     this.run.emergencyReturn = false;
     this.returning = true;
     this.returnTimer = 0;
@@ -352,6 +360,7 @@ export class CloudHarvestGame {
 
   private triggerEmergencyReturn(): void {
     if (this.atFactory || this.returning) return;
+    if (this.run.signalTrace.status === "active") this.finishSignalTrace(false, "fuel");
     const discarded = this.getCargoCount();
     this.run.cargo = emptyCloudStock();
     this.run.cargoValue = emptyCloudStock();
@@ -378,6 +387,10 @@ export class CloudHarvestGame {
 
   queueCargoForProcessing(id: ContractId): ProcessingEnqueueResult | null {
     if (!this.atFactory) return null;
+    if (id === "energy" && !this.state.story.electricSignalCleared) {
+      this.onToast("전기구름 항로의 신호 좌표를 먼저 확보해야 합니다.", "warning");
+      return null;
+    }
     const contract = PROCESSING_CONTRACTS.find((item) => item.id === id);
     if (!contract || this.getCargoCount() <= 0) return null;
     const estimate = this.getProcessingEstimate(id);
@@ -577,6 +590,14 @@ export class CloudHarvestGame {
     };
   }
 
+  private prepareSignalTrace(mapRank: number): void {
+    const startsSignalTrace = mapRank === 2
+      && this.state.story.seen.includes("electricFrontier")
+      && !this.state.story.electricSignalCleared;
+    this.signalTargetId = undefined;
+    this.run.signalTrace = { ...freshSignalTrace(), status: startsSignalTrace ? "active" : "inactive" };
+  }
+
   launchFlight(mapRank: number): boolean {
     if (!this.atFactory || this.launching || this.returning || this.dayComplete) return false;
     if (!Number.isInteger(mapRank) || mapRank < 0 || mapRank > this.state.rank || !RANKS[mapRank]) return false;
@@ -591,6 +612,7 @@ export class CloudHarvestGame {
     this.run.emergencyReturn = false;
     this.run.processingUsage = {};
     this.prepareRivalRace(mapRank);
+    this.prepareSignalTrace(mapRank);
     this.fuelWarningStage = 0;
     this.fuelPity = 0;
     this.fuelPickupFlash = 0;
@@ -1028,6 +1050,7 @@ export class CloudHarvestGame {
       if (!formed) this.spawnCloud(false);
       this.spawnTimer = this.getCloudSpawnInterval() * (formed ? 1.8 : 1);
     }
+    this.updateSignalTrace(dt);
 
     const worldZoom = this.getWorldZoom();
     this.player.targetX = Math.max(55 / worldZoom, Math.min(this.getWorldWidth() - 55 / worldZoom, this.player.targetX));
@@ -1222,6 +1245,16 @@ export class CloudHarvestGame {
             text: "경쟁 수확선 확인. 3초 먼저 움직일 수 있어요. 비구름 다섯 개를 선점하세요!",
           });
           this.playTone(185, .12);
+        } else if (this.run.signalTrace.status === "active") {
+          this.onToast("소나: 전하 신호 포착! 표식이 붙은 전기구름 5개를 45초 안에 추적하세요.", "warning");
+          this.onRadio({
+            speaker: "관측 연구원 소나",
+            role: "LIVE THUNDER LINK // 45 SEC",
+            tone: "sona",
+            portrait: "sona-worried",
+            text: "전하 신호가 이동합니다. 보라색 표식이 붙은 전기구름만 따라가세요. 다섯 개를 연결하면 기압장 좌표를 고정할 수 있어요!",
+          });
+          this.playTone(248, .12);
         } else {
           this.onToast("기상 항로 진입 — 수확 비행 시작!", "success");
         }
@@ -1446,6 +1479,78 @@ export class CloudHarvestGame {
     this.playTone(92, .24);
   }
 
+  private updateSignalTrace(dt: number): void {
+    const trace = this.run.signalTrace;
+    if (trace.status !== "active") return;
+    trace.timeLeft = Math.max(0, trace.timeLeft - dt);
+    if (trace.timeLeft <= 0) {
+      this.finishSignalTrace(false, "time");
+      return;
+    }
+    this.ensureSignalTarget();
+  }
+
+  private ensureSignalTarget(): void {
+    if (this.run.signalTrace.status !== "active") return;
+    const current = this.clouds.find((cloud) => cloud.id === this.signalTargetId && cloud.signalTarget);
+    if (current) return;
+    let target = this.clouds.find((cloud) => cloud.kind === "electric" && !cloud.front
+      && cloud.formationId === undefined && !this.queuedCascadeIds.has(cloud.id));
+    if (!target) {
+      this.spawnCloud(false, "electric");
+      target = this.clouds[this.clouds.length - 1];
+    }
+    if (!target) return;
+    target.signalTarget = true;
+    target.dense = false;
+    this.signalTargetId = target.id;
+    this.addShockwave({ x: target.x, y: target.y, radius: target.radius * .7, life: .7, maxLife: .7, color: "#c9a7ff" });
+    this.playTone(610 + this.run.signalTrace.progress * 55, .07);
+  }
+
+  private finishSignalTrace(success: boolean, reason: "time" | "return" | "fuel" = "time"): void {
+    const trace = this.run.signalTrace;
+    if (trace.status !== "active") return;
+    const markedCloud = this.clouds.find((cloud) => cloud.id === this.signalTargetId);
+    if (markedCloud) markedCloud.signalTarget = false;
+    this.signalTargetId = undefined;
+    if (success) {
+      trace.status = "won";
+      trace.timeLeft = Math.max(0, trace.timeLeft);
+      this.state.story.electricSignalCleared = true;
+      this.state.money += trace.reward;
+      this.state.totalEarned += trace.reward;
+      this.state.materials.electric += 3;
+      this.addFloatingText({ x: this.player.x, y: this.player.y - 72, text: `SIGNAL LOCKED  +◈${trace.reward}`, color: "#e3c8ff", life: 1.8 });
+      this.addShockwave({ x: this.player.x, y: this.player.y, radius: 28, life: 1, maxLife: 1, color: "#b695ff" });
+      this.burst(this.player.x, this.player.y, "#d9bcff", 58, 360, "spark");
+      this.onToast(`신호 좌표 확보! ◈ ${trace.reward} · 전기구름 재료 3 · NRG 추출 라인 해금`, "success");
+      this.onRadio({
+        speaker: "관측 연구원 소나",
+        role: "THUNDER GRID // COORDINATE LOCKED",
+        tone: "sona",
+        portrait: "sona-serious",
+        text: "좌표 고정 완료. 인공 기압장이 북부 빙정층으로 이어집니다. 전하 결정 추출 라인도 지금 승인됐어요.",
+      });
+      this.playChord();
+      this.commit();
+      this.onRunChange(this.getRunState());
+      return;
+    }
+    trace.status = "lost";
+    const reasonText = reason === "fuel" ? "연료가 먼저 바닥났어요." : reason === "return" ? "귀환 항로로 이탈했어요." : "신호 창이 닫혔어요.";
+    this.onToast(`신호 추적 실패 — 화물 손실 없음 · 전기구름 항로에서 재도전`, "warning");
+    this.onRadio({
+      speaker: "정비사 모카",
+      role: "SIGNAL RETRY // CARGO SAFE",
+      tone: "moka",
+      portrait: "moka-worried",
+      text: `${reasonText} 수확한 화물은 그대로니까 정비하고 다음 전기구름 항로에서 다시 추적하죠.`,
+    });
+    this.playTone(105, .22);
+    this.onRunChange(this.getRunState());
+  }
+
   private updateDrones(dt: number): boolean {
     this.droneBeams = [];
     let harvested = false;
@@ -1463,11 +1568,11 @@ export class CloudHarvestGame {
 
     for (const drone of this.harvestDrones) {
       drone.phase += dt * (.7 + (drone.phase % 1) * .25);
-      let target = this.clouds.find((cloud) => cloud.id === drone.targetId && !claimedTargets.has(cloud.id) && !this.queuedCascadeIds.has(cloud.id));
+      let target = this.clouds.find((cloud) => cloud.id === drone.targetId && !cloud.signalTarget && !claimedTargets.has(cloud.id) && !this.queuedCascadeIds.has(cloud.id));
       if (!target) {
         let nearest = Number.POSITIVE_INFINITY;
         for (const cloud of this.clouds) {
-          if (claimedTargets.has(cloud.id) || this.queuedCascadeIds.has(cloud.id)) continue;
+          if (cloud.signalTarget || claimedTargets.has(cloud.id) || this.queuedCascadeIds.has(cloud.id)) continue;
           const approachX = cloud.x + Math.cos(drone.phase) * (34 + cloud.radius * .35);
           const approachY = cloud.y + Math.sin(drone.phase) * (28 + cloud.radius * .28);
           const distance = Math.hypot(approachX - drone.x, approachY - drone.y);
@@ -1546,6 +1651,7 @@ export class CloudHarvestGame {
     this.clouds.splice(cloudIndex, 1);
     const definition = CLOUDS[cloud.kind];
     const countsForRivalRace = this.run.rivalRace.status === "active" && cloud.kind === "rain";
+    const countsForSignalTrace = this.run.signalTrace.status === "active" && source !== "drone" && cloud.id === this.signalTargetId && cloud.signalTarget;
     this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
     this.comboTimer = 3.4 + FLIGHT_ROUTES[this.run.routeId].comboWindowBonus + this.run.skills.comboCapacitor * .35 + this.run.skills.vacuumMomentum * .22;
     this.state.bestCombo = Math.max(this.state.bestCombo, this.combo);
@@ -1603,6 +1709,20 @@ export class CloudHarvestGame {
         life: 1.2,
       });
       if (this.run.rivalRace.playerScore >= this.run.rivalRace.target) this.finishRivalRace(true);
+    }
+    if (countsForSignalTrace) {
+      this.signalTargetId = undefined;
+      this.run.signalTrace.progress += 1;
+      this.addFloatingText({
+        x: cloud.x,
+        y: cloud.y - 42,
+        text: `SIGNAL LINK  ${this.run.signalTrace.progress}/${this.run.signalTrace.target}`,
+        color: "#e1c4ff",
+        life: 1.35,
+      });
+      this.addShockwave({ x: cloud.x, y: cloud.y, radius: 18, life: .68, maxLife: .68, color: "#b695ff" });
+      if (this.run.signalTrace.progress >= this.run.signalTrace.target) this.finishSignalTrace(true);
+      else this.ensureSignalTarget();
     }
 
     if (cascadeDepth > 0 && this.cascadeCount % 5 === 0) {
@@ -1908,22 +2028,24 @@ export class CloudHarvestGame {
     this.playChord();
   }
 
-  private spawnCloud(initial: boolean): void {
+  private spawnCloud(initial: boolean, forcedKind?: CloudKind): void {
     const zoom = this.getWorldZoom();
     const worldWidth = this.getWorldWidth();
     const worldHeight = this.getWorldHeight();
     const rank = RANKS[this.run.mapRank];
-    const roll = Math.random();
-    let cursor = 0;
-    let kind: CloudKind = "cumulus";
-    for (const candidate of Object.keys(rank.weights) as CloudKind[]) {
-      cursor += rank.weights[candidate];
-      if (roll <= cursor) { kind = candidate; break; }
-    }
-    const lowTierBias = FLIGHT_ROUTES[this.run.routeId].lowTierBias;
-    if (this.run.mapRank > 0 && Math.random() < lowTierBias) {
-      const highestFallback = Math.max(0, this.run.mapRank - 1);
-      kind = CLOUD_ORDER[Math.floor(Math.random() * (highestFallback + 1))];
+    let kind: CloudKind = forcedKind ?? "cumulus";
+    if (!forcedKind) {
+      const roll = Math.random();
+      let cursor = 0;
+      for (const candidate of Object.keys(rank.weights) as CloudKind[]) {
+        cursor += rank.weights[candidate];
+        if (roll <= cursor) { kind = candidate; break; }
+      }
+      const lowTierBias = FLIGHT_ROUTES[this.run.routeId].lowTierBias;
+      if (this.run.mapRank > 0 && Math.random() < lowTierBias) {
+        const highestFallback = Math.max(0, this.run.mapRank - 1);
+        kind = CLOUD_ORDER[Math.floor(Math.random() * (highestFallback + 1))];
+      }
     }
     const definition = CLOUDS[kind];
     const dense = Math.random() < .085 + this.run.mapRank * .018 + (this.run.flight - 1) * .035 + FLIGHT_ROUTES[this.run.routeId].denseBonus + this.run.skills.denseRadar * .03 + this.state.research.forecasting * .015;
@@ -2419,6 +2541,24 @@ export class CloudHarvestGame {
         const mx = marker * 12;
         ctx.beginPath(); ctx.moveTo(mx - 5, -cloud.radius * .9); ctx.lineTo(mx, -cloud.radius * 1.04); ctx.lineTo(mx + 5, -cloud.radius * .9); ctx.closePath(); ctx.fill();
       }
+    }
+    if (cloud.signalTarget) {
+      const signalPulse = 1 + Math.sin(time * 6.5) * .08;
+      ctx.shadowColor = reducedEffects ? "transparent" : "#d5b5ff";
+      ctx.shadowBlur = reducedEffects ? 0 : 24;
+      ctx.strokeStyle = "#d9bcff";
+      ctx.lineWidth = 4;
+      ctx.setLineDash([10, 7]);
+      ctx.lineDashOffset = -time * 58;
+      ctx.beginPath();
+      ctx.arc(0, 0, cloud.radius * 1.38 * signalPulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#f3e7ff";
+      ctx.font = `900 ${Math.max(11, cloud.radius * .3)}px Outfit, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText(`SIGNAL ${this.run.signalTrace.progress + 1}/${this.run.signalTrace.target}`, 0, -cloud.radius * 1.42);
+      ctx.shadowColor = "transparent";
     }
     if (cloud.kind === "rain") { ctx.fillStyle = "#3d8cca"; for (let i = -1; i <= 1; i += 1) { ctx.beginPath(); ctx.ellipse(i * 13, cloud.radius * .65, 3, 7, .4, 0, Math.PI * 2); ctx.fill(); } }
     if (cloud.kind === "electric") { ctx.strokeStyle = "#ffe45e"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(2, cloud.radius * .2); ctx.lineTo(-8, cloud.radius * .56); ctx.lineTo(3, cloud.radius * .5); ctx.lineTo(-2, cloud.radius * .9); ctx.lineTo(14, cloud.radius * .4); ctx.stroke(); }
