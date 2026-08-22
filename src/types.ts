@@ -1,10 +1,13 @@
 export type CloudKind = "cumulus" | "rain" | "electric" | "ice" | "solar" | "aurora";
 export type CloudFormationKind = "ring" | "stream" | "cluster";
 export type ContractId = "water" | "climate" | "priority" | "energy" | "cryogenic" | "stellar" | "spectrum";
+export type ProcessingOutputKind = "quick" | "bulk" | "material" | "special";
 export type FlightRouteId = "tailwind" | "pressureMine" | "frontline";
 export type ResearchId = "logistics" | "refining" | "forecasting";
 export type InfiniteResearchId = "speed" | "power" | "fuel" | "drone" | "yield";
-export type StorySceneId = "prologue" | "firstReturn" | "rainFrontier";
+export type StorySceneId =
+  | "prologue" | "firstReturn" | "rainFrontier" | "rivalAftermath"
+  | "electricFrontier" | "iceFrontier" | "solarFrontier" | "auroraFrontier";
 
 export interface CloudDefinition {
   kind: CloudKind;
@@ -79,11 +82,13 @@ export interface ProcessingJob {
   payout: number;
   workRequired: number;
   progress: number;
+  materialRewards?: Partial<Record<CloudKind, number>>;
 }
 
 export interface ProcessingState {
   jobs: ProcessingJob[];
   completedCoins: number;
+  completedMaterials: Record<CloudKind, number>;
   totalProcessed: number;
   nextJobId: number;
   lastUpdatedAt: number;
@@ -93,10 +98,21 @@ export interface ProcessingEstimate {
   payout: number;
   batches: number;
   seconds: number;
+  units: number;
+  materialRewards: Record<CloudKind, number>;
+  quotaRemaining: number | null;
 }
 
 export interface ProcessingEnqueueResult extends ProcessingEstimate {
   materialsStored: number;
+  cargoRemaining: number;
+  flightCompleted: boolean;
+}
+
+export interface ProcessingClaimResult {
+  coins: number;
+  materials: Record<CloudKind, number>;
+  materialUnits: number;
 }
 
 export type GrowthMissionId = "collect" | "return" | "contract" | "ship" | "skill" | "upgrade" | "promote" | "rain";
@@ -224,6 +240,7 @@ export interface RunState {
   processingLines: number;
   processingSpeed: number;
   processingBatchCapacity: number;
+  processingUsage: Partial<Record<ContractId, number>>;
   rivalRace: RivalRaceState;
 }
 
@@ -273,6 +290,13 @@ export interface ProcessingContract {
   name: string;
   description: string;
   multipliers: Record<CloudKind, number>;
+  outputKind: ProcessingOutputKind;
+  outputLabel: string;
+  acceptedKinds: CloudKind[];
+  durationMultiplier: number;
+  batchSize: number;
+  materialYield?: number;
+  flightLimit?: number;
 }
 
 export interface RankDefinition {

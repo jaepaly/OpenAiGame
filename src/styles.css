@@ -168,7 +168,7 @@ body { min-width: 320px; background: #92ddf7; }
 .growth-mission.advance::after { animation: mission-complete-card .82s cubic-bezier(.18,.8,.3,1) both; }
 .mission-target { outline: 4px solid #fff36f !important; outline-offset: 5px; animation: mission-target-glow .7s ease-in-out infinite alternate !important; }
 .contract-list.mission-target { outline: 0 !important; animation: none !important; }
-.contract-list.mission-target .contract-card.best { outline: 4px solid #fff36f; outline-offset: 3px; animation: mission-target-glow .7s ease-in-out infinite alternate; }
+.contract-list.mission-target .contract-card:not(:disabled):first-of-type { outline: 4px solid #fff36f; outline-offset: 3px; animation: mission-target-glow .7s ease-in-out infinite alternate; }
 @keyframes mission-complete-card { 0% { opacity:0; transform:scale(.82); } 16%,62% { opacity:1; transform:scale(1); } 100% { opacity:0; transform:scale(1.06); } }
 @keyframes mission-target-glow { to { filter:brightness(1.14); box-shadow:0 0 28px rgba(255,243,111,.65); } }
 .cloud-legend { position: absolute; z-index: 4; top: 82px; left: 22px; display: flex; flex-direction: column; gap: 5px; pointer-events: none; }
@@ -535,8 +535,15 @@ body.base-open .promotion-card { top: 28px; }
   border-radius: 20px; box-shadow: 0 6px 0 #081e2b; cursor: pointer; transition: .14s ease;
 }
 .contract-card:hover { transform: translateY(-7px); border-color: #fff06f; box-shadow: 0 13px 0 #081e2b,0 20px 35px rgba(0,0,0,.24); }
-.contract-card.best { position: relative; border-color: #fff06f; }
-.best-offer { position: absolute; top: 17px; right: 17px; padding: 5px 8px; color: #17394a; background: #fff06f; border-radius: 7px; font: 900 10px "Outfit",sans-serif; font-style: normal; letter-spacing: .06em; }
+.contract-card { position: relative; }
+.contract-card.bulk { border-color: #e6bd55; }
+.contract-card.material { border-color: #a98bff; background: linear-gradient(155deg,rgba(70,67,126,.88),rgba(31,44,76,.94)); }
+.contract-card.special { border-color: #ff7183; background: linear-gradient(155deg,rgba(111,55,69,.9),rgba(57,35,54,.96)); }
+.contract-card:disabled { filter: grayscale(.65); opacity: .48; cursor: default; transform: none; box-shadow: 0 4px 0 #081e2b; }
+.contract-purpose { position: absolute; top: 17px; right: 17px; max-width: calc(100% - 96px); padding: 5px 8px; color: #17394a; background: #7ff5df; border-radius: 7px; font: 900 10px "Outfit",sans-serif; font-style: normal; letter-spacing: .04em; text-align: right; }
+.contract-card.bulk .contract-purpose { background: #fff06f; }
+.contract-card.material .contract-purpose { color: white; background: #8c74e9; }
+.contract-card.special .contract-purpose { color: white; background: #ef6278; }
 .contract-card:active { transform: translateY(3px); box-shadow: 0 3px 0 #081e2b; }
 .contract-code { width: 58px; height: 42px; display: grid; place-items: center; color: #17394a; background: #7ff5df; border-radius: 11px; font: 900 15px "Outfit",sans-serif; }
 .contract-copy { margin-top: 11px; display: flex; flex-direction: column; }

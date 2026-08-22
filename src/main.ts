@@ -113,12 +113,12 @@ app.innerHTML = `
         <div class="factory-panel">
           <header class="factory-heading">
             <span>PROCESSING BAY // CARGO ARRIVAL</span>
-            <h2>구름을 어느 가공 라인에 맡길까요?</h2>
-            <p>적재한 구름은 다음 비행 중에도 계속 가공되며, 완성품이 되어야 코인으로 출하할 수 있습니다.</p>
+            <h2>화물을 어떤 결과물로 바꿀까요?</h2>
+            <p>빠른 현금·대량 수익·특성 재료·한정 주문은 목적이 다릅니다. 화물을 여러 라인에 나눠 맡길 수 있습니다.</p>
           </header>
           <div class="factory-manifest" id="factoryManifest"></div>
           <div class="contract-list" id="contractList"></div>
-          <div class="factory-tip">등급이 높은 구름은 더 오래 걸립니다. 정비소에서 처리 속도·동시 라인·묶음 용량을 영구 강화할 수 있습니다.</div>
+          <div class="factory-tip">SPECIAL 주문은 비행당 수량이 제한됩니다. 먼저 한정 주문을 채운 뒤 남은 화물을 다른 라인에 배정할 수 있습니다.</div>
           <section class="factory-receipt" id="factoryReceipt">
             <span id="receiptKicker">FLIGHT 1/3 COMPLETE</span>
             <h3 id="receiptContract">가공 라인 적재 완료</h3>
@@ -466,6 +466,52 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
       { speaker: "소나", name: "관측 연구원 소나", role: "NEW OBJECTIVE // RAIN CLOUD ×5", mark: "SN", tone: "sona", portrait: "sona-serious", text: "법적으로는 공동 항로예요. 물러날 이유 없습니다. 비구름 다섯 개를 확보해 구름 소실 데이터부터 추적하죠." },
     ],
   },
+  rivalAftermath: {
+    chapter: "CHAPTER 3 // STOLEN WEATHER",
+    title: "우선 항로의 대가",
+    beats: [
+      { speaker: "모카", name: "정비사 모카", role: "DOCK SALVAGE", mark: "MK", tone: "moka", portrait: "moka-surprised", text: "쾌청산업 수확선이 흘리고 간 관제 모듈을 주웠어요. 덕분에 비구름 긴급 주문도 따냈지만… 안쪽 기록이 좀 수상해요." },
+      { speaker: "소나", name: "관측 연구원 소나", role: "ENCRYPTED FORECAST", mark: "SN", tone: "sona", portrait: "sona-worried", text: "자연 소실이 아니었어요. 상공의 구름을 한곳으로 끌어당기는 인공 기압장이 작동 중입니다. 가뭄은 사고가 아니라 누군가 만든 결과일 수 있어요." },
+      { speaker: "모카", name: "정비사 모카", role: "SHIP UPGRADE DIRECTIVE", mark: "MK", tone: "moka", portrait: "moka-serious", text: "그럼 더 높이 올라가죠. 엔진도, 가공동도 키워서 저 회사가 숨긴 기압장의 끝까지 따라가는 겁니다." },
+    ],
+  },
+  electricFrontier: {
+    chapter: "CHAPTER 4 // THUNDER GRID",
+    title: "번개 속의 좌표",
+    beats: [
+      { speaker: "소나", name: "관측 연구원 소나", role: "ELECTRIC FRONT ANALYSIS", mark: "SN", tone: "sona", portrait: "sona-neutral", text: "전기구름 항로가 열렸습니다. 전하핵을 정밀 추출하면 코인 수익을 줄이는 대신 특성 연구 재료를 더 확보할 수 있어요." },
+      { speaker: "소나", name: "관측 연구원 소나", role: "SIGNAL MATCH // 97%", mark: "97", tone: "sona", portrait: "sona-worried", text: "번개가 칠 때마다 같은 좌표가 반복됩니다. 쾌청산업의 인공 기압장이 북쪽 빙정층과 연결돼 있어요." },
+      { speaker: "모카", name: "정비사 모카", role: "INSULATION CHECK", mark: "MK", tone: "moka", portrait: "moka-serious", text: "좋아요. 절연 코팅 확인했고 드론도 분산 운항으로 맞췄습니다. 번개가 길을 가리킨다면 그대로 쫓아가죠." },
+    ],
+  },
+  iceFrontier: {
+    chapter: "CHAPTER 5 // FROZEN ARCHIVE",
+    title: "얼어붙은 관측 기록",
+    beats: [
+      { speaker: "NARRATION", name: "북부 빙정층", role: "ABANDONED WEATHER RELAY", mark: "ICE", tone: "narrator", text: "빙정구름 안에서 오래된 관측 중계기가 발견됐다. 전원이 끊긴 기록 장치에는 회사가 폐업하기 전의 마지막 항로가 남아 있었다." },
+      { speaker: "모카", name: "정비사 모카", role: "ARCHIVE RECOVERY", mark: "MK", tone: "moka", portrait: "moka-worried", text: "선대 사장님도 같은 기압장을 추적했어요. 실패해서 회사를 잃은 게 아니라, 증거를 지키려고 모든 장비를 팔았던 거예요." },
+      { speaker: "소나", name: "관측 연구원 소나", role: "NEXT TARGET // SOLAR LAYER", mark: "SN", tone: "sona", portrait: "sona-serious", text: "기록의 마지막 좌표는 태양구름 층입니다. 이번에는 증거도 회사도 모두 지켜서 돌아오겠습니다." },
+    ],
+  },
+  solarFrontier: {
+    chapter: "CHAPTER 6 // FALSE SUN",
+    title: "구름을 태우는 엔진",
+    beats: [
+      { speaker: "소나", name: "관측 연구원 소나", role: "CLIMATE ENGINE VISUAL", mark: "SN", tone: "sona", portrait: "sona-worried", text: "확인했습니다. 쾌청산업은 태양구름의 에너지로 거대한 기압 엔진을 돌리고 있어요. 주변 구름을 독점 항로로 밀어내는 장치입니다." },
+      { speaker: "쾌청산업 관제", name: "쾌청산업", role: "CORPORATE WEATHER AUTHORITY", mark: "QS", tone: "rival", text: "기후는 관리 가능한 자원이다. 소형 수확사가 개입하면 공급 안정성이 훼손된다. 즉시 추적을 중단하라." },
+      { speaker: "모카", name: "정비사 모카", role: "FULL THROTTLE", mark: "MK", tone: "moka", portrait: "moka-serious", text: "공급 안정성 같은 소리 하네요. 아래 도시는 마흔셋째 날째 비를 기다리고 있어요. 오로라층까지 올라가 엔진의 중심을 찾죠." },
+    ],
+  },
+  auroraFrontier: {
+    chapter: "CHAPTER 7 // OPEN SKY",
+    title: "회사의 다음 하늘",
+    beats: [
+      { speaker: "NARRATION", name: "오로라 핵심 항로", role: "IONOSPHERE INDUSTRIAL ZONE", mark: "AUR", tone: "narrator", text: "여섯 종류의 구름이 한 항로에서 빛났다. 작은 수확 회사의 비행선은 마침내 인공 기압장의 중심과 같은 고도에 도달했다." },
+      { speaker: "소나", name: "관측 연구원 소나", role: "WEATHER RESTORATION PLAN", mark: "SN", tone: "sona", portrait: "sona-serious", text: "엔진을 멈추는 것만으로는 부족합니다. 모은 구름을 다시 순환시켜야 해요. 가공 라인과 무한 특성망이 복구 작업의 기반이 될 겁니다." },
+      { speaker: "모카", name: "정비사 모카", role: "CO-FOUNDER // OPEN SKY", mark: "MK", tone: "moka", portrait: "moka-neutral", text: "처음엔 빚 독촉장과 낡은 배 한 대뿐이었죠. 이제는 우리가 얼마나 높이 성장할지 정해진 천장도 없어요. 사장님, 다음 비행 준비됐습니다." },
+      { speaker: "NARRATION", name: "구름 수확 회사", role: "ENDLESS RESTORATION BEGINS", mark: "∞", tone: "narrator", text: "회사의 첫 목표는 생존이었다. 이제 목표는 하늘을 되돌리는 일이다. 수확선은 더 빠르게, 더 멀리, 끝없이 성장하며 다시 출격했다." },
+    ],
+  },
 };
 
 const storyQueue: StorySceneId[] = [];
@@ -503,7 +549,12 @@ function syncStoryTriggers(state: GameState): void {
     queueStoryScene("firstReturn");
     return;
   }
-  if (state.rank >= 1 && !state.story.seen.includes("rainFrontier")) queueStoryScene("rainFrontier");
+  if (state.rank >= 1 && !state.story.seen.includes("rainFrontier")) { queueStoryScene("rainFrontier"); return; }
+  if (state.story.rivalBeaten && !state.story.seen.includes("rivalAftermath")) { queueStoryScene("rivalAftermath"); return; }
+  if (state.rank >= 2 && !state.story.seen.includes("electricFrontier")) { queueStoryScene("electricFrontier"); return; }
+  if (state.rank >= 3 && !state.story.seen.includes("iceFrontier")) { queueStoryScene("iceFrontier"); return; }
+  if (state.rank >= 4 && !state.story.seen.includes("solarFrontier")) { queueStoryScene("solarFrontier"); return; }
+  if (state.rank >= 5 && !state.story.seen.includes("auroraFrontier")) queueStoryScene("auroraFrontier");
 }
 
 function openNextStoryScene(): void {
@@ -788,12 +839,13 @@ function renderProcessing(state: RunState): void {
   const active = jobs.slice(0, state.processingLines);
   const waiting = Math.max(0, jobs.length - active.length);
   const completed = Math.floor(state.processing.completedCoins);
+  const completedMaterials = CLOUD_ORDER.reduce((total, kind) => total + state.processing.completedMaterials[kind], 0);
   const finishedProducts = previousProcessingJobs && previousCompletedCoins !== null && completed > previousCompletedCoins
     ? previousProcessingJobs.filter((previous) => !jobs.some((job) => job.id === previous.id))
     : [];
-  processingFacilityButton.classList.toggle("ready", completed > 0);
+  processingFacilityButton.classList.toggle("ready", completed > 0 || completedMaterials > 0);
   const processingCode = processingFacilityButton.querySelector<HTMLElement>("b");
-  if (processingCode) processingCode.textContent = completed > 0 ? "PROC! · FACILITY 03" : "PROC · FACILITY 03";
+  if (processingCode) processingCode.textContent = completed > 0 || completedMaterials > 0 ? "PROC! · FACILITY 03" : "PROC · FACILITY 03";
   processingSummary.textContent = `${state.processingLines} LINE · ${waiting > 0 ? `대기 ${waiting}묶음` : jobs.length > 0 ? "자동 가공 중" : "대기 없음"}`;
   const visibleLines = Math.max(3, state.processingLines);
   const lineEntries = Array.from({ length: visibleLines }, (_, index) => {
@@ -834,14 +886,14 @@ function renderProcessing(state: RunState): void {
     if (progressFill) progressFill.style.width = `${progress}%`;
     vat.classList.toggle("finishing", progress >= 90);
   });
-  const nextOutputKey = `${waiting}|${completed}|${jobs.length > 0}`;
+  const nextOutputKey = `${waiting}|${completed}|${completedMaterials}|${jobs.length > 0}`;
   if (processingOutputKey !== nextOutputKey) {
     processingOutput.innerHTML = `<div class="output-readout"><small>대기열</small><strong>${waiting}</strong><span>BATCH</span></div>
-      <div class="output-window ${completed > 0 ? "ready" : ""}"><div class="output-canister"><i></i><b>${completed > 0 ? "◈" : "◇"}</b><span></span></div><strong>${completed > 0 ? "완제품 출하 준비" : jobs.length > 0 ? "제품 충전 중" : "완제품 대기"}</strong><small>${completed > 0 ? `◈ ${completed.toLocaleString()} 적재 완료` : "가공이 끝나면 이곳에 쌓입니다"}</small></div>`;
+      <div class="output-window ${completed > 0 || completedMaterials > 0 ? "ready" : ""}"><div class="output-canister"><i></i><b>${completedMaterials > 0 ? "◆" : completed > 0 ? "◈" : "◇"}</b><span></span></div><strong>${completed > 0 || completedMaterials > 0 ? "완제품 출하 준비" : jobs.length > 0 ? "제품 충전 중" : "완제품 대기"}</strong><small>${completed > 0 || completedMaterials > 0 ? `◈ ${completed.toLocaleString()}${completedMaterials > 0 ? ` · 특성 재료 ${completedMaterials}` : ""}` : "가공이 끝나면 이곳에 쌓입니다"}</small></div>`;
     processingOutputKey = nextOutputKey;
   }
-  claimProcessingButton.disabled = completed <= 0;
-  claimProcessingValue.textContent = `◈ ${completed.toLocaleString()}`;
+  claimProcessingButton.disabled = completed <= 0 && completedMaterials <= 0;
+  claimProcessingValue.textContent = `◈ ${completed.toLocaleString()}${completedMaterials > 0 ? ` + ◆${completedMaterials}` : ""}`;
   finishedProducts.forEach((product) => emitProcessedProduct(product.line, product.kind));
   previousProcessingJobs = active.map((job, line) => ({
     id: job.id,
@@ -880,25 +932,25 @@ function showFactory(state: RunState): void {
     </div>
   `).join("") + `<div class="manifest-bonus"><span>FLIGHT BONUS</span><b>콤보·전선 운항 보너스</b><strong>+ ◈${Math.floor(state.cargoBonus).toLocaleString()}</strong></div>`;
   const company = game.getState();
-  const contractRank: Partial<Record<ContractId, number>> = { cryogenic: 3, stellar: 4, spectrum: 5 };
+  const contractRank: Partial<Record<ContractId, number>> = { energy: 2, cryogenic: 3, stellar: 4, spectrum: 5 };
   const availableContracts = PROCESSING_CONTRACTS.filter((contract) => {
     if (contract.id === "priority") return company.story.rivalBeaten;
     return (contractRank[contract.id] ?? 0) <= company.rank;
   });
-  const estimates = availableContracts.map((contract) => game.getProcessingEstimate(contract.id));
-  const payouts = estimates.map((estimate) => estimate.payout);
-  const bestPayout = Math.max(...payouts);
-  const unlockedClouds = Object.values(CLOUDS).filter((cloud) => cloud.unlockRank <= game.getState().rank);
   contractList.innerHTML = availableContracts.map((contract) => {
     const estimate = game.getProcessingEstimate(contract.id);
     const payout = estimate.payout;
-    return `<button class="contract-card ${payout === bestPayout ? "best" : ""}" data-contract="${contract.id}">
+    const materialUnits = CLOUD_ORDER.reduce((total, kind) => total + estimate.materialRewards[kind], 0);
+    const acceptedClouds = contract.acceptedKinds.map((kind) => CLOUDS[kind]);
+    const quotaLabel = contract.flightLimit === undefined ? "수량 제한 없음" : `이번 비행 ${estimate.quotaRemaining}/${contract.flightLimit}개 남음`;
+    const rewardLabel = materialUnits > 0 ? `◈ ${payout.toLocaleString()} + ◆${materialUnits}` : `◈ ${payout.toLocaleString()}`;
+    return `<button class="contract-card ${contract.outputKind}" data-contract="${contract.id}" ${estimate.units <= 0 ? "disabled" : ""}>
       <span class="contract-code">${contract.code}</span>
-      ${payout === bestPayout ? `<em class="best-offer">BEST OFFER</em>` : ""}
+      <em class="contract-purpose">${contract.outputLabel}</em>
       <span class="contract-copy"><b>${contract.name}</b><small>${contract.description}</small></span>
-      <span class="contract-rates">${unlockedClouds.map((cloud) => `${cloud.icon} ×${contract.multipliers[cloud.kind].toFixed(2)}`).join(" · ")}</span>
-      <span class="contract-process"><b>${estimate.batches}묶음</b><small>예상 ${processingTime(estimate.seconds)}</small></span>
-      <strong class="contract-payout">예상 ◈ ${payout.toLocaleString()} · 가동 시작</strong>
+      <span class="contract-rates">투입 ${acceptedClouds.map((cloud) => cloud.icon).join(" ")} · ${quotaLabel}</span>
+      <span class="contract-process"><b>${estimate.units} UNIT · ${estimate.batches}묶음</b><small>예상 ${processingTime(estimate.seconds)}</small></span>
+      <strong class="contract-payout">${estimate.units > 0 ? `예상 ${rewardLabel} · 배정` : contract.flightLimit && estimate.quotaRemaining === 0 ? "이번 비행 주문 완료" : "맞는 화물 없음"}</strong>
     </button>`;
   }).join("");
   factoryOverlay.classList.add("show");
@@ -1188,8 +1240,14 @@ contractList.addEventListener("click", (event) => {
   const result = game.queueCargoForProcessing(button.dataset.contract as ContractId);
   if (result) {
     const contractName = button.querySelector(".contract-copy b")?.textContent ?? "가공 계약";
+    const materialUnits = CLOUD_ORDER.reduce((total, kind) => total + result.materialRewards[kind], 0);
+    if (!result.flightCompleted) {
+      baseHubStatus.textContent = `${contractName} ${result.units}개 배정 · 남은 화물 ${result.cargoRemaining}개도 생산라인을 선택하세요`;
+      showFactory(game.getRunState());
+      return;
+    }
     receiptContract.textContent = `${contractName} 가동 시작`;
-    receiptPayout.textContent = `예상 ◈ ${result.payout.toLocaleString()}`;
+    receiptPayout.textContent = `예상 ◈ ${result.payout.toLocaleString()}${materialUnits > 0 ? ` + ◆${materialUnits}` : ""}`;
     baseHubStatus.textContent = `${result.batches}묶음 자동 가공 중 · 완성품 출하 대기`;
     const run = game.getRunState();
     const dayComplete = game.isDayComplete();
@@ -1217,8 +1275,8 @@ contractList.addEventListener("click", (event) => {
   }
 });
 claimProcessingButton.addEventListener("click", () => {
-  const coins = game.claimProcessedCoins();
-  if (coins > 0) emitShippingBurst(coins);
+  const output = game.claimProcessedOutput();
+  if (output.coins > 0 || output.materialUnits > 0) emitShippingBurst(output.coins + output.materialUnits);
 });
 processingFacilityButton.addEventListener("click", () => processingOverlay.classList.add("show"));
 processingCloseButton.addEventListener("click", () => processingOverlay.classList.remove("show"));

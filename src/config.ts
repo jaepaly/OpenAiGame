@@ -51,13 +51,48 @@ export const FLIGHT_ROUTES: Record<FlightRouteId, FlightRouteDefinition> = {
 };
 
 export const PROCESSING_CONTRACTS: ProcessingContract[] = [
-  { id: "water", code: "H2O", name: "생수 병입 라인", description: "맑은 구름을 프리미엄 생수로 가공합니다.", multipliers: { cumulus: 1.45, rain: 1.05, electric: .85, ice: .82, solar: .72, aurora: .68 } },
-  { id: "climate", code: "CLM", name: "기상 솔루션", description: "비구름 중심의 농업·기상 서비스 계약입니다.", multipliers: { cumulus: 1.12, rain: 1.55, electric: 1.05, ice: 1.1, solar: .84, aurora: .8 } },
-  { id: "priority", code: "P-1", name: "우선 항로 납품", description: "쾌청산업을 꺾은 수확사에게만 개방되는 고수익 비구름 긴급 계약입니다.", multipliers: { cumulus: 1.05, rain: 1.92, electric: 1.18, ice: 1.04, solar: .88, aurora: .82 } },
-  { id: "energy", code: "NRG", name: "에너지 연구소", description: "전기구름을 고밀도 에너지 셀로 변환합니다.", multipliers: { cumulus: .9, rain: 1.2, electric: 1.9, ice: 1.15, solar: 1.35, aurora: 1.25 } },
-  { id: "cryogenic", code: "CRY", name: "극저온 소재국", description: "빙정구름을 초전도 냉각재로 정제합니다.", multipliers: { cumulus: .72, rain: .9, electric: 1.15, ice: 2.05, solar: 1.05, aurora: 1.18 } },
-  { id: "stellar", code: "SOL", name: "태양광 연성로", description: "태양구름을 고효율 광자 연료로 가공합니다.", multipliers: { cumulus: .68, rain: .76, electric: 1.08, ice: 1.05, solar: 2.2, aurora: 1.35 } },
-  { id: "spectrum", code: "AUR", name: "오로라 스펙트럼국", description: "오로라구름의 희귀 입자를 최고가로 매입합니다.", multipliers: { cumulus: .62, rain: .7, electric: .92, ice: 1.1, solar: 1.35, aurora: 2.45 } },
+  {
+    id: "water", code: "QCK", name: "즉시 압축 판매", outputKind: "quick", outputLabel: "빠른 운영자금",
+    description: "모든 구름을 소형 캔으로 빠르게 압축합니다. 수익은 낮지만 라인이 금방 비워집니다.",
+    multipliers: { cumulus: .78, rain: .78, electric: .78, ice: .78, solar: .78, aurora: .78 },
+    acceptedKinds: ["cumulus", "rain", "electric", "ice", "solar", "aurora"], durationMultiplier: .32, batchSize: 8,
+  },
+  {
+    id: "climate", code: "BLK", name: "산업 대량 정제", outputKind: "bulk", outputLabel: "최대 코인 효율",
+    description: "화물 전체를 대형 탱크에 투입합니다. 오래 걸리지만 가장 안정적인 현금 수익을 냅니다.",
+    multipliers: { cumulus: 1.24, rain: 1.24, electric: 1.24, ice: 1.24, solar: 1.24, aurora: 1.24 },
+    acceptedKinds: ["cumulus", "rain", "electric", "ice", "solar", "aurora"], durationMultiplier: 1.35, batchSize: 24,
+  },
+  {
+    id: "priority", code: "P-1", name: "비구름 긴급 주문", outputKind: "special", outputLabel: "비구름 8개 한정",
+    description: "쾌청산업을 꺾고 얻은 우선 납품권입니다. 비행당 비구름 8개까지만 고가로 매입합니다.",
+    multipliers: { cumulus: 0, rain: 1.92, electric: 0, ice: 0, solar: 0, aurora: 0 },
+    acceptedKinds: ["rain"], durationMultiplier: .72, batchSize: 8, flightLimit: 8,
+  },
+  {
+    id: "energy", code: "NRG", name: "전하 결정 추출", outputKind: "material", outputLabel: "전기구름 재료 +50%",
+    description: "전기구름의 전하핵을 천천히 분리합니다. 코인 수익을 줄이는 대신 특성 해금용 재료를 더 회수합니다.",
+    multipliers: { cumulus: 0, rain: 0, electric: .42, ice: 0, solar: 0, aurora: 0 },
+    acceptedKinds: ["electric"], durationMultiplier: 1.7, batchSize: 6, materialYield: .5,
+  },
+  {
+    id: "cryogenic", code: "CRY", name: "빙정 결정 추출", outputKind: "material", outputLabel: "빙정구름 재료 +50%",
+    description: "빙정구름을 극저온 분리해 특성 해금용 결정을 추가 회수합니다.",
+    multipliers: { cumulus: 0, rain: 0, electric: 0, ice: .42, solar: 0, aurora: 0 },
+    acceptedKinds: ["ice"], durationMultiplier: 1.85, batchSize: 6, materialYield: .5,
+  },
+  {
+    id: "stellar", code: "SOL", name: "광자 결정 추출", outputKind: "material", outputLabel: "태양구름 재료 +50%",
+    description: "태양구름의 광자핵을 보존해 후반 특성용 재료를 추가 생산합니다.",
+    multipliers: { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: .42, aurora: 0 },
+    acceptedKinds: ["solar"], durationMultiplier: 2, batchSize: 6, materialYield: .5,
+  },
+  {
+    id: "spectrum", code: "AUR", name: "스펙트럼 결정 추출", outputKind: "material", outputLabel: "오로라 재료 +50%",
+    description: "오로라구름의 희귀 입자를 손실 없이 분광해 무한 성장용 재료를 추가 회수합니다.",
+    multipliers: { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: .42 },
+    acceptedKinds: ["aurora"], durationMultiplier: 2.2, batchSize: 6, materialYield: .5,
+  },
 ];
 
 export const PROCESSING_SECONDS: Record<CloudKind, number> = {
@@ -361,7 +396,9 @@ export const INITIAL_STATE = {
   sound: true,
   materials: { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 },
   processing: {
-    jobs: [] as ProcessingJob[], completedCoins: 0, totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now(),
+    jobs: [] as ProcessingJob[], completedCoins: 0,
+    completedMaterials: { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 },
+    totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now(),
   },
   growthMission: { step: 0, safeReturns: 0, contractsSigned: 0, shipmentsClaimed: 0, rainHarvested: 0 },
   infiniteResearch: { speed: 0, power: 0, fuel: 0, drone: 0, yield: 0 },
