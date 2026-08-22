@@ -137,6 +137,30 @@ body { min-width: 320px; background: #92ddf7; }
 .signal-trace-active .promotion-card { top: 284px; }
 .signal-trace-active .toast { top: 280px; }
 
+.archive-relay { position: absolute; z-index: 7; left: 50%; top: 150px; width: min(610px,calc(100% - 18px)); padding: 11px 14px 12px; color: white; background: radial-gradient(circle at 50% 0,rgba(158,238,255,.2),transparent 50%),linear-gradient(145deg,rgba(8,39,57,.97),rgba(18,48,72,.98)); border: 3px solid #9eeeff; border-radius: 20px; box-shadow: 0 7px 0 rgba(17,51,70,.5),0 0 35px rgba(158,238,255,.3); opacity: 0; pointer-events: none; transform: translate(-50%,-12px) scale(.96); transition: opacity .2s ease,transform .2s ease; }
+.archive-relay.show { opacity: 1; transform: translate(-50%,0) scale(1); }
+.archive-relay header { display: flex; align-items: center; gap: 9px; }
+.archive-relay header span { color: #9eeeff; font: 900 9px "Outfit",sans-serif; letter-spacing: .14em; }
+.archive-relay header strong { margin-left: auto; font: 900 14px "Outfit",sans-serif; letter-spacing: .06em; }
+.archive-relay header em { min-width: 58px; padding: 5px 8px; color: #123448; background: #d8fbff; border-radius: 7px; font: 900 10px "Outfit",sans-serif; font-style: normal; text-align: center; }
+.archive-relay-board { margin-top: 9px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.archive-relay-board section { min-width: 0; padding: 8px 10px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 5px 10px; background: rgba(3,25,38,.58); border: 1px solid rgba(158,238,255,.26); border-radius: 11px; }
+.archive-relay-board small { grid-column: 1/3; color: #93bac9; font: 900 8px "Outfit",sans-serif; letter-spacing: .12em; }
+.archive-relay-board section > div { display: flex; gap: 6px; }
+.archive-relay-board section:first-child i { flex: 1 1 0; height: 11px; display: block; background: #244b5c; border: 2px solid #5f899a; border-radius: 4px; transition: .18s ease; }
+.archive-relay-board section:first-child i.filled { background: linear-gradient(90deg,#9eeeff,#ffffff); border-color: white; box-shadow: 0 0 13px rgba(158,238,255,.8); transform: scaleY(1.16); }
+.archive-relay-board section > strong { color: #d8fbff; font: 900 18px/1 "Outfit",sans-serif; }
+.archive-chain > div { height: 11px; overflow: hidden; background: #173b4e; border: 2px solid #537e91; border-radius: 99px; }
+.archive-chain > div i { width: 0; height: 100%; display: block; background: linear-gradient(90deg,#5ed8ed,#d8fbff,#ffffff); border-radius: inherit; box-shadow: 0 0 13px rgba(158,238,255,.72); transition: width .16s ease; }
+.archive-relay footer { margin-top: 8px; padding-top: 7px; color: #d2e9ef; border-top: 1px solid rgba(158,238,255,.27); font-size: 10px; font-weight: 900; text-align: center; }
+.archive-relay.won { border-color: white; box-shadow: 0 7px 0 rgba(19,61,76,.48),0 0 44px rgba(216,251,255,.5); }
+.archive-relay.won header strong,.archive-relay.won .archive-relay-board section > strong { color: white; }
+.archive-relay.lost { border-color: #8ca9b5; filter: saturate(.55); }
+.archive-relay.lost header strong { color: #c2d1d7; }
+.returning .archive-relay,.launching .archive-relay,body.base-open .archive-relay,body.garage-open .archive-relay,body.story-open .archive-relay { opacity: 0 !important; transform: translate(-50%,-12px) scale(.96); }
+.archive-relay-active .promotion-card { top: 304px; }
+.archive-relay-active .toast { top: 300px; }
+
 .radio-call { position: absolute; z-index: 10; right: 172px; bottom: 26px; width: min(510px,calc(100% - 210px)); min-height: 136px; padding: 11px 16px 12px 11px; display: grid; grid-template-columns: 112px minmax(0,1fr); gap: 15px; align-items: center; color: white; background: linear-gradient(145deg,rgba(7,31,44,.97),rgba(15,53,65,.98)); border: 3px solid #7ff5df; border-radius: 23px; box-shadow: 0 8px 0 rgba(5,26,36,.48),0 18px 38px rgba(7,31,44,.34); opacity: 0; pointer-events: none; transform: translateX(30px) scale(.96); transition: opacity .2s ease,transform .24s cubic-bezier(.2,.85,.3,1.12); }
 .radio-call.show { opacity: 1; transform: translateX(0) scale(1); }
 .radio-call.moka { border-color: #ffad72; background: linear-gradient(145deg,rgba(49,31,29,.98),rgba(74,43,35,.98)); }
@@ -166,6 +190,10 @@ body { min-width: 320px; background: #92ddf7; }
 .signal-result > small,.signal-result > div b { color: #d5a9ff; }
 .signal-result footer { border-color: rgba(159,248,255,.3); }
 .signal-result footer b { color: #9ff8ff; }
+.archive-result { background: radial-gradient(circle at 50% 0,rgba(158,238,255,.28),transparent 44%),linear-gradient(150deg,rgba(8,40,59,.99),rgba(18,52,72,.99)); border-color: #9eeeff; box-shadow: 0 11px 0 rgba(18,60,76,.55),0 0 72px rgba(158,238,255,.43),0 30px 80px rgba(0,0,0,.46); }
+.archive-result > small,.archive-result > div b { color: #d8fbff; }
+.archive-result footer { border-color: rgba(255,255,255,.3); }
+.archive-result footer b { color: white; }
 
 .tutorial {
   position: absolute; z-index: 4; left: 50%; top: 150px; transform: translateX(-50%); display: flex; flex-direction: column;
@@ -645,6 +673,10 @@ body.base-open .promotion-card { top: 28px; }
 .base-facility.launch.signal-ready b { color: #d5a9ff; }
 .base-facility.launch.signal-ready::before,.base-facility.launch.signal-ready em { background: #b776ff; }
 @keyframes signal-facility-ready { to { filter:brightness(1.18); box-shadow:0 0 38px rgba(183,118,255,.68),0 8px 0 rgba(5,25,34,.42); } }
+.base-facility.launch.archive-ready { border-color: #9eeeff; animation: archive-facility-ready .72s ease-in-out infinite alternate; }
+.base-facility.launch.archive-ready b { color: #d8fbff; }
+.base-facility.launch.archive-ready::before,.base-facility.launch.archive-ready em { background: #9eeeff; }
+@keyframes archive-facility-ready { to { filter:brightness(1.2); box-shadow:0 0 40px rgba(158,238,255,.72),0 8px 0 rgba(5,25,34,.42); } }
 
 .route-overlay {
   position: absolute; z-index: 32; inset: 0; padding: 24px; display: grid; place-items: center;
@@ -683,6 +715,8 @@ body.base-open .promotion-card { top: 28px; }
 .route-rival-event i { margin-right: 5px; padding: 3px 5px; color: #291522; background: #ff6578; border-radius: 5px; font: 900 9px "Outfit",sans-serif; font-style: normal; }
 .route-rival-event.signal { color: #eadcff; background: rgba(49,31,86,.78); border-color: #b776ff; }
 .route-rival-event.signal i { color: #241738; background: #d5a9ff; }
+.route-rival-event.archive { color: #d8fbff; background: rgba(18,60,78,.82); border-color: #9eeeff; }
+.route-rival-event.archive i { color: #123448; background: #d8fbff; }
 .route-card em { width: 100%; margin-top: auto; padding-top: 17px; color: white; text-align: center; font-size: 15px; font-style: normal; font-weight: 900; }
 .route-unlock-requirements { width: 100%; margin-top: 13px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
 .route-unlock-requirements span { min-height: 40px; padding: 7px 5px; display: grid; place-items: center; color: #d7e5e8; background: rgba(3,20,29,.58); border: 1px solid #476978; border-radius: 9px; font-size: 11px; font-weight: 900; text-align: center; line-height: 1.25; }
@@ -906,6 +940,18 @@ body.base-open .promotion-card { top: 28px; }
   .signal-trace footer { margin-top: 6px; font-size: 8px; }
   .signal-trace-active .promotion-card { top: 258px; }
   .signal-trace-active .toast { top: 258px; }
+  .archive-relay { top: 158px; padding: 9px 10px 10px; border-radius: 16px; }
+  .archive-relay header span { font-size: 7px; }
+  .archive-relay header strong { font-size: 10px; }
+  .archive-relay header em { min-width: 50px; font-size: 8px; }
+  .archive-relay-board { margin-top: 6px; gap: 5px; }
+  .archive-relay-board section { padding: 6px; gap: 4px 5px; }
+  .archive-relay-board small { font-size: 6px; }
+  .archive-relay-board section:first-child i,.archive-chain > div { height: 8px; }
+  .archive-relay-board section > strong { font-size: 14px; }
+  .archive-relay footer { margin-top: 5px; font-size: 8px; }
+  .archive-relay-active .promotion-card { top: 272px; }
+  .archive-relay-active .toast { top: 270px; }
   .radio-call { right: 9px; bottom: 105px; width: calc(100% - 18px); min-height: 106px; padding: 8px 11px 9px 8px; grid-template-columns: 84px minmax(0,1fr); gap: 10px; border-radius: 18px; }
   .radio-call-portrait { width: 84px; height: 84px; border-radius: 14px 14px 31px 14px; }
   .radio-call-copy > span { font-size: 8px; }

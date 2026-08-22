@@ -64,6 +64,15 @@ app.innerHTML = `
         <footer id="signalTraceMessage">보라색 표식 전기구름을 순서대로 추적하세요</footer>
       </aside>
 
+      <aside class="archive-relay" id="archiveRelay" aria-live="polite" aria-hidden="true">
+        <header><span>LIVE FROZEN ARCHIVE</span><strong id="archiveRelayTitle">RESONANCE RECOVERY</strong><em id="archiveRelayTimer">60.0s</em></header>
+        <div class="archive-relay-board">
+          <section><small>RECOVERED FILES</small><div id="archiveFragmentPips"></div><strong id="archiveFragmentScore">0 / 3</strong></section>
+          <section class="archive-chain"><small>RESONANCE CHAIN</small><div><i id="archiveChainFill"></i></div><strong id="archiveChainScore">0 / 3</strong></section>
+        </div>
+        <footer id="archiveRelayMessage">청록 표식 빙정 파편 3개를 4초 안에 연속 수확하세요</footer>
+      </aside>
+
       <div class="tutorial" id="tutorial"><b>WASD 이동 · 마우스 조준</b><span>좌클릭 흡입 · SPACE 기지 귀환 · 연료 0% 전 복귀</span></div>
       <aside class="growth-mission" id="growthMission" aria-live="polite">
         <span class="growth-mission-code" id="growthMissionCode">JOB 01</span>
@@ -99,6 +108,14 @@ app.innerHTML = `
         <p>움직이는 전기구름 신호를 연결해 인공 기압장이 향하는 북쪽 좌표를 확보했습니다.</p>
         <div><span><b id="signalResultReward">◈ 180</b> 관측 지원금</span><span><b>NRG + ◆3</b> 전하 결정 추출 해금</span></div>
         <footer><b>NEXT SKY</b><span>북부 빙정층 · 얼어붙은 관측 기록 추적</span></footer>
+      </section>
+
+      <section class="rival-result archive-result" id="archiveResult" aria-live="polite" aria-hidden="true">
+        <small>CHAPTER 5 CLEAR // FROZEN ARCHIVE</small>
+        <h2>선대의 기록 복원!</h2>
+        <p>얼어붙은 관측 파일 세 조각을 되살려 회사가 폐업했던 진짜 이유와 태양구름 층 좌표를 확보했습니다.</p>
+        <div><span><b id="archiveResultReward">◈ 350</b> 기록 복원 지원금</span><span><b>CRY + ◆4</b> 빙정 결정 추출 해금</span></div>
+        <footer><b>NEXT SKY</b><span>태양구름 층 · 인공 기압 엔진 추적</span></footer>
       </section>
 
       <aside class="promotion-card">
@@ -260,6 +277,8 @@ const rivalResult = required<HTMLElement>("#rivalResult");
 const rivalResultReward = required<HTMLElement>("#rivalResultReward");
 const signalResult = required<HTMLElement>("#signalResult");
 const signalResultReward = required<HTMLElement>("#signalResultReward");
+const archiveResult = required<HTMLElement>("#archiveResult");
+const archiveResultReward = required<HTMLElement>("#archiveResultReward");
 const altitude = required<HTMLElement>("#altitude");
 const rankName = required<HTMLElement>("#rankName");
 const promotionTitle = required<HTMLElement>("#promotionTitle");
@@ -310,6 +329,14 @@ const signalTraceTimer = required<HTMLElement>("#signalTraceTimer");
 const signalTracePips = required<HTMLElement>("#signalTracePips");
 const signalTraceScore = required<HTMLElement>("#signalTraceScore");
 const signalTraceMessage = required<HTMLElement>("#signalTraceMessage");
+const archiveRelay = required<HTMLElement>("#archiveRelay");
+const archiveRelayTitle = required<HTMLElement>("#archiveRelayTitle");
+const archiveRelayTimer = required<HTMLElement>("#archiveRelayTimer");
+const archiveFragmentPips = required<HTMLElement>("#archiveFragmentPips");
+const archiveFragmentScore = required<HTMLElement>("#archiveFragmentScore");
+const archiveChainFill = required<HTMLElement>("#archiveChainFill");
+const archiveChainScore = required<HTMLElement>("#archiveChainScore");
+const archiveRelayMessage = required<HTMLElement>("#archiveRelayMessage");
 const levelUpOverlay = required<HTMLElement>("#levelUpOverlay");
 const skillChoices = required<HTMLElement>("#skillChoices");
 const levelUpTitle = required<HTMLElement>("#levelUpTitle");
@@ -414,8 +441,10 @@ let radioBusy = false;
 let radioTimer = 0;
 let rivalResultTimer = 0;
 let signalResultTimer = 0;
+let archiveResultTimer = 0;
 let previousRivalRaceStatus: RunState["rivalRace"]["status"] = "inactive";
 let previousSignalTraceStatus: RunState["signalTrace"]["status"] = "inactive";
+let previousArchiveRelayStatus: RunState["archiveRelay"]["status"] = "inactive";
 
 function enqueueRadioCall(call: RadioCall): void {
   radioQueue.push(call);
@@ -470,6 +499,18 @@ function showSignalResult(reward: number): void {
     signalResult.classList.remove("show");
     signalResult.setAttribute("aria-hidden", "true");
   }, 5000);
+}
+
+function showArchiveResult(reward: number): void {
+  window.clearTimeout(archiveResultTimer);
+  archiveResultReward.textContent = `◈ ${reward}`;
+  archiveResult.classList.remove("show");
+  archiveResult.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => archiveResult.classList.add("show"));
+  archiveResultTimer = window.setTimeout(() => {
+    archiveResult.classList.remove("show");
+    archiveResult.setAttribute("aria-hidden", "true");
+  }, 5200);
 }
 
 const STORY_SCENES: Record<StorySceneId, StoryScene> = {
@@ -527,9 +568,9 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
     chapter: "CHAPTER 5 // FROZEN ARCHIVE",
     title: "얼어붙은 관측 기록",
     beats: [
-      { speaker: "NARRATION", name: "북부 빙정층", role: "ABANDONED WEATHER RELAY", mark: "ICE", tone: "narrator", text: "빙정구름 안에서 오래된 관측 중계기가 발견됐다. 전원이 끊긴 기록 장치에는 회사가 폐업하기 전의 마지막 항로가 남아 있었다." },
-      { speaker: "모카", name: "정비사 모카", role: "ARCHIVE RECOVERY", mark: "MK", tone: "moka", portrait: "moka-worried", text: "선대 사장님도 같은 기압장을 추적했어요. 실패해서 회사를 잃은 게 아니라, 증거를 지키려고 모든 장비를 팔았던 거예요." },
-      { speaker: "소나", name: "관측 연구원 소나", role: "NEXT TARGET // SOLAR LAYER", mark: "SN", tone: "sona", portrait: "sona-serious", text: "기록의 마지막 좌표는 태양구름 층입니다. 이번에는 증거도 회사도 모두 지켜서 돌아오겠습니다." },
+      { speaker: "NARRATION", name: "북부 빙정층", role: "ABANDONED WEATHER RELAY", mark: "ICE", tone: "narrator", text: "빙정구름 안에서 오래된 관측 중계기가 발견됐다. 회사 문양이 남아 있었지만 기록 장치는 세 겹의 얼음과 함께 정지해 있었다." },
+      { speaker: "모카", name: "정비사 모카", role: "ARCHIVE RECOVERY", mark: "MK", tone: "moka", portrait: "moka-worried", text: "선대 사장님이 쓰던 중계기예요. 파일이 빙정 파편으로 쪼개져서, 공명이 끊기기 전에 한 묶음씩 빠르게 해동해야 해요." },
+      { speaker: "소나", name: "관측 연구원 소나", role: "NEW OBJECTIVE // RESONANCE ×3", mark: "SN", tone: "sona", portrait: "sona-serious", text: "청록 표식 파편 세 개를 4초 간격 안에 연결하세요. 같은 작업을 세 번 성공하면 마지막 관측 기록을 완전히 복원할 수 있습니다." },
     ],
   },
   solarFrontier: {
@@ -849,6 +890,34 @@ function renderRunState(state: RunState): void {
   }
   if (signal.status === "won" && previousSignalTraceStatus !== "won") showSignalResult(signal.reward);
   previousSignalTraceStatus = signal.status;
+  const archive = state.archiveRelay;
+  const archiveVisible = archive.status !== "inactive";
+  archiveRelay.classList.toggle("show", archiveVisible);
+  archiveRelay.classList.toggle("won", archive.status === "won");
+  archiveRelay.classList.toggle("lost", archive.status === "lost");
+  archiveRelay.setAttribute("aria-hidden", String(!archiveVisible));
+  document.body.classList.toggle("archive-relay-active", archiveVisible);
+  archiveRelayTimer.textContent = archive.status === "active" ? `${Math.max(0, archive.timeLeft).toFixed(1)}s` : archive.status === "won" ? "RESTORED" : "FROZEN";
+  archiveFragmentScore.textContent = `${archive.fragments} / ${archive.fragmentTarget}`;
+  archiveFragmentPips.innerHTML = Array.from({ length: archive.fragmentTarget }, (_, index) => `<i class="${index < archive.fragments ? "filled" : ""}"></i>`).join("");
+  archiveChainScore.textContent = `${archive.streak} / ${archive.chainTarget}`;
+  archiveChainFill.style.width = `${Math.min(100, archive.streak / Math.max(1, archive.chainTarget) * 100)}%`;
+  archiveChainFill.style.setProperty("--chain-time", `${Math.min(1, archive.chainTimeLeft / Math.max(.01, archive.chainWindow))}`);
+  if (archive.status === "won") {
+    archiveRelayTitle.textContent = "ARCHIVE ONLINE";
+    archiveRelayMessage.textContent = `CRY 빙정 결정 추출 라인 해금 · 기록 복원 지원금 ◈ ${archive.reward}`;
+  } else if (archive.status === "lost") {
+    archiveRelayTitle.textContent = "RELAY REFROZEN";
+    archiveRelayMessage.textContent = "화물 손실 없음 · 빙정 항로에서 복원 진도 0부터 재시도";
+  } else if (archive.streak > 0) {
+    archiveRelayTitle.textContent = "RESONANCE ACTIVE";
+    archiveRelayMessage.textContent = `${archive.chainTimeLeft.toFixed(1)}초 안에 남은 표식 파편 ${archive.chainTarget - archive.streak}개를 이어서 수확하세요`;
+  } else {
+    archiveRelayTitle.textContent = "RESONANCE RECOVERY";
+    archiveRelayMessage.textContent = "청록 표식 빙정 파편 3개를 4초 안에 연속 수확하세요";
+  }
+  if (archive.status === "won" && previousArchiveRelayStatus !== "won") showArchiveResult(archive.reward);
+  previousArchiveRelayStatus = archive.status;
   renderProcessing(state);
 }
 
@@ -1005,16 +1074,18 @@ function showFactory(state: RunState): void {
     const acceptedClouds = contract.acceptedKinds.map((kind) => CLOUDS[kind]);
     const quotaLabel = contract.flightLimit === undefined ? "수량 제한 없음" : `이번 비행 ${estimate.quotaRemaining}/${contract.flightLimit}개 남음`;
     const rewardLabel = materialUnits > 0 ? `◈ ${payout.toLocaleString()} + ◆${materialUnits}` : `◈ ${payout.toLocaleString()}`;
-    const eventLocked = contract.id === "energy" && !company.story.electricSignalCleared;
+    const signalLocked = contract.id === "energy" && !company.story.electricSignalCleared;
+    const archiveLocked = contract.id === "cryogenic" && !company.story.iceArchiveRecovered;
+    const eventLocked = signalLocked || archiveLocked;
     const disabled = eventLocked || estimate.units <= 0;
     const payoutLabel = eventLocked
-      ? "LIVE THUNDER TRACE 성공 시 해금"
+      ? signalLocked ? "LIVE THUNDER TRACE 성공 시 해금" : "FROZEN ARCHIVE 복원 시 해금"
       : estimate.units > 0
         ? `예상 ${rewardLabel} · 배정`
         : contract.flightLimit && estimate.quotaRemaining === 0 ? "이번 비행 주문 완료" : "맞는 화물 없음";
     return `<button class="contract-card ${contract.outputKind} ${eventLocked ? "event-locked" : ""}" data-contract="${contract.id}" ${disabled ? "disabled" : ""}>
       <span class="contract-code">${contract.code}</span>
-      <em class="contract-purpose">${eventLocked ? "신호 좌표 필요" : contract.outputLabel}</em>
+      <em class="contract-purpose">${eventLocked ? signalLocked ? "신호 좌표 필요" : "관측 기록 필요" : contract.outputLabel}</em>
       <span class="contract-copy"><b>${contract.name}</b><small>${contract.description}</small></span>
       <span class="contract-rates">투입 ${acceptedClouds.map((cloud) => cloud.icon).join(" ")} · ${quotaLabel}</span>
       <span class="contract-process"><b>${estimate.units} UNIT · ${estimate.batches}묶음</b><small>예상 ${processingTime(estimate.seconds)}</small></span>
@@ -1200,10 +1271,12 @@ function renderState(state: GameState): void {
   if (state.harvested > 2) tutorial.classList.add("hidden");
   const rivalEventReady = state.rank >= 1 && state.story.seen.includes("rainFrontier") && !state.story.rivalBeaten;
   const signalEventReady = state.rank >= 2 && state.story.seen.includes("electricFrontier") && !state.story.electricSignalCleared;
+  const archiveEventReady = state.rank >= 3 && state.story.seen.includes("iceFrontier") && !state.story.iceArchiveRecovered;
   launchButton.classList.toggle("rival-ready", rivalEventReady);
   launchButton.classList.toggle("signal-ready", signalEventReady);
+  launchButton.classList.toggle("archive-ready", archiveEventReady);
   const launchFacilityCode = launchButton.querySelector<HTMLElement>("b");
-  if (launchFacilityCode) launchFacilityCode.textContent = signalEventReady ? "GO! · SIGNAL TRACE" : rivalEventReady ? "GO! · LIVE RACE" : "GO · FACILITY 04";
+  if (launchFacilityCode) launchFacilityCode.textContent = archiveEventReady ? "GO! · FROZEN ARCHIVE" : signalEventReady ? "GO! · SIGNAL TRACE" : rivalEventReady ? "GO! · LIVE RACE" : "GO · FACILITY 04";
   renderGrowthMission(state);
 
   cloudLegend.innerHTML = (Object.values(CLOUDS))
@@ -1387,6 +1460,7 @@ function renderRouteList(): void {
     const payout = map.valueMultiplier * FLIGHT_ROUTES[map.routeId].valueMultiplier;
     const rivalEvent = mapRank === 1 && !locked && company.story.seen.includes("rainFrontier") && !company.story.rivalBeaten;
     const signalEvent = mapRank === 2 && !locked && company.story.seen.includes("electricFrontier") && !company.story.electricSignalCleared;
+    const archiveEvent = mapRank === 3 && !locked && company.story.seen.includes("iceFrontier") && !company.story.iceArchiveRecovered;
     const cardContents = `
       <span class="route-visual">${locked ? "🔒" : map.icon}</span>
       <span class="route-code">${map.code}</span>
@@ -1397,6 +1471,7 @@ function renderRouteList(): void {
       <span class="route-clouds">${clouds}</span>
       ${rivalEvent ? `<span class="route-rival-event"><i>LIVE EVENT</i> 비구름 5개 선점 경쟁 · 전용 계약 보상</span>` : ""}
       ${signalEvent ? `<span class="route-rival-event signal"><i>LIVE TRACE</i> 표식 전기구름 5개 · 45초 · NRG 라인 해금</span>` : ""}
+      ${archiveEvent ? `<span class="route-rival-event archive"><i>FROZEN FILE</i> 3연속 수확 × 3회 · 60초 · CRY 라인 해금</span>` : ""}
       <span class="route-identity">${map.identity}</span>`;
 
     if (locked) {

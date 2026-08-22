@@ -1,5 +1,5 @@
 import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
-import type { Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, Particle, ProcessingClaimResult, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RivalRaceState, RunSkillId, RunState, SignalTraceState, StorySceneId, UpgradeId } from "./types";
+import type { ArchiveRelayState, Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, Particle, ProcessingClaimResult, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RivalRaceState, RunSkillId, RunState, SignalTraceState, StorySceneId, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
@@ -35,6 +35,11 @@ const RIVAL_RACE_REWARD = 80;
 const SIGNAL_TRACE_TARGET = 5;
 const SIGNAL_TRACE_SECONDS = 45;
 const SIGNAL_TRACE_REWARD = 180;
+const ARCHIVE_FRAGMENT_TARGET = 3;
+const ARCHIVE_CHAIN_TARGET = 3;
+const ARCHIVE_CHAIN_WINDOW = 4;
+const ARCHIVE_RELAY_SECONDS = 60;
+const ARCHIVE_RELAY_REWARD = 350;
 const PACING_TARGETS = {
   firstHarvest: 10,
   firstReturn: 75,
@@ -51,6 +56,11 @@ const emptyCloudStock = (): Record<CloudKind, number> => ({ cumulus: 0, rain: 0,
 const freshProcessingState = (): ProcessingState => ({ jobs: [], completedCoins: 0, completedMaterials: emptyCloudStock(), totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now() });
 const freshRivalRace = (): RivalRaceState => ({ status: "inactive", playerScore: 0, rivalScore: 0, target: RIVAL_RACE_TARGET, reward: RIVAL_RACE_REWARD });
 const freshSignalTrace = (): SignalTraceState => ({ status: "inactive", progress: 0, target: SIGNAL_TRACE_TARGET, timeLeft: SIGNAL_TRACE_SECONDS, timeLimit: SIGNAL_TRACE_SECONDS, reward: SIGNAL_TRACE_REWARD });
+const freshArchiveRelay = (): ArchiveRelayState => ({
+  status: "inactive", fragments: 0, fragmentTarget: ARCHIVE_FRAGMENT_TARGET, streak: 0, chainTarget: ARCHIVE_CHAIN_TARGET,
+  chainTimeLeft: 0, chainWindow: ARCHIVE_CHAIN_WINDOW, timeLeft: ARCHIVE_RELAY_SECONDS, timeLimit: ARCHIVE_RELAY_SECONDS,
+  waveDelay: .7, reward: ARCHIVE_RELAY_REWARD,
+});
 
 const freshRunState = (day = 1): RunState => ({
   day,
@@ -93,6 +103,7 @@ const freshRunState = (day = 1): RunState => ({
   processingUsage: {},
   rivalRace: freshRivalRace(),
   signalTrace: freshSignalTrace(),
+  archiveRelay: freshArchiveRelay(),
 });
 
 export class CloudHarvestGame {
@@ -161,6 +172,8 @@ export class CloudHarvestGame {
   private harvestDrones: HarvestDrone[] = [];
   private rivalHarvester: RivalHarvester = { x: 0, y: 0, vx: 0, vy: 0, angle: Math.PI, pulse: 0, delay: 0 };
   private signalTargetId?: number;
+  private archiveWaveIndex = 0;
+  private archiveRelayPulse = 0;
   private runEmitTimer = 0;
   private processingEmitTimer = 0;
   private fuelWarningStage = 0;
@@ -204,6 +217,7 @@ export class CloudHarvestGame {
     this.resize();
     this.prepareRivalRace(this.run.mapRank);
     this.prepareSignalTrace(this.run.mapRank);
+    this.prepareArchiveRelay(this.run.mapRank);
     window.addEventListener("resize", () => this.resize());
     for (let i = 0; i < Math.min(18, this.getMaxClouds()); i += 1) this.spawnCloud(true);
     this.emitAll();
@@ -323,6 +337,7 @@ export class CloudHarvestGame {
   requestReturn(): boolean {
     if (this.atFactory || this.returning || this.launching) return false;
     if (this.run.signalTrace.status === "active") this.finishSignalTrace(false, "return");
+    if (this.run.archiveRelay.status === "active") this.finishArchiveRelay(false, "return");
     this.run.emergencyReturn = false;
     this.returning = true;
     this.returnTimer = 0;
@@ -361,6 +376,7 @@ export class CloudHarvestGame {
   private triggerEmergencyReturn(): void {
     if (this.atFactory || this.returning) return;
     if (this.run.signalTrace.status === "active") this.finishSignalTrace(false, "fuel");
+    if (this.run.archiveRelay.status === "active") this.finishArchiveRelay(false, "fuel");
     const discarded = this.getCargoCount();
     this.run.cargo = emptyCloudStock();
     this.run.cargoValue = emptyCloudStock();
@@ -389,6 +405,10 @@ export class CloudHarvestGame {
     if (!this.atFactory) return null;
     if (id === "energy" && !this.state.story.electricSignalCleared) {
       this.onToast("전기구름 항로의 신호 좌표를 먼저 확보해야 합니다.", "warning");
+      return null;
+    }
+    if (id === "cryogenic" && !this.state.story.iceArchiveRecovered) {
+      this.onToast("빙정 중계기의 관측 기록을 먼저 복원해야 합니다.", "warning");
       return null;
     }
     const contract = PROCESSING_CONTRACTS.find((item) => item.id === id);
@@ -598,6 +618,15 @@ export class CloudHarvestGame {
     this.run.signalTrace = { ...freshSignalTrace(), status: startsSignalTrace ? "active" : "inactive" };
   }
 
+  private prepareArchiveRelay(mapRank: number): void {
+    const startsArchiveRelay = mapRank === 3
+      && this.state.story.seen.includes("iceFrontier")
+      && !this.state.story.iceArchiveRecovered;
+    this.archiveWaveIndex = 0;
+    this.archiveRelayPulse = 0;
+    this.run.archiveRelay = { ...freshArchiveRelay(), status: startsArchiveRelay ? "active" : "inactive" };
+  }
+
   launchFlight(mapRank: number): boolean {
     if (!this.atFactory || this.launching || this.returning || this.dayComplete) return false;
     if (!Number.isInteger(mapRank) || mapRank < 0 || mapRank > this.state.rank || !RANKS[mapRank]) return false;
@@ -613,6 +642,7 @@ export class CloudHarvestGame {
     this.run.processingUsage = {};
     this.prepareRivalRace(mapRank);
     this.prepareSignalTrace(mapRank);
+    this.prepareArchiveRelay(mapRank);
     this.fuelWarningStage = 0;
     this.fuelPity = 0;
     this.fuelPickupFlash = 0;
@@ -1051,6 +1081,7 @@ export class CloudHarvestGame {
       this.spawnTimer = this.getCloudSpawnInterval() * (formed ? 1.8 : 1);
     }
     this.updateSignalTrace(dt);
+    this.updateArchiveRelay(dt);
 
     const worldZoom = this.getWorldZoom();
     this.player.targetX = Math.max(55 / worldZoom, Math.min(this.getWorldWidth() - 55 / worldZoom, this.player.targetX));
@@ -1255,6 +1286,16 @@ export class CloudHarvestGame {
             text: "전하 신호가 이동합니다. 보라색 표식이 붙은 전기구름만 따라가세요. 다섯 개를 연결하면 기압장 좌표를 고정할 수 있어요!",
           });
           this.playTone(248, .12);
+        } else if (this.run.archiveRelay.status === "active") {
+          this.onToast("소나: 동결 기록 반응! 표시된 빙정 파편 3개를 4초 간격 안에 연결하세요.", "warning");
+          this.onRadio({
+            speaker: "관측 연구원 소나",
+            role: "FROZEN ARCHIVE // RESONANCE LINK",
+            tone: "sona",
+            portrait: "sona-worried",
+            text: "중계기 기록이 세 조각으로 얼어붙어 있어요. 청록 표식 파편 세 개를 빠르게 이어서 한 조각씩 해동하세요. 공명이 끊기면 그 묶음은 다시 얼어붙습니다!",
+          });
+          this.playTone(520, .14);
         } else {
           this.onToast("기상 항로 진입 — 수확 비행 시작!", "success");
         }
@@ -1551,6 +1592,151 @@ export class CloudHarvestGame {
     this.onRunChange(this.getRunState());
   }
 
+  private archiveRelayPosition(): { x: number; y: number } {
+    return { x: this.getWorldWidth() * .48, y: this.getWorldHeight() * .42 };
+  }
+
+  private clearArchiveShards(remove: boolean): void {
+    const shardIds = new Set(this.clouds.filter((cloud) => cloud.archiveShard).map((cloud) => cloud.id));
+    if (remove && shardIds.size > 0) {
+      for (const cloud of this.clouds) {
+        if (!shardIds.has(cloud.id)) continue;
+        this.burst(cloud.x, cloud.y, "#bff8ff", 10, 150, "shard");
+        this.queuedCascadeIds.delete(cloud.id);
+      }
+      this.clouds = this.clouds.filter((cloud) => !shardIds.has(cloud.id));
+      this.cascadeQueue = this.cascadeQueue.filter((item) => !shardIds.has(item.cloudId));
+      return;
+    }
+    for (const cloud of this.clouds) if (cloud.archiveShard) cloud.archiveShard = false;
+  }
+
+  private spawnArchiveWave(): void {
+    if (this.run.archiveRelay.status !== "active") return;
+    this.clearArchiveShards(true);
+    const relay = this.archiveRelayPosition();
+    const waveAngle = -Math.PI / 2 + this.archiveWaveIndex * .58;
+    this.archiveWaveIndex += 1;
+    for (let index = 0; index < this.run.archiveRelay.chainTarget; index += 1) {
+      this.spawnCloud(false, "ice");
+      const shard = this.clouds[this.clouds.length - 1];
+      if (!shard) continue;
+      const angle = waveAngle + index / this.run.archiveRelay.chainTarget * Math.PI * 2;
+      const health = CLOUDS.ice.health * (1 + this.run.mapRank * .12) * .46;
+      shard.x = Math.max(70, Math.min(this.getWorldWidth() - 70, relay.x + Math.cos(angle) * 175));
+      shard.y = Math.max(190, Math.min(this.getWorldHeight() - 125, relay.y + Math.sin(angle) * 112));
+      shard.vx = Math.cos(angle) * 3;
+      shard.vy = Math.sin(angle) * 2;
+      shard.radius = Math.min(34, Math.max(27, shard.radius));
+      shard.health = health;
+      shard.maxHealth = health;
+      shard.dense = false;
+      shard.front = false;
+      shard.formationId = undefined;
+      shard.formationCore = false;
+      shard.formationKind = undefined;
+      shard.archiveShard = true;
+    }
+    this.addShockwave({ x: relay.x, y: relay.y, radius: 34, life: .85, maxLife: .85, color: "#9eeeff" });
+    this.addFloatingText({ x: relay.x, y: relay.y - 58, text: `MEMORY WAVE  ${this.run.archiveRelay.fragments + 1}/${this.run.archiveRelay.fragmentTarget}`, color: "#d8fbff", life: 1.2 });
+    this.playTone(470 + this.run.archiveRelay.fragments * 70, .08);
+  }
+
+  private updateArchiveRelay(dt: number): void {
+    this.archiveRelayPulse = Math.max(0, this.archiveRelayPulse - dt * 2.4);
+    const archive = this.run.archiveRelay;
+    if (archive.status !== "active") return;
+    archive.timeLeft = Math.max(0, archive.timeLeft - dt);
+    if (archive.timeLeft <= 0) {
+      this.finishArchiveRelay(false, "time");
+      return;
+    }
+    if (archive.waveDelay > 0) {
+      archive.waveDelay = Math.max(0, archive.waveDelay - dt);
+      if (archive.waveDelay <= 0) this.spawnArchiveWave();
+      return;
+    }
+    if (archive.streak > 0) {
+      archive.chainTimeLeft = Math.max(0, archive.chainTimeLeft - dt);
+      if (archive.chainTimeLeft <= 0) {
+        const relay = this.archiveRelayPosition();
+        archive.streak = 0;
+        archive.waveDelay = .65;
+        this.clearArchiveShards(true);
+        this.addFloatingText({ x: relay.x, y: relay.y - 48, text: "RESONANCE LOST  ·  REFREEZE", color: "#a9c8d7", life: 1.25 });
+        this.addShockwave({ x: relay.x, y: relay.y, radius: 20, life: .6, maxLife: .6, color: "#7f9eb5" });
+        this.playTone(150, .12);
+        return;
+      }
+    }
+    if (!this.clouds.some((cloud) => cloud.archiveShard)) this.spawnArchiveWave();
+  }
+
+  private registerArchiveShard(cloud: Cloud): void {
+    const archive = this.run.archiveRelay;
+    if (archive.status !== "active") return;
+    const relay = this.archiveRelayPosition();
+    archive.streak += 1;
+    archive.chainTimeLeft = archive.chainWindow;
+    this.addHarvestLink({ x: cloud.x, y: cloud.y, targetX: relay.x, targetY: relay.y, life: .7, maxLife: .7, color: "#9eeeff" });
+    this.addFloatingText({ x: cloud.x, y: cloud.y - 42, text: `RESONANCE  ${archive.streak}/${archive.chainTarget}`, color: "#d8fbff", life: 1.2 });
+    this.playTone(620 + archive.streak * 90, .055);
+    if (archive.streak < archive.chainTarget) return;
+    archive.fragments += 1;
+    archive.streak = 0;
+    archive.chainTimeLeft = 0;
+    this.archiveRelayPulse = 1;
+    const relayFuel = Math.min(1.5, this.getFuelCapacity() - this.run.fuel);
+    if (relayFuel > 0) this.run.fuel += relayFuel;
+    this.clearArchiveShards(true);
+    this.addFloatingText({ x: relay.x, y: relay.y - 64, text: `ARCHIVE RESTORED  ${archive.fragments}/${archive.fragmentTarget}${relayFuel > 0 ? `  ·  FUEL +${relayFuel.toFixed(1)}` : ""}`, color: "#ffffff", life: 1.6 });
+    this.addShockwave({ x: relay.x, y: relay.y, radius: 46, life: .9, maxLife: .9, color: "#9eeeff" });
+    this.burst(relay.x, relay.y, "#d8fbff", 40, 300, "shard");
+    if (archive.fragments >= archive.fragmentTarget) this.finishArchiveRelay(true);
+    else archive.waveDelay = .85;
+  }
+
+  private finishArchiveRelay(success: boolean, reason: "time" | "return" | "fuel" = "time"): void {
+    const archive = this.run.archiveRelay;
+    if (archive.status !== "active") return;
+    this.clearArchiveShards(false);
+    if (success) {
+      archive.status = "won";
+      this.state.story.iceArchiveRecovered = true;
+      this.state.money += archive.reward;
+      this.state.totalEarned += archive.reward;
+      this.state.materials.ice += 4;
+      const relay = this.archiveRelayPosition();
+      this.addFloatingText({ x: relay.x, y: relay.y - 82, text: `ARCHIVE ONLINE  +◈${archive.reward}`, color: "#ffffff", life: 2 });
+      this.addShockwave({ x: relay.x, y: relay.y, radius: 72, life: 1.2, maxLife: 1.2, color: "#9eeeff" });
+      this.burst(relay.x, relay.y, "#ffffff", 70, 410, "shard");
+      this.onToast(`관측 기록 복원! ◈ ${archive.reward} · 빙정 재료 4 · CRY 추출 라인 해금`, "success");
+      this.onRadio({
+        speaker: "관측 연구원 소나",
+        role: "FROZEN ARCHIVE // FILE RECOVERED",
+        tone: "sona",
+        portrait: "sona-serious",
+        text: "기록 복원 완료. 선대 사장님은 실패한 게 아니라 기압장 증거를 지키려고 회사를 해체한 거였어요. 마지막 좌표는 태양구름 층입니다.",
+      });
+      this.playChord();
+      this.commit();
+      this.onRunChange(this.getRunState());
+      return;
+    }
+    archive.status = "lost";
+    const reasonText = reason === "fuel" ? "연료가 먼저 바닥났어요." : reason === "return" ? "귀환 항로로 이탈했어요." : "중계기 전원이 다시 얼어붙었어요.";
+    this.onToast("기록 복원 중단 — 화물 손실 없음 · 빙정 항로에서 재시도", "warning");
+    this.onRadio({
+      speaker: "정비사 모카",
+      role: "ARCHIVE RETRY // CARGO SAFE",
+      tone: "moka",
+      portrait: "moka-worried",
+      text: `${reasonText} 복원 진도는 초기화됐지만 수확 화물은 그대로예요. 다음 빙정 항로에서 다시 전원을 넣어보죠.`,
+    });
+    this.playTone(118, .22);
+    this.onRunChange(this.getRunState());
+  }
+
   private updateDrones(dt: number): boolean {
     this.droneBeams = [];
     let harvested = false;
@@ -1568,11 +1754,11 @@ export class CloudHarvestGame {
 
     for (const drone of this.harvestDrones) {
       drone.phase += dt * (.7 + (drone.phase % 1) * .25);
-      let target = this.clouds.find((cloud) => cloud.id === drone.targetId && !cloud.signalTarget && !claimedTargets.has(cloud.id) && !this.queuedCascadeIds.has(cloud.id));
+      let target = this.clouds.find((cloud) => cloud.id === drone.targetId && !cloud.signalTarget && !cloud.archiveShard && !claimedTargets.has(cloud.id) && !this.queuedCascadeIds.has(cloud.id));
       if (!target) {
         let nearest = Number.POSITIVE_INFINITY;
         for (const cloud of this.clouds) {
-          if (cloud.signalTarget || claimedTargets.has(cloud.id) || this.queuedCascadeIds.has(cloud.id)) continue;
+          if (cloud.signalTarget || cloud.archiveShard || claimedTargets.has(cloud.id) || this.queuedCascadeIds.has(cloud.id)) continue;
           const approachX = cloud.x + Math.cos(drone.phase) * (34 + cloud.radius * .35);
           const approachY = cloud.y + Math.sin(drone.phase) * (28 + cloud.radius * .28);
           const distance = Math.hypot(approachX - drone.x, approachY - drone.y);
@@ -1652,6 +1838,7 @@ export class CloudHarvestGame {
     const definition = CLOUDS[cloud.kind];
     const countsForRivalRace = this.run.rivalRace.status === "active" && cloud.kind === "rain";
     const countsForSignalTrace = this.run.signalTrace.status === "active" && source !== "drone" && cloud.id === this.signalTargetId && cloud.signalTarget;
+    const countsForArchiveRelay = this.run.archiveRelay.status === "active" && source !== "drone" && cloud.archiveShard;
     this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
     this.comboTimer = 3.4 + FLIGHT_ROUTES[this.run.routeId].comboWindowBonus + this.run.skills.comboCapacitor * .35 + this.run.skills.vacuumMomentum * .22;
     this.state.bestCombo = Math.max(this.state.bestCombo, this.combo);
@@ -1724,6 +1911,7 @@ export class CloudHarvestGame {
       if (this.run.signalTrace.progress >= this.run.signalTrace.target) this.finishSignalTrace(true);
       else this.ensureSignalTarget();
     }
+    if (countsForArchiveRelay) this.registerArchiveShard(cloud);
 
     if (cascadeDepth > 0 && this.cascadeCount % 5 === 0) {
       const milestone = this.cascadeCount >= 30 ? "MEGA HARVEST" : this.cascadeCount >= 20 ? "SUPER CASCADE" : this.cascadeCount >= 10 ? "CHAIN REACTION" : "CASCADE";
@@ -1735,7 +1923,7 @@ export class CloudHarvestGame {
       this.impactFlash = Math.min(1, .48 + this.cascadeCount * .012);
     }
 
-    if (this.combo % 5 === 0) this.triggerPressureSurge(cloud.x, cloud.y);
+    if (this.combo % 5 === 0) this.triggerPressureSurge(cloud.x, cloud.y, source === "drone");
     if (cloud.front && !this.clouds.some((item) => item.front)) this.completeCloudFront(cloud.x, cloud.y);
     if (cloud.formationCore && cloud.formationId !== undefined) this.collapseFormation(cloud, cascadeDepth);
 
@@ -1744,6 +1932,7 @@ export class CloudHarvestGame {
       const chainRadius = 105 + chainStacks * 35 + this.run.skills.relayBurst * 42 + this.run.skills.blackHole * 120
         + this.run.skills.cascadeGrid * 95 + this.run.skills.chainReactor * 145;
       for (const nearby of this.clouds) {
+        if (source === "drone" && nearby.archiveShard) continue;
         const distance = Math.hypot(nearby.x - cloud.x, nearby.y - cloud.y);
         if (distance < chainRadius) {
           nearby.health -= 11 + chainStacks * 12 + this.run.skills.relayBurst * 15 + this.run.skills.blackHole * 25
@@ -1968,7 +2157,7 @@ export class CloudHarvestGame {
     this.onLevelUp(0);
   }
 
-  private triggerPressureSurge(x: number, y: number): void {
+  private triggerPressureSurge(x: number, y: number, protectArchive = false): void {
     const bonus = this.combo * 3;
     this.run.cargoBonus += bonus;
     if (!this.run.feverActive) {
@@ -1976,6 +2165,7 @@ export class CloudHarvestGame {
       if (this.run.fever >= 100) this.startFever();
     }
     for (const nearby of this.clouds) {
+      if (protectArchive && nearby.archiveShard) continue;
       const distance = Math.hypot(nearby.x - x, nearby.y - y);
       if (distance > 250) continue;
       const force = 1 - distance / 250;
@@ -2200,6 +2390,7 @@ export class CloudHarvestGame {
     if (this.isSuctionActive()) this.drawSuctionField(ctx, time);
     this.drawCascadeLinks(ctx, time);
     for (const cloud of this.clouds) this.drawCloud(ctx, cloud, time);
+    this.drawArchiveRelay(ctx, time);
     this.drawRivalHarvester(ctx, time);
     this.drawStormDroneBeams(ctx, time);
     this.drawHarvestLinks(ctx, time);
@@ -2473,6 +2664,60 @@ export class CloudHarvestGame {
     }
   }
 
+  private drawArchiveRelay(ctx: CanvasRenderingContext2D, time: number): void {
+    const archive = this.run.archiveRelay;
+    if (archive.status === "inactive") return;
+    const { x, y } = this.archiveRelayPosition();
+    const active = archive.status === "active";
+    const pulse = 1 + Math.sin(time * 3.2) * .035 + this.archiveRelayPulse * .12;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(pulse, pulse);
+    ctx.globalAlpha = archive.status === "lost" ? .55 : 1;
+    if (active || archive.status === "won") {
+      ctx.strokeStyle = archive.status === "won" ? "rgba(255,255,255,.75)" : "rgba(158,238,255,.38)";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([12, 10]);
+      ctx.lineDashOffset = -time * 34;
+      ctx.beginPath(); ctx.arc(0, 0, 66 + Math.sin(time * 2.2) * 5, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.shadowColor = archive.status === "won" ? "#ffffff" : "#9eeeff";
+    ctx.shadowBlur = archive.status === "lost" ? 0 : 26;
+    ctx.fillStyle = "rgba(14,57,78,.94)";
+    ctx.strokeStyle = "#bff8ff";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    for (let point = 0; point < 6; point += 1) {
+      const angle = point * Math.PI / 3 - Math.PI / 2;
+      const px = Math.cos(angle) * 38;
+      const py = Math.sin(angle) * 38;
+      if (point === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.shadowColor = "transparent";
+    ctx.strokeStyle = "#d8fbff";
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(0, -38); ctx.lineTo(0, -61); ctx.lineTo(19, -75); ctx.stroke();
+    ctx.fillStyle = "#9eeeff";
+    ctx.beginPath(); ctx.arc(22, -77, 6 + Math.sin(time * 7) * 1.5, 0, Math.PI * 2); ctx.fill();
+    const cells = archive.fragmentTarget;
+    for (let index = 0; index < cells; index += 1) {
+      const filled = index < archive.fragments;
+      ctx.fillStyle = filled ? "#ffffff" : "rgba(126,188,207,.24)";
+      ctx.strokeStyle = filled ? "#ffffff" : "#6595a7";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(-25 + index * 18, -9, 13, 26, 4); ctx.fill(); ctx.stroke();
+    }
+    ctx.fillStyle = archive.status === "won" ? "#ffffff" : "#d8fbff";
+    ctx.font = "900 11px Outfit, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(archive.status === "won" ? "ARCHIVE ONLINE" : archive.status === "lost" ? "RELAY OFFLINE" : "FROZEN RELAY", 0, 57);
+    ctx.font = "900 9px Outfit, sans-serif";
+    ctx.fillText(`${archive.fragments}/${archive.fragmentTarget} FILES`, 0, 71);
+    ctx.restore();
+  }
+
   private drawCloud(ctx: CanvasRenderingContext2D, cloud: Cloud, time: number): void {
     const definition = CLOUDS[cloud.kind];
     const reducedEffects = this.clouds.length > 58 || this.particles.length > 560;
@@ -2558,6 +2803,22 @@ export class CloudHarvestGame {
       ctx.font = `900 ${Math.max(11, cloud.radius * .3)}px Outfit, sans-serif`;
       ctx.textAlign = "center";
       ctx.fillText(`SIGNAL ${this.run.signalTrace.progress + 1}/${this.run.signalTrace.target}`, 0, -cloud.radius * 1.42);
+      ctx.shadowColor = "transparent";
+    }
+    if (cloud.archiveShard) {
+      const archivePulse = 1 + Math.sin(time * 7 + cloud.phase) * .07;
+      ctx.shadowColor = reducedEffects ? "transparent" : "#9eeeff";
+      ctx.shadowBlur = reducedEffects ? 0 : 26;
+      ctx.strokeStyle = "#bff8ff";
+      ctx.lineWidth = 4;
+      ctx.setLineDash([7, 5]);
+      ctx.lineDashOffset = -time * 50;
+      ctx.beginPath(); ctx.arc(0, 0, cloud.radius * 1.32 * archivePulse, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `900 ${Math.max(10, cloud.radius * .28)}px Outfit, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText("MEMORY SHARD", 0, -cloud.radius * 1.38);
       ctx.shadowColor = "transparent";
     }
     if (cloud.kind === "rain") { ctx.fillStyle = "#3d8cca"; for (let i = -1; i <= 1; i += 1) { ctx.beginPath(); ctx.ellipse(i * 13, cloud.radius * .65, 3, 7, .4, 0, Math.PI * 2); ctx.fill(); } }
