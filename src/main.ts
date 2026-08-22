@@ -7,7 +7,7 @@ import sonaNeutralPortrait from "./assets/characters/sona-neutral.png";
 import sonaSeriousPortrait from "./assets/characters/sona-serious.png";
 import sonaWorriedPortrait from "./assets/characters/sona-worried.png";
 import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
-import { CloudHarvestGame } from "./game";
+import { CloudHarvestGame, type RadioCall } from "./game";
 import type { ContractId, GameState, GrowthMissionId, InfiniteResearchId, ResearchId, RunSkillId, RunState, StorySceneId, UpgradeId } from "./types";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -70,6 +70,19 @@ app.innerHTML = `
         <strong>연료가 0이 되면 화물을 전부 버리고 비상 귀환합니다</strong>
         <span id="fuelWarningValue">연료 35%</span>
       </div>
+
+      <aside class="radio-call" id="radioCall" aria-live="polite" aria-hidden="true">
+        <div class="radio-call-portrait"><img id="radioCallPortrait" alt="" /></div>
+        <div class="radio-call-copy"><span id="radioCallSignal">LIVE COMMS</span><strong id="radioCallSpeaker">관측 연구원 소나</strong><small id="radioCallRole">WEATHER ANALYST</small><p id="radioCallText"></p></div>
+      </aside>
+
+      <section class="rival-result" id="rivalResult" aria-live="polite" aria-hidden="true">
+        <small>CHAPTER 2 CLEAR // PRIORITY ROUTE</small>
+        <h2>비구름 항로 확보!</h2>
+        <p>쾌청산업보다 먼저 수확을 끝내 회사의 첫 우선 운항권을 따냈습니다.</p>
+        <div><span><b id="rivalResultReward">◈ 80</b> 관제 지원금</span><span><b>P-1 ×1.92</b> 전용 가공 계약</span></div>
+        <footer><b>NEXT SKY</b><span>전기구름 항로 · 전국 기상기업 승급 준비</span></footer>
+      </section>
 
       <aside class="promotion-card">
         <div class="promotion-icon">↥</div>
@@ -220,6 +233,14 @@ const combo = required<HTMLElement>("#combo");
 const fuelWarning = required<HTMLElement>("#fuelWarning");
 const fuelWarningKicker = required<HTMLElement>("#fuelWarningKicker");
 const fuelWarningValue = required<HTMLElement>("#fuelWarningValue");
+const radioCall = required<HTMLElement>("#radioCall");
+const radioCallPortrait = required<HTMLImageElement>("#radioCallPortrait");
+const radioCallSignal = required<HTMLElement>("#radioCallSignal");
+const radioCallSpeaker = required<HTMLElement>("#radioCallSpeaker");
+const radioCallRole = required<HTMLElement>("#radioCallRole");
+const radioCallText = required<HTMLElement>("#radioCallText");
+const rivalResult = required<HTMLElement>("#rivalResult");
+const rivalResultReward = required<HTMLElement>("#rivalResultReward");
 const altitude = required<HTMLElement>("#altitude");
 const rankName = required<HTMLElement>("#rankName");
 const promotionTitle = required<HTMLElement>("#promotionTitle");
@@ -358,6 +379,60 @@ const STORY_PORTRAITS: Record<StoryPortrait, string> = {
   "sona-worried": sonaWorriedPortrait,
 };
 
+const RADIO_PORTRAITS: Record<RadioCall["portrait"], string> = {
+  "moka-worried": mokaWorriedPortrait,
+  "sona-worried": sonaWorriedPortrait,
+  "sona-serious": sonaSeriousPortrait,
+};
+const radioQueue: RadioCall[] = [];
+let radioBusy = false;
+let radioTimer = 0;
+let rivalResultTimer = 0;
+let previousRivalRaceStatus: RunState["rivalRace"]["status"] = "inactive";
+
+function enqueueRadioCall(call: RadioCall): void {
+  radioQueue.push(call);
+  if (!radioBusy) presentNextRadioCall();
+}
+
+function presentNextRadioCall(): void {
+  const call = radioQueue.shift();
+  if (!call) {
+    radioBusy = false;
+    return;
+  }
+  radioBusy = true;
+  window.clearTimeout(radioTimer);
+  radioCall.className = `radio-call ${call.tone} show`;
+  radioCall.setAttribute("aria-hidden", "false");
+  radioCallPortrait.src = RADIO_PORTRAITS[call.portrait];
+  radioCallPortrait.alt = `${call.speaker} 무전 초상화`;
+  radioCallSignal.textContent = call.tone === "sona" ? "LIVE WEATHER LINK" : "DOCK RADIO";
+  radioCallSpeaker.textContent = call.speaker;
+  radioCallRole.textContent = call.role;
+  radioCallText.textContent = call.text;
+  radioTimer = window.setTimeout(() => {
+    radioCall.classList.remove("show");
+    radioCall.setAttribute("aria-hidden", "true");
+    window.setTimeout(() => {
+      radioBusy = false;
+      presentNextRadioCall();
+    }, 220);
+  }, 3900);
+}
+
+function showRivalResult(reward: number): void {
+  window.clearTimeout(rivalResultTimer);
+  rivalResultReward.textContent = `◈ ${reward}`;
+  rivalResult.classList.remove("show");
+  rivalResult.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => rivalResult.classList.add("show"));
+  rivalResultTimer = window.setTimeout(() => {
+    rivalResult.classList.remove("show");
+    rivalResult.setAttribute("aria-hidden", "true");
+  }, 4400);
+}
+
 const STORY_SCENES: Record<StorySceneId, StoryScene> = {
   prologue: {
     chapter: "CHAPTER 0 // THE LAST SMALL COMPANY",
@@ -399,9 +474,14 @@ let activeStoryBeat = 0;
 let storySystemReady = false;
 let storyTransitioning = false;
 
-const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast);
+const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast, enqueueRadioCall);
 if (import.meta.env.DEV) {
-  (window as typeof window & { __cloudHarvestGame?: CloudHarvestGame }).__cloudHarvestGame = game;
+  const developmentWindow = window as typeof window & {
+    __cloudHarvestGame?: CloudHarvestGame;
+    __cloudHarvestPacing?: () => ReturnType<CloudHarvestGame["getPacingReport"]>;
+  };
+  developmentWindow.__cloudHarvestGame = game;
+  developmentWindow.__cloudHarvestPacing = () => game.getPacingReport();
 }
 storySystemReady = true;
 window.setTimeout(() => syncStoryTriggers(game.getState()), 360);
@@ -655,6 +735,8 @@ function renderRunState(state: RunState): void {
     rivalRaceTitle.textContent = "RAIN CLOUD RUSH";
     rivalRaceMessage.textContent = "비구름을 먼저 확보해 우선 항로를 차지하세요";
   }
+  if (race.status === "won" && previousRivalRaceStatus !== "won") showRivalResult(race.reward);
+  previousRivalRaceStatus = race.status;
   renderProcessing(state);
 }
 
@@ -996,6 +1078,10 @@ function renderState(state: GameState): void {
   rankName.textContent = RANKS[state.rank].name;
   soundButton.textContent = state.sound ? "🔊" : "🔇";
   if (state.harvested > 2) tutorial.classList.add("hidden");
+  const rivalEventReady = state.rank >= 1 && state.story.seen.includes("rainFrontier") && !state.story.rivalBeaten;
+  launchButton.classList.toggle("rival-ready", rivalEventReady);
+  const launchFacilityCode = launchButton.querySelector<HTMLElement>("b");
+  if (launchFacilityCode) launchFacilityCode.textContent = rivalEventReady ? "GO! · LIVE RACE" : "GO · FACILITY 04";
   renderGrowthMission(state);
 
   cloudLegend.innerHTML = (Object.values(CLOUDS))

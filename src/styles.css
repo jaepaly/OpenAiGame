@@ -117,6 +117,32 @@ body { min-width: 320px; background: #92ddf7; }
 .rival-race-active .promotion-card { top: 306px; }
 .rival-race-active .toast { top: 298px; }
 
+.radio-call { position: absolute; z-index: 10; right: 172px; bottom: 26px; width: min(510px,calc(100% - 210px)); min-height: 136px; padding: 11px 16px 12px 11px; display: grid; grid-template-columns: 112px minmax(0,1fr); gap: 15px; align-items: center; color: white; background: linear-gradient(145deg,rgba(7,31,44,.97),rgba(15,53,65,.98)); border: 3px solid #7ff5df; border-radius: 23px; box-shadow: 0 8px 0 rgba(5,26,36,.48),0 18px 38px rgba(7,31,44,.34); opacity: 0; pointer-events: none; transform: translateX(30px) scale(.96); transition: opacity .2s ease,transform .24s cubic-bezier(.2,.85,.3,1.12); }
+.radio-call.show { opacity: 1; transform: translateX(0) scale(1); }
+.radio-call.moka { border-color: #ffad72; background: linear-gradient(145deg,rgba(49,31,29,.98),rgba(74,43,35,.98)); }
+.radio-call-portrait { width: 112px; height: 112px; overflow: hidden; background: #153d50; border: 3px solid #7ff5df; border-radius: 18px 18px 42px 18px; box-shadow: inset 0 0 24px rgba(0,0,0,.35); }
+.radio-call.moka .radio-call-portrait { border-color: #ffad72; }
+.radio-call-portrait img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 12%; }
+.radio-call-copy { min-width: 0; }
+.radio-call-copy > span { color: #7ff5df; font: 900 10px "Outfit",sans-serif; letter-spacing: .16em; }
+.radio-call.moka .radio-call-copy > span { color: #ffad72; }
+.radio-call-copy strong { display: block; margin-top: 3px; font-size: 19px; }
+.radio-call-copy small { display: block; margin-top: 1px; color: #9fc2c9; font: 900 9px "Outfit",sans-serif; letter-spacing: .09em; }
+.radio-call-copy p { margin: 9px 0 0; color: #f2ffff; font-size: 14px; font-weight: 900; line-height: 1.45; word-break: keep-all; }
+
+.rival-result { position: absolute; z-index: 12; left: 50%; top: 51%; width: min(720px,calc(100% - 30px)); padding: 28px 32px 26px; color: white; background: radial-gradient(circle at 50% 0,rgba(255,243,111,.2),transparent 42%),linear-gradient(150deg,rgba(7,34,46,.98),rgba(20,49,54,.99)); border: 4px solid #fff36f; border-radius: 28px; box-shadow: 0 11px 0 rgba(49,52,19,.55),0 0 65px rgba(255,243,111,.34),0 30px 80px rgba(0,0,0,.42); text-align: center; opacity: 0; pointer-events: none; transform: translate(-50%,-42%) scale(.82); }
+.rival-result.show { animation: rival-result-reveal 4.4s cubic-bezier(.18,.84,.27,1) both; }
+@keyframes rival-result-reveal { 0% { opacity:0; transform:translate(-50%,-42%) scale(.82); } 8%,80% { opacity:1; transform:translate(-50%,-50%) scale(1); } 100% { opacity:0; transform:translate(-50%,-55%) scale(1.04); } }
+.rival-result > small { color: #fff36f; font: 900 12px "Outfit",sans-serif; letter-spacing: .18em; }
+.rival-result h2 { margin: 7px 0 4px; color: white; font-size: 38px; }
+.rival-result > p { margin: 0 auto; max-width: 590px; color: #c9e2e5; font-size: 16px; font-weight: 900; line-height: 1.55; }
+.rival-result > div { margin-top: 19px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.rival-result > div span { padding: 13px 10px; display: flex; flex-direction: column; gap: 2px; color: #b9d5d8; background: rgba(4,24,34,.7); border: 2px solid #49727b; border-radius: 14px; font-size: 12px; font-weight: 900; }
+.rival-result > div b { color: #fff36f; font: 900 20px "Outfit",sans-serif; }
+.rival-result footer { margin-top: 16px; padding-top: 13px; display: flex; justify-content: center; gap: 10px; border-top: 2px solid rgba(127,245,223,.26); font-size: 13px; font-weight: 900; }
+.rival-result footer b { color: #7ff5df; font-family: "Outfit",sans-serif; }
+.rival-result footer span { color: #d9edef; }
+
 .tutorial {
   position: absolute; z-index: 4; left: 50%; top: 150px; transform: translateX(-50%); display: flex; flex-direction: column;
   align-items: center; padding: 10px 18px; color: white; background: rgba(25,65,89,.75);
@@ -577,6 +603,10 @@ body.base-open .promotion-card { top: 28px; }
 .base-facility.launch { right: 2%; border-color: #e8c553; }
 .base-facility.launch b { color: #fff36f; }
 .base-facility.launch::before, .base-facility.launch em { background: #fff36f; }
+.base-facility.launch.rival-ready { border-color: #ff6578; animation: rival-facility-ready .72s ease-in-out infinite alternate; }
+.base-facility.launch.rival-ready b { color: #ff8796; }
+.base-facility.launch.rival-ready::before,.base-facility.launch.rival-ready em { background: #ff6578; }
+@keyframes rival-facility-ready { to { filter:brightness(1.16); box-shadow:0 0 34px rgba(255,101,120,.6),0 8px 0 rgba(5,25,34,.42); } }
 
 .route-overlay {
   position: absolute; z-index: 32; inset: 0; padding: 24px; display: grid; place-items: center;
@@ -826,6 +856,20 @@ body.base-open .promotion-card { top: 28px; }
   .rival-race footer { margin-top: 6px; font-size: 8px; }
   .rival-race-active .promotion-card { top: 264px; }
   .rival-race-active .toast { top: 265px; }
+  .radio-call { right: 9px; bottom: 105px; width: calc(100% - 18px); min-height: 106px; padding: 8px 11px 9px 8px; grid-template-columns: 84px minmax(0,1fr); gap: 10px; border-radius: 18px; }
+  .radio-call-portrait { width: 84px; height: 84px; border-radius: 14px 14px 31px 14px; }
+  .radio-call-copy > span { font-size: 8px; }
+  .radio-call-copy strong { font-size: 15px; }
+  .radio-call-copy small { font-size: 7px; }
+  .radio-call-copy p { margin-top: 6px; font-size: 11px; line-height: 1.4; }
+  .rival-result { width: calc(100% - 18px); padding: 20px 15px 18px; border-radius: 22px; }
+  .rival-result > small { font-size: 9px; }
+  .rival-result h2 { font-size: 27px; }
+  .rival-result > p { font-size: 13px; }
+  .rival-result > div { margin-top: 13px; gap: 7px; }
+  .rival-result > div span { padding: 9px 5px; font-size: 9px; }
+  .rival-result > div b { font-size: 16px; }
+  .rival-result footer { margin-top: 12px; padding-top: 10px; flex-direction: column; gap: 2px; font-size: 10px; }
   .tutorial { top: 158px; width: max-content; max-width: 88%; }
   .cloud-legend { top: 116px; left: 8px; }
   .promotion-card { right: 8px; top: 100px; width: 278px; transform: scale(.86); transform-origin: top right; }

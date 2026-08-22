@@ -6,6 +6,14 @@ type RunListener = (state: RunState) => void;
 type LevelListener = (pendingPicks: number) => void;
 type FactoryListener = (state: RunState) => void;
 type ToastListener = (message: string, tone?: "normal" | "success" | "warning") => void;
+export type RadioCall = {
+  speaker: string;
+  role: string;
+  text: string;
+  tone: "moka" | "sona";
+  portrait: "moka-worried" | "sona-worried" | "sona-serious";
+};
+type RadioListener = (call: RadioCall) => void;
 type HarvestDrone = { x: number; y: number; vx: number; vy: number; targetId?: number; phase: number };
 type RivalHarvester = { x: number; y: number; vx: number; vy: number; targetId?: number; angle: number; beamTarget?: { x: number; y: number }; pulse: number; delay: number };
 
@@ -24,6 +32,18 @@ const MAX_HARVEST_LINKS = 24;
 const SAVE_KEY = "cloud-harvest-inc-save-v2";
 const RIVAL_RACE_TARGET = 5;
 const RIVAL_RACE_REWARD = 80;
+const PACING_TARGETS = {
+  firstHarvest: 10,
+  firstReturn: 75,
+  firstContract: 105,
+  firstShipment: 150,
+  firstSkill: 210,
+  firstUpgrade: 270,
+  rainUnlocked: 420,
+  rivalStarted: 480,
+  rivalWon: 600,
+} as const;
+type PacingMilestone = keyof typeof PACING_TARGETS;
 const emptyCloudStock = (): Record<CloudKind, number> => ({ cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 });
 const freshProcessingState = (): ProcessingState => ({ jobs: [], completedCoins: 0, totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now() });
 const freshRivalRace = (): RivalRaceState => ({ status: "inactive", playerScore: 0, rivalScore: 0, target: RIVAL_RACE_TARGET, reward: RIVAL_RACE_REWARD });
@@ -77,6 +97,7 @@ export class CloudHarvestGame {
   private readonly onLevelUp: LevelListener;
   private readonly onFactoryOpen: FactoryListener;
   private readonly onToast: ToastListener;
+  private readonly onRadio: RadioListener;
   private state: GameState;
   private run = freshRunState();
   private clouds: Cloud[] = [];
@@ -142,6 +163,8 @@ export class CloudHarvestGame {
   private lastHarvestToneAt = 0;
   private discoveredCloudKinds = new Set<CloudKind>(["cumulus"]);
   private discoveryBanner?: { kind: CloudKind; life: number; maxLife: number };
+  private pacingSeconds = 0;
+  private pacingMilestones: Partial<Record<PacingMilestone, number>> = {};
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -150,6 +173,7 @@ export class CloudHarvestGame {
     onLevelUp: LevelListener,
     onFactoryOpen: FactoryListener,
     onToast: ToastListener,
+    onRadio: RadioListener,
   ) {
     this.canvas = canvas;
     const context = canvas.getContext("2d");
@@ -160,6 +184,7 @@ export class CloudHarvestGame {
     this.onLevelUp = onLevelUp;
     this.onFactoryOpen = onFactoryOpen;
     this.onToast = onToast;
+    this.onRadio = onRadio;
     this.state = this.loadState();
     this.restoreCareerProgress();
     this.run.fuelCapacity = this.getFuelCapacity();
@@ -178,6 +203,21 @@ export class CloudHarvestGame {
   }
 
   getState(): GameState { return structuredClone(this.state); }
+  getPacingReport() {
+    return (Object.keys(PACING_TARGETS) as PacingMilestone[]).map((id) => ({
+      id,
+      seconds: this.pacingMilestones[id] ?? null,
+      targetSeconds: PACING_TARGETS[id],
+    }));
+  }
+
+  private markPacingMilestone(id: PacingMilestone): void {
+    if (!import.meta.env.DEV || this.pacingMilestones[id] !== undefined) return;
+    const seconds = Math.round(this.pacingSeconds * 10) / 10;
+    this.pacingMilestones[id] = seconds;
+    const target = PACING_TARGETS[id];
+    console.info(`[PACE] ${id}: ${seconds.toFixed(1)}s / target ≤ ${target}s`);
+  }
   getRunState(): RunState {
     const state = structuredClone(this.run);
     state.fuelCapacity = this.getFuelCapacity();
@@ -339,6 +379,7 @@ export class CloudHarvestGame {
     const seconds = this.getProcessingEstimate(id).seconds;
     this.state.processing.jobs.push(...jobs);
     this.state.growthMission.contractsSigned += 1;
+    this.markPacingMilestone("firstContract");
     (Object.keys(this.run.cargo) as CloudKind[]).forEach((kind) => {
       this.state.materials[kind] += this.run.cargo[kind];
     });
@@ -373,6 +414,7 @@ export class CloudHarvestGame {
     this.state.money += coins;
     this.state.totalEarned += coins;
     this.state.growthMission.shipmentsClaimed += 1;
+    this.markPacingMilestone("firstShipment");
     this.commit();
     this.onRunChange(this.getRunState());
     this.playChord();
@@ -478,6 +520,7 @@ export class CloudHarvestGame {
 
   private prepareRivalRace(mapRank: number): void {
     const startsRivalRace = mapRank === 1 && this.state.story.seen.includes("rainFrontier") && !this.state.story.rivalBeaten;
+    if (startsRivalRace) this.markPacingMilestone("rivalStarted");
     this.run.rivalRace = { ...freshRivalRace(), status: startsRivalRace ? "active" : "inactive" };
     this.rivalHarvester = {
       x: this.getWorldWidth() - 90 / this.getWorldZoom(),
@@ -577,6 +620,7 @@ export class CloudHarvestGame {
     }
     this.state.money -= cost;
     this.state.levels[id] += 1;
+    this.markPacingMilestone("firstUpgrade");
     this.burst(this.player.x, this.player.y, "#ffd166", 22, 150);
     this.playTone(520 + this.state.levels[id] * 40, 0.09);
     this.onToast(`${upgrade.name} Lv.${this.state.levels[id]} 장착!`, "success");
@@ -589,6 +633,7 @@ export class CloudHarvestGame {
     if (!payment) return false;
     CLOUD_ORDER.forEach((kind) => { this.state.materials[kind] -= payment[kind]; });
     this.run.skills[id] = 1;
+    this.markPacingMilestone("firstSkill");
     this.commit();
     this.burst(this.player.x, this.player.y, RUN_SKILLS[id].color, 36, 210);
     this.playChord();
@@ -675,6 +720,7 @@ export class CloudHarvestGame {
     }
     this.state.money -= next.promotionCost;
     this.state.rank += 1;
+    if (this.state.rank === 1) this.markPacingMilestone("rainUnlocked");
     this.state.selectedMap = this.state.rank;
     this.state.rankHarvested = 0;
     this.state.rankFlights = 0;
@@ -908,6 +954,7 @@ export class CloudHarvestGame {
     if (!this.running) return;
     const dt = Math.min((time - this.lastTime) / 1000 || 0, 0.033);
     this.lastTime = time;
+    if (!this.storyPaused) this.pacingSeconds += dt;
     this.updateProcessing(dt);
     if (this.impactFreeze > 0) this.impactFreeze -= dt;
     else if (!this.pausedForLevel && !this.storyPaused && (!this.atFactory || this.launching || this.returning)) this.update(dt);
@@ -1122,6 +1169,13 @@ export class CloudHarvestGame {
         this.burst(this.player.x, this.player.y, "#8fffe4", 45, 260);
         if (this.run.rivalRace.status === "active") {
           this.onToast("소나: 쾌청산업 수확선 접근! 비구름 5개를 먼저 확보하세요.", "warning");
+          this.onRadio({
+            speaker: "관측 연구원 소나",
+            role: "LIVE WEATHER LINK",
+            tone: "sona",
+            portrait: "sona-worried",
+            text: "경쟁 수확선 확인. 3초 먼저 움직일 수 있어요. 비구름 다섯 개를 선점하세요!",
+          });
           this.playTone(185, .12);
         } else {
           this.onToast("기상 항로 진입 — 수확 비행 시작!", "success");
@@ -1189,6 +1243,7 @@ export class CloudHarvestGame {
     if (this.returnTimer >= 1.55 && !this.atFactory) {
       this.atFactory = true;
       if (!this.run.emergencyReturn) this.state.growthMission.safeReturns += 1;
+      if (!this.run.emergencyReturn) this.markPacingMilestone("firstReturn");
       this.run.fuelCapacity = this.getFuelCapacity();
       this.run.fuel = this.run.fuelCapacity;
       this.shake = 0;
@@ -1315,6 +1370,7 @@ export class CloudHarvestGame {
     this.rivalHarvester.beamTarget = undefined;
     if (playerWon) {
       race.status = "won";
+      this.markPacingMilestone("rivalWon");
       this.state.story.rivalBeaten = true;
       this.state.money += race.reward;
       this.state.totalEarned += race.reward;
@@ -1323,11 +1379,25 @@ export class CloudHarvestGame {
       this.addShockwave({ x: this.player.x, y: this.player.y, radius: 25, life: .9, maxLife: .9, color: "#fff36f" });
       this.burst(this.player.x, this.player.y, "#fff36f", 48, 340, "spark");
       this.onToast(`소나: 우선 항로 확보! ◈ ${race.reward} 지원금과 전용 가공 계약이 해금됐습니다.`, "success");
+      this.onRadio({
+        speaker: "관측 연구원 소나",
+        role: "ROUTE CONTROL // SECURED",
+        tone: "sona",
+        portrait: "sona-serious",
+        text: "쾌청산업보다 먼저 확보했습니다. 우선 항로와 긴급 납품 계약, 지금부터 모두 우리 회사 겁니다.",
+      });
       this.playChord();
       return;
     }
     race.status = "lost";
     this.onToast("모카: 이번 화물은 그대로예요. 기지에서 정비하고 비구름 항로에 재도전하죠.", "warning");
+    this.onRadio({
+      speaker: "정비사 모카",
+      role: "DOCK SUPPORT // RETRY READY",
+      tone: "moka",
+      portrait: "moka-worried",
+      text: "화물은 멀쩡해요. 무리해서 쫓지 말고 돌아와요. 터빈 한 번 손보고 다시 붙으면 됩니다.",
+    });
     this.playTone(92, .24);
   }
 
@@ -1451,6 +1521,7 @@ export class CloudHarvestGame {
     this.run.cargo[cloud.kind] += 1;
     this.run.cargoValue[cloud.kind] += earned;
     this.state.harvested += 1;
+    this.markPacingMilestone("firstHarvest");
     if (countsForRivalRace) this.run.rivalRace.playerScore += 1;
     if (cloud.kind === "rain") this.state.growthMission.rainHarvested += 1;
     if (source === "manual") this.tryRecoverFuel(cloud);
