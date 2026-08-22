@@ -499,7 +499,7 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
     beats: [
       { speaker: "소나", name: "관측 연구원 소나", role: "CLIMATE ENGINE VISUAL", mark: "SN", tone: "sona", portrait: "sona-worried", text: "확인했습니다. 쾌청산업은 태양구름의 에너지로 거대한 기압 엔진을 돌리고 있어요. 주변 구름을 독점 항로로 밀어내는 장치입니다." },
       { speaker: "쾌청산업 관제", name: "쾌청산업", role: "CORPORATE WEATHER AUTHORITY", mark: "QS", tone: "rival", text: "기후는 관리 가능한 자원이다. 소형 수확사가 개입하면 공급 안정성이 훼손된다. 즉시 추적을 중단하라." },
-      { speaker: "모카", name: "정비사 모카", role: "FULL THROTTLE", mark: "MK", tone: "moka", portrait: "moka-serious", text: "공급 안정성 같은 소리 하네요. 아래 도시는 마흔셋 날째 비를 기다리고 있어요. 오로라층까지 올라가 엔진의 중심을 찾죠." },
+      { speaker: "모카", name: "정비사 모카", role: "FULL THROTTLE", mark: "MK", tone: "moka", portrait: "moka-serious", text: "공급 안정성 같은 소리 하네요. 아래 도시는 43일째 비를 기다리고 있어요. 오로라층까지 올라가 엔진의 중심을 찾죠." },
     ],
   },
   auroraFrontier: {
