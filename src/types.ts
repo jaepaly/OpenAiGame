@@ -1,6 +1,6 @@
 export type CloudKind = "cumulus" | "rain" | "electric" | "ice" | "solar" | "aurora";
 export type CloudFormationKind = "ring" | "stream" | "cluster";
-export type ContractId = "water" | "climate" | "energy" | "cryogenic" | "stellar" | "spectrum";
+export type ContractId = "water" | "climate" | "priority" | "energy" | "cryogenic" | "stellar" | "spectrum";
 export type FlightRouteId = "tailwind" | "pressureMine" | "frontline";
 export type ResearchId = "logistics" | "refining" | "forecasting";
 export type InfiniteResearchId = "speed" | "power" | "fuel" | "drone" | "yield";
@@ -141,6 +141,17 @@ export interface GameState {
 
 export interface StoryProgress {
   seen: StorySceneId[];
+  rivalBeaten: boolean;
+}
+
+export type RivalRaceStatus = "inactive" | "active" | "won" | "lost";
+
+export interface RivalRaceState {
+  status: RivalRaceStatus;
+  playerScore: number;
+  rivalScore: number;
+  target: number;
+  reward: number;
 }
 
 export type CoreRunSkillId =
@@ -213,6 +224,7 @@ export interface RunState {
   processingLines: number;
   processingSpeed: number;
   processingBatchCapacity: number;
+  rivalRace: RivalRaceState;
 }
 
 export interface InfiniteResearchDefinition {

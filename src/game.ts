@@ -1,5 +1,5 @@
 import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
-import type { Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, Particle, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RunSkillId, RunState, StorySceneId, UpgradeId } from "./types";
+import type { Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, Particle, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RivalRaceState, RunSkillId, RunState, StorySceneId, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
@@ -7,6 +7,7 @@ type LevelListener = (pendingPicks: number) => void;
 type FactoryListener = (state: RunState) => void;
 type ToastListener = (message: string, tone?: "normal" | "success" | "warning") => void;
 type HarvestDrone = { x: number; y: number; vx: number; vy: number; targetId?: number; phase: number };
+type RivalHarvester = { x: number; y: number; vx: number; vy: number; targetId?: number; angle: number; beamTarget?: { x: number; y: number }; pulse: number; delay: number };
 
 const CLOUD_ORDER: CloudKind[] = ["cumulus", "rain", "electric", "ice", "solar", "aurora"];
 type Shockwave = { x: number; y: number; radius: number; life: number; maxLife: number; color: string };
@@ -21,8 +22,11 @@ const MAX_SHOCKWAVES = 24;
 const MAX_HARVEST_LINKS = 24;
 
 const SAVE_KEY = "cloud-harvest-inc-save-v2";
+const RIVAL_RACE_TARGET = 5;
+const RIVAL_RACE_REWARD = 80;
 const emptyCloudStock = (): Record<CloudKind, number> => ({ cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 });
 const freshProcessingState = (): ProcessingState => ({ jobs: [], completedCoins: 0, totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now() });
+const freshRivalRace = (): RivalRaceState => ({ status: "inactive", playerScore: 0, rivalScore: 0, target: RIVAL_RACE_TARGET, reward: RIVAL_RACE_REWARD });
 
 const freshRunState = (day = 1): RunState => ({
   day,
@@ -62,6 +66,7 @@ const freshRunState = (day = 1): RunState => ({
   processingLines: 1,
   processingSpeed: 1,
   processingBatchCapacity: 10,
+  rivalRace: freshRivalRace(),
 });
 
 export class CloudHarvestGame {
@@ -127,6 +132,7 @@ export class CloudHarvestGame {
   private transitionWhooshPlayed = false;
   private dayComplete = false;
   private harvestDrones: HarvestDrone[] = [];
+  private rivalHarvester: RivalHarvester = { x: 0, y: 0, vx: 0, vy: 0, angle: Math.PI, pulse: 0, delay: 0 };
   private runEmitTimer = 0;
   private processingEmitTimer = 0;
   private fuelWarningStage = 0;
@@ -164,6 +170,7 @@ export class CloudHarvestGame {
     if (this.advanceGrowthMissions(false)) localStorage.setItem(SAVE_KEY, JSON.stringify(this.state));
     this.bindInput();
     this.resize();
+    this.prepareRivalRace(this.run.mapRank);
     window.addEventListener("resize", () => this.resize());
     for (let i = 0; i < Math.min(18, this.getMaxClouds()); i += 1) this.spawnCloud(true);
     this.emitAll();
@@ -469,6 +476,20 @@ export class CloudHarvestGame {
     }
   }
 
+  private prepareRivalRace(mapRank: number): void {
+    const startsRivalRace = mapRank === 1 && this.state.story.seen.includes("rainFrontier") && !this.state.story.rivalBeaten;
+    this.run.rivalRace = { ...freshRivalRace(), status: startsRivalRace ? "active" : "inactive" };
+    this.rivalHarvester = {
+      x: this.getWorldWidth() - 90 / this.getWorldZoom(),
+      y: this.getWorldHeight() * .42,
+      vx: 0,
+      vy: 0,
+      angle: Math.PI,
+      pulse: 0,
+      delay: startsRivalRace ? 2.8 : 0,
+    };
+  }
+
   launchFlight(mapRank: number): boolean {
     if (!this.atFactory || this.launching || this.returning || this.dayComplete) return false;
     if (!Number.isInteger(mapRank) || mapRank < 0 || mapRank > this.state.rank || !RANKS[mapRank]) return false;
@@ -481,6 +502,7 @@ export class CloudHarvestGame {
     this.run.fuelRecovered = 0;
     this.run.fuelRecoveryLimit = this.getFuelRecoveryLimit();
     this.run.emergencyReturn = false;
+    this.prepareRivalRace(mapRank);
     this.fuelWarningStage = 0;
     this.fuelPity = 0;
     this.fuelPickupFlash = 0;
@@ -1019,6 +1041,7 @@ export class CloudHarvestGame {
       harvestedThisFrame = true;
     }
     harvestedThisFrame = this.updateCascadeQueue(dt) || harvestedThisFrame;
+    this.updateRivalRace(dt);
     if (harvestedThisFrame) {
       this.commit();
       this.bankLevelUps();
@@ -1097,7 +1120,12 @@ export class CloudHarvestGame {
         this.player.targetX = this.player.x;
         this.player.targetY = this.player.y;
         this.burst(this.player.x, this.player.y, "#8fffe4", 45, 260);
-        this.onToast("기상 항로 진입 — 수확 비행 시작!", "success");
+        if (this.run.rivalRace.status === "active") {
+          this.onToast("소나: 쾌청산업 수확선 접근! 비구름 5개를 먼저 확보하세요.", "warning");
+          this.playTone(185, .12);
+        } else {
+          this.onToast("기상 항로 진입 — 수확 비행 시작!", "success");
+        }
         this.emitAll();
       }
     }
@@ -1171,6 +1199,136 @@ export class CloudHarvestGame {
       this.burst(this.player.x, this.player.y + 34, "#7ff5df", 28, 120);
       this.commit();
     }
+  }
+
+  private updateRivalRace(dt: number): void {
+    const race = this.run.rivalRace;
+    const rival = this.rivalHarvester;
+    rival.pulse += dt;
+    rival.beamTarget = undefined;
+
+    if (race.status === "inactive") return;
+    if (race.status === "won") {
+      rival.vx += 420 * dt;
+      rival.vy -= 90 * dt;
+      rival.x += rival.vx * dt;
+      rival.y += rival.vy * dt;
+      return;
+    }
+    if (race.status === "lost") {
+      rival.vx *= Math.exp(-dt * 4);
+      rival.vy *= Math.exp(-dt * 4);
+      rival.x += rival.vx * dt;
+      rival.y += rival.vy * dt;
+      return;
+    }
+    if (rival.delay > 0) {
+      rival.delay = Math.max(0, rival.delay - dt);
+      return;
+    }
+
+    let target = this.clouds.find((cloud) => cloud.id === rival.targetId
+      && cloud.kind === "rain" && !cloud.front && cloud.formationId === undefined && !this.queuedCascadeIds.has(cloud.id));
+    if (!target) {
+      let bestScore = Number.POSITIVE_INFINITY;
+      for (const candidate of this.clouds) {
+        if (candidate.kind !== "rain" || candidate.front || candidate.formationId !== undefined || this.queuedCascadeIds.has(candidate.id)) continue;
+        const distance = Math.hypot(candidate.x - rival.x, candidate.y - rival.y);
+        const score = distance + candidate.health * 1.35;
+        if (score < bestScore) {
+          bestScore = score;
+          target = candidate;
+        }
+      }
+      rival.targetId = target?.id;
+    }
+
+    let destinationX = this.getWorldWidth() * .72 + Math.cos(rival.pulse * .55) * this.getWorldWidth() * .14;
+    let destinationY = this.getWorldHeight() * .43 + Math.sin(rival.pulse * .8) * this.getWorldHeight() * .12;
+    if (target) {
+      const cloudAngle = Math.atan2(target.y - rival.y, target.x - rival.x);
+      const approachDistance = 78 + target.radius;
+      destinationX = target.x - Math.cos(cloudAngle) * approachDistance;
+      destinationY = target.y - Math.sin(cloudAngle) * approachDistance;
+      const targetDelta = Math.atan2(Math.sin(cloudAngle - rival.angle), Math.cos(cloudAngle - rival.angle));
+      rival.angle += targetDelta * (1 - Math.exp(-dt * 7));
+      const targetDistance = Math.hypot(target.x - rival.x, target.y - rival.y);
+      if (targetDistance < 155 + target.radius) {
+        rival.beamTarget = { x: target.x, y: target.y };
+        target.health -= (15.5 + this.run.flight * 1.2) * dt;
+        target.hurtFlash = Math.max(target.hurtFlash, .45);
+        if (Math.random() < dt * 11 && this.particles.length < MAX_PARTICLES) {
+          this.particles.push({
+            x: rival.x + Math.cos(rival.angle) * 42,
+            y: rival.y + Math.sin(rival.angle) * 42,
+            vx: (target.x - rival.x) * 1.8,
+            vy: (target.y - rival.y) * 1.8,
+            life: .22,
+            maxLife: .22,
+            size: 2.5 + Math.random() * 2,
+            color: "#ff6578",
+          });
+        }
+        if (target.health <= 0) this.collectRivalCloud(target);
+      }
+    } else {
+      const patrolAngle = Math.atan2(destinationY - rival.y, destinationX - rival.x);
+      const patrolDelta = Math.atan2(Math.sin(patrolAngle - rival.angle), Math.cos(patrolAngle - rival.angle));
+      rival.angle += patrolDelta * (1 - Math.exp(-dt * 4));
+    }
+
+    rival.vx += (destinationX - rival.x) * dt * 2.9;
+    rival.vy += (destinationY - rival.y) * dt * 2.9;
+    const speed = Math.hypot(rival.vx, rival.vy);
+    const maxSpeed = 188 + this.run.flight * 8;
+    if (speed > maxSpeed) {
+      rival.vx = rival.vx / speed * maxSpeed;
+      rival.vy = rival.vy / speed * maxSpeed;
+    }
+    rival.x += rival.vx * dt;
+    rival.y += rival.vy * dt;
+    rival.vx *= Math.exp(-dt * 2.15);
+    rival.vy *= Math.exp(-dt * 2.15);
+    const zoom = this.getWorldZoom();
+    rival.x = Math.max(52 / zoom, Math.min(this.getWorldWidth() - 52 / zoom, rival.x));
+    rival.y = Math.max(115 / zoom, Math.min(this.getWorldHeight() - 145 / zoom, rival.y));
+  }
+
+  private collectRivalCloud(cloud: Cloud): void {
+    const cloudIndex = this.clouds.findIndex((candidate) => candidate.id === cloud.id);
+    if (cloudIndex < 0 || this.run.rivalRace.status !== "active") return;
+    this.clouds.splice(cloudIndex, 1);
+    this.rivalHarvester.targetId = undefined;
+    this.rivalHarvester.beamTarget = undefined;
+    this.run.rivalRace.rivalScore += 1;
+    this.addFloatingText({ x: cloud.x, y: cloud.y - 15, text: `RIVAL STEAL  ${this.run.rivalRace.rivalScore}/${this.run.rivalRace.target}`, color: "#ff6578", life: 1.15 });
+    this.addShockwave({ x: cloud.x, y: cloud.y, radius: 12, life: .42, maxLife: .42, color: "#ff6578" });
+    this.burst(cloud.x, cloud.y, "#ff6578", 18, 240, "spark");
+    this.playTone(118, .07);
+    if (this.run.rivalRace.rivalScore >= this.run.rivalRace.target) this.finishRivalRace(false);
+  }
+
+  private finishRivalRace(playerWon: boolean): void {
+    const race = this.run.rivalRace;
+    if (race.status !== "active") return;
+    this.rivalHarvester.targetId = undefined;
+    this.rivalHarvester.beamTarget = undefined;
+    if (playerWon) {
+      race.status = "won";
+      this.state.story.rivalBeaten = true;
+      this.state.money += race.reward;
+      this.state.totalEarned += race.reward;
+      this.rivalHarvester.vx = 170;
+      this.addFloatingText({ x: this.player.x, y: this.player.y - 70, text: `ROUTE SECURED  +◈${race.reward}`, color: "#fff36f", life: 1.8 });
+      this.addShockwave({ x: this.player.x, y: this.player.y, radius: 25, life: .9, maxLife: .9, color: "#fff36f" });
+      this.burst(this.player.x, this.player.y, "#fff36f", 48, 340, "spark");
+      this.onToast(`소나: 우선 항로 확보! ◈ ${race.reward} 지원금과 전용 가공 계약이 해금됐습니다.`, "success");
+      this.playChord();
+      return;
+    }
+    race.status = "lost";
+    this.onToast("모카: 이번 화물은 그대로예요. 기지에서 정비하고 비구름 항로에 재도전하죠.", "warning");
+    this.playTone(92, .24);
   }
 
   private updateDrones(dt: number): boolean {
@@ -1272,6 +1430,7 @@ export class CloudHarvestGame {
     this.queuedCascadeIds.delete(cloud.id);
     this.clouds.splice(cloudIndex, 1);
     const definition = CLOUDS[cloud.kind];
+    const countsForRivalRace = this.run.rivalRace.status === "active" && cloud.kind === "rain";
     this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
     this.comboTimer = 3.4 + FLIGHT_ROUTES[this.run.routeId].comboWindowBonus + this.run.skills.comboCapacitor * .35 + this.run.skills.vacuumMomentum * .22;
     this.state.bestCombo = Math.max(this.state.bestCombo, this.combo);
@@ -1292,6 +1451,7 @@ export class CloudHarvestGame {
     this.run.cargo[cloud.kind] += 1;
     this.run.cargoValue[cloud.kind] += earned;
     this.state.harvested += 1;
+    if (countsForRivalRace) this.run.rivalRace.playerScore += 1;
     if (cloud.kind === "rain") this.state.growthMission.rainHarvested += 1;
     if (source === "manual") this.tryRecoverFuel(cloud);
     const baseXp = { cumulus: 2, rain: 5, electric: 9, ice: 14, solar: 22, aurora: 34 }[cloud.kind];
@@ -1318,6 +1478,16 @@ export class CloudHarvestGame {
     this.impactFreeze = this.run.feverActive ? 0 : Math.min(.025, .008 + this.combo * .0006);
     this.comboPunch = 1;
     this.playHarvestTone(cloud.kind, cascadeDepth);
+    if (countsForRivalRace) {
+      this.addFloatingText({
+        x: cloud.x,
+        y: cloud.y - 34,
+        text: `ROUTE RACE  ${this.run.rivalRace.playerScore}/${this.run.rivalRace.target}`,
+        color: "#7ff5df",
+        life: 1.2,
+      });
+      if (this.run.rivalRace.playerScore >= this.run.rivalRace.target) this.finishRivalRace(true);
+    }
 
     if (cascadeDepth > 0 && this.cascadeCount % 5 === 0) {
       const milestone = this.cascadeCount >= 30 ? "MEGA HARVEST" : this.cascadeCount >= 20 ? "SUPER CASCADE" : this.cascadeCount >= 10 ? "CHAIN REACTION" : "CASCADE";
@@ -1789,6 +1959,7 @@ export class CloudHarvestGame {
     if (this.isSuctionActive()) this.drawSuctionField(ctx, time);
     this.drawCascadeLinks(ctx, time);
     for (const cloud of this.clouds) this.drawCloud(ctx, cloud, time);
+    this.drawRivalHarvester(ctx, time);
     this.drawStormDroneBeams(ctx, time);
     this.drawHarvestLinks(ctx, time);
     for (const wave of this.shockwaves) {
@@ -2406,6 +2577,132 @@ export class CloudHarvestGame {
     ctx.strokeStyle = this.run.feverActive ? "#fff36f" : "#8de6ed"; ctx.lineWidth = 3 + Math.min(4, radiusLevel);
     ctx.beginPath(); ctx.ellipse(35 + nozzleLength, 0, 5 + radiusLevel, 13 + radiusLevel * 1.2, 0, 0, Math.PI * 2); ctx.stroke();
 
+    ctx.restore();
+  }
+
+  private drawRivalHarvester(ctx: CanvasRenderingContext2D, time: number): void {
+    const race = this.run.rivalRace;
+    if (race.status === "inactive") return;
+    const rival = this.rivalHarvester;
+
+    if (rival.beamTarget) {
+      const muzzleX = rival.x + Math.cos(rival.angle) * 43;
+      const muzzleY = rival.y + Math.sin(rival.angle) * 43;
+      const beamGradient = ctx.createLinearGradient(muzzleX, muzzleY, rival.beamTarget.x, rival.beamTarget.y);
+      beamGradient.addColorStop(0, "rgba(255,101,120,.95)");
+      beamGradient.addColorStop(1, "rgba(255,224,143,.75)");
+      ctx.save();
+      ctx.strokeStyle = beamGradient;
+      ctx.lineWidth = 4 + Math.sin(time * 20) * 1.2;
+      ctx.setLineDash([12, 7]);
+      ctx.lineDashOffset = -time * 72;
+      ctx.shadowColor = "#ff6578";
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.moveTo(muzzleX, muzzleY);
+      ctx.lineTo(rival.beamTarget.x, rival.beamTarget.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#fff1a8";
+      ctx.beginPath();
+      ctx.arc(rival.beamTarget.x, rival.beamTarget.y, 5 + Math.sin(time * 17) * 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.translate(rival.x, rival.y + Math.sin(time * 5.2 + 1.4) * 2.5);
+    ctx.rotate(rival.angle);
+    const defeated = race.status === "won";
+    ctx.globalAlpha = defeated ? .82 : 1;
+    ctx.shadowColor = defeated ? "#9eb8c2" : "#ff6578";
+    ctx.shadowBlur = defeated ? 10 : 20 + Math.sin(time * 6) * 5;
+
+    if (!defeated && (Math.hypot(rival.vx, rival.vy) > 22 || rival.beamTarget)) {
+      ctx.fillStyle = "#ff6578";
+      for (let index = 0; index < 4; index += 1) {
+        const trail = 12 + ((time * 190 + index * 17) % 45);
+        ctx.globalAlpha = .72 - index * .12;
+        ctx.beginPath();
+        ctx.ellipse(-49 - trail, (index - 1.5) * 4, 14, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.fillStyle = "#142331";
+    ctx.beginPath();
+    ctx.roundRect(-48, -18, 25, 36, 8);
+    ctx.fill();
+    ctx.strokeStyle = "#ff6578";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(-36, 0, 11, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#ff6578";
+    ctx.beginPath();
+    ctx.arc(-36, 0, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    const rivalBody = ctx.createLinearGradient(-30, -20, 44, 22);
+    rivalBody.addColorStop(0, defeated ? "#65727e" : "#293542");
+    rivalBody.addColorStop(1, defeated ? "#36434f" : "#101820");
+    ctx.fillStyle = rivalBody;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 43, 27, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = defeated ? "#82929e" : "#ff6578";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.fillStyle = defeated ? "#63717c" : "#c73f59";
+    ctx.beginPath();
+    ctx.moveTo(-26, -18);
+    ctx.lineTo(-43, -33);
+    ctx.lineTo(2, -23);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-26, 18);
+    ctx.lineTo(-43, 33);
+    ctx.lineTo(2, 23);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#e9f5f6";
+    ctx.beginPath();
+    ctx.arc(-2, -6, 19, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = defeated ? "#627581" : "#8e3150";
+    ctx.beginPath();
+    ctx.ellipse(-2, 0, 12, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.72)";
+    ctx.beginPath();
+    ctx.arc(-6, -4, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = defeated ? "#98a7ae" : "#ff6578";
+    ctx.beginPath();
+    ctx.roundRect(33, -10, 20, 20, 6);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = "900 10px Outfit, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("QS", 43, 0);
+    ctx.restore();
+
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.font = "900 11px Outfit, sans-serif";
+    ctx.fillStyle = race.status === "lost" ? "#fff36f" : "#ff6578";
+    ctx.strokeStyle = "rgba(7,22,31,.82)";
+    ctx.lineWidth = 5;
+    const label = race.status === "lost" ? "RIVAL WIN" : race.status === "won" ? "RETREATING" : "쾌청산업";
+    ctx.strokeText(label, rival.x, rival.y - 40);
+    ctx.fillText(label, rival.x, rival.y - 40);
     ctx.restore();
   }
 

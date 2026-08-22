@@ -53,6 +53,7 @@ export const FLIGHT_ROUTES: Record<FlightRouteId, FlightRouteDefinition> = {
 export const PROCESSING_CONTRACTS: ProcessingContract[] = [
   { id: "water", code: "H2O", name: "생수 병입 라인", description: "맑은 구름을 프리미엄 생수로 가공합니다.", multipliers: { cumulus: 1.45, rain: 1.05, electric: .85, ice: .82, solar: .72, aurora: .68 } },
   { id: "climate", code: "CLM", name: "기상 솔루션", description: "비구름 중심의 농업·기상 서비스 계약입니다.", multipliers: { cumulus: 1.12, rain: 1.55, electric: 1.05, ice: 1.1, solar: .84, aurora: .8 } },
+  { id: "priority", code: "P-1", name: "우선 항로 납품", description: "쾌청산업을 꺾은 수확사에게만 개방되는 고수익 비구름 긴급 계약입니다.", multipliers: { cumulus: 1.05, rain: 1.92, electric: 1.18, ice: 1.04, solar: .88, aurora: .82 } },
   { id: "energy", code: "NRG", name: "에너지 연구소", description: "전기구름을 고밀도 에너지 셀로 변환합니다.", multipliers: { cumulus: .9, rain: 1.2, electric: 1.9, ice: 1.15, solar: 1.35, aurora: 1.25 } },
   { id: "cryogenic", code: "CRY", name: "극저온 소재국", description: "빙정구름을 초전도 냉각재로 정제합니다.", multipliers: { cumulus: .72, rain: .9, electric: 1.15, ice: 2.05, solar: 1.05, aurora: 1.18 } },
   { id: "stellar", code: "SOL", name: "태양광 연성로", description: "태양구름을 고효율 광자 연료로 가공합니다.", multipliers: { cumulus: .68, rain: .76, electric: 1.08, ice: 1.05, solar: 2.2, aurora: 1.35 } },
@@ -364,7 +365,7 @@ export const INITIAL_STATE = {
   },
   growthMission: { step: 0, safeReturns: 0, contractsSigned: 0, shipmentsClaimed: 0, rainHarvested: 0 },
   infiniteResearch: { speed: 0, power: 0, fuel: 0, drone: 0, yield: 0 },
-  story: { seen: [] as StorySceneId[] },
+  story: { seen: [] as StorySceneId[], rivalBeaten: false },
   career: {
     day: 1, level: 1, xp: 0, xpNext: 6, pendingPicks: 0,
     skills: {

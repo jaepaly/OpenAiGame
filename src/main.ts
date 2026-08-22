@@ -45,6 +45,16 @@ app.innerHTML = `
         <div class="route-status"><small id="dayFlight">DAY 1 · FLIGHT 1/3</small><b id="routeName">순풍 회랑</b></div>
       </div>
 
+      <aside class="rival-race" id="rivalRace" aria-live="polite" aria-hidden="true">
+        <header><span>LIVE ROUTE CONTEST</span><strong id="rivalRaceTitle">RAIN CLOUD RUSH</strong><em id="rivalRaceTarget">FIRST TO 5</em></header>
+        <div class="rival-race-board">
+          <section class="rival-race-lane player"><span>YOU // 구름 수확 회사</span><div id="playerRacePips"></div><strong id="playerRaceScore">0</strong></section>
+          <b class="rival-race-versus">VS</b>
+          <section class="rival-race-lane rival"><span>쾌청산업 // PRIORITY-1</span><div id="rivalRacePips"></div><strong id="rivalRaceScore">0</strong></section>
+        </div>
+        <footer id="rivalRaceMessage">비구름을 먼저 확보해 우선 항로를 차지하세요</footer>
+      </aside>
+
       <div class="tutorial" id="tutorial"><b>WASD 이동 · 마우스 조준</b><span>좌클릭 흡입 · SPACE 기지 귀환 · 연료 0% 전 복귀</span></div>
       <aside class="growth-mission" id="growthMission" aria-live="polite">
         <span class="growth-mission-code" id="growthMissionCode">JOB 01</span>
@@ -246,6 +256,14 @@ const feverFill = required<HTMLElement>("#feverFill");
 const feverText = required<HTMLElement>("#feverText");
 const routeName = required<HTMLElement>("#routeName");
 const dayFlight = required<HTMLElement>("#dayFlight");
+const rivalRace = required<HTMLElement>("#rivalRace");
+const rivalRaceTitle = required<HTMLElement>("#rivalRaceTitle");
+const rivalRaceTarget = required<HTMLElement>("#rivalRaceTarget");
+const playerRacePips = required<HTMLElement>("#playerRacePips");
+const rivalRacePips = required<HTMLElement>("#rivalRacePips");
+const playerRaceScore = required<HTMLElement>("#playerRaceScore");
+const rivalRaceScore = required<HTMLElement>("#rivalRaceScore");
+const rivalRaceMessage = required<HTMLElement>("#rivalRaceMessage");
 const levelUpOverlay = required<HTMLElement>("#levelUpOverlay");
 const skillChoices = required<HTMLElement>("#skillChoices");
 const levelUpTitle = required<HTMLElement>("#levelUpTitle");
@@ -615,6 +633,28 @@ function renderRunState(state: RunState): void {
   fuelWarningKicker.textContent = fuelRatio <= .15 ? "FUEL CRITICAL // EMERGENCY RETURN" : "LOW FUEL // RETURN NOW";
   fuelWarningValue.textContent = `남은 연료 ${Math.ceil(state.fuel)} / ${Math.round(state.fuelCapacity)} · ${Math.ceil(fuelRatio * 100)}%`;
   document.body.classList.toggle("fever-active", state.feverActive);
+  const race = state.rivalRace;
+  const raceVisible = race.status !== "inactive";
+  rivalRace.classList.toggle("show", raceVisible);
+  rivalRace.classList.toggle("won", race.status === "won");
+  rivalRace.classList.toggle("lost", race.status === "lost");
+  rivalRace.setAttribute("aria-hidden", String(!raceVisible));
+  document.body.classList.toggle("rival-race-active", raceVisible);
+  playerRaceScore.textContent = String(race.playerScore);
+  rivalRaceScore.textContent = String(race.rivalScore);
+  playerRacePips.innerHTML = Array.from({ length: race.target }, (_, index) => `<i class="${index < race.playerScore ? "filled" : ""}"></i>`).join("");
+  rivalRacePips.innerHTML = Array.from({ length: race.target }, (_, index) => `<i class="${index < race.rivalScore ? "filled" : ""}"></i>`).join("");
+  rivalRaceTarget.textContent = `FIRST TO ${race.target}`;
+  if (race.status === "won") {
+    rivalRaceTitle.textContent = "ROUTE SECURED";
+    rivalRaceMessage.textContent = `우선 항로 납품 계약 해금 · 관제 지원금 ◈ ${race.reward}`;
+  } else if (race.status === "lost") {
+    rivalRaceTitle.textContent = "RIVAL CLAIMED ROUTE";
+    rivalRaceMessage.textContent = "화물 손실 없음 · 비구름 항로에서 다시 도전 가능";
+  } else {
+    rivalRaceTitle.textContent = "RAIN CLOUD RUSH";
+    rivalRaceMessage.textContent = "비구름을 먼저 확보해 우선 항로를 차지하세요";
+  }
   renderProcessing(state);
 }
 
@@ -757,7 +797,12 @@ function showFactory(state: RunState): void {
       <small>기본 ◈${Math.floor(state.cargoValue[cloud.kind]).toLocaleString()} · 개당 ${PROCESSING_SECONDS[cloud.kind]}초</small>
     </div>
   `).join("") + `<div class="manifest-bonus"><span>FLIGHT BONUS</span><b>콤보·전선 운항 보너스</b><strong>+ ◈${Math.floor(state.cargoBonus).toLocaleString()}</strong></div>`;
-  const availableContracts = PROCESSING_CONTRACTS.filter((_, index) => index < 3 || index <= game.getState().rank);
+  const company = game.getState();
+  const contractRank: Partial<Record<ContractId, number>> = { cryogenic: 3, stellar: 4, spectrum: 5 };
+  const availableContracts = PROCESSING_CONTRACTS.filter((contract) => {
+    if (contract.id === "priority") return company.story.rivalBeaten;
+    return (contractRank[contract.id] ?? 0) <= company.rank;
+  });
   const estimates = availableContracts.map((contract) => game.getProcessingEstimate(contract.id));
   const payouts = estimates.map((estimate) => estimate.payout);
   const bestPayout = Math.max(...payouts);
@@ -1126,6 +1171,7 @@ function renderRouteList(): void {
       .map((kind) => `${CLOUDS[kind].icon}${Math.round(map.weights[kind] * 100)}%`)
       .join(" · ");
     const payout = map.valueMultiplier * FLIGHT_ROUTES[map.routeId].valueMultiplier;
+    const rivalEvent = mapRank === 1 && !locked && company.story.seen.includes("rainFrontier") && !company.story.rivalBeaten;
     const cardContents = `
       <span class="route-visual">${locked ? "🔒" : map.icon}</span>
       <span class="route-code">${map.code}</span>
@@ -1134,6 +1180,7 @@ function renderRouteList(): void {
       <p>${map.description}</p>
       <b>연료 소모 ×${map.fuelDrain.toFixed(2)} · 수익 ×${payout.toFixed(2)}</b>
       <span class="route-clouds">${clouds}</span>
+      ${rivalEvent ? `<span class="route-rival-event"><i>LIVE EVENT</i> 비구름 5개 선점 경쟁 · 전용 계약 보상</span>` : ""}
       <span class="route-identity">${map.identity}</span>`;
 
     if (locked) {
