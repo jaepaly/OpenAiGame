@@ -1696,9 +1696,9 @@ body.base-open .base-hub-status { top: 142px; }
 .title-kicker { display: flex; align-items: center; gap: 14px; }
 .title-kicker span { padding: 9px 13px; color: #062b3a; background: var(--title-yellow); border: 2px solid #fff7a8; border-radius: 8px; box-shadow: 0 5px 0 #9f7e30; font: 900 12px "Outfit",sans-serif; letter-spacing: .12em; }
 .title-kicker b { color: var(--title-cyan); font: 900 14px "Outfit",sans-serif; letter-spacing: .18em; }
-.title-logo-lockup { margin-top: clamp(76px,12vh,132px); display: flex; align-items: flex-start; gap: 24px; }
+.title-logo-lockup { margin-top: clamp(105px,14vh,160px); display: flex; align-items: flex-start; gap: 24px; }
 .title-logo-mark { flex: 0 0 auto; width: 108px; height: 108px; display: grid; place-items: center; color: #083b50; background: linear-gradient(145deg,#f4ffff,#78eee7); border: 6px solid rgba(255,255,255,.92); border-radius: 31px 31px 56px 31px; box-shadow: 0 12px 0 #0a6072,0 0 46px rgba(112,249,233,.36); font-size: 60px; transform: rotate(-5deg); }
-.title-logo-lockup h1 { margin: 0; color: white; font: 900 clamp(82px,7.8vw,128px)/.9 "Nunito",sans-serif; letter-spacing: -.075em; text-shadow: 0 7px 0 #0b4c61,0 16px 37px rgba(0,25,38,.4); }
+.title-logo-lockup h1 { margin: 0; color: white; font: 900 clamp(82px,7.8vw,128px)/1 "Nunito",sans-serif; letter-spacing: -.075em; text-shadow: 0 7px 0 #0b4c61,0 16px 37px rgba(0,25,38,.4); }
 .title-logo-lockup h1 em { color: var(--title-yellow); font-style: normal; }
 .title-copy > p { margin: 28px 0 0; max-width: 650px; color: #d8f4f6; font-size: clamp(20px,1.65vw,28px); font-weight: 800; line-height: 1.48; letter-spacing: -.025em; }
 .title-copy > p strong { color: white; font-weight: 900; }
@@ -1744,7 +1744,7 @@ body.base-open .base-hub-status { top: 142px; }
 @media (max-width: 1180px) {
   .title-layout { width: calc(100% - 38px); grid-template-columns: minmax(500px,1.08fr) minmax(390px,.92fr); gap: 18px; }
   .title-copy { padding-left: 0; }
-  .title-logo-lockup { margin-top: clamp(60px,10vh,100px); }
+  .title-logo-lockup { margin-top: clamp(82px,12vh,118px); }
   .title-logo-lockup h1 { font-size: clamp(78px,8.4vw,104px); }
   .title-logo-mark { width: 96px; height: 96px; border-width: 5px; font-size: 53px; }
   .title-actions { width: 100%; }
@@ -1789,7 +1789,7 @@ body.base-open .base-hub-status { top: 142px; }
   .title-controls b { font-size: 11px; }
   .title-pilot { position: static; z-index: auto; width: 0; height: 0; min-height: 0; opacity: 1; filter: none; }
   .title-pilot > img,.title-character-halo,.title-pilot-tag { display: none; }
-  .title-save-card { right: 15px; bottom: 46px; width: calc(100% - 30px); padding: 14px; }
+  .title-save-card { right: 15px; bottom: 34px; width: calc(100% - 30px); padding: 14px; }
   .title-save-stats { grid-template-columns: 66px 1fr 82px; }
   .title-save-stats > span { padding: 8px; }
   .title-save-stats strong { font-size: 15px; }
@@ -1804,7 +1804,7 @@ body.base-open .base-hub-status { top: 142px; }
 @media (max-height: 720px) and (min-width: 821px) {
   .title-layout { padding-bottom: 50px; }
   .title-copy { padding-top: 28px; padding-bottom: 22px; }
-  .title-logo-lockup { margin-top: 68px; }
+  .title-logo-lockup { margin-top: 100px; }
   .title-logo-lockup h1 { font-size: clamp(82px,7.8vw,106px); }
   .title-copy > p { margin-top: 21px; }
   .title-actions { padding-top: 21px; }
