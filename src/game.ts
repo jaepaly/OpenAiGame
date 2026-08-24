@@ -95,8 +95,30 @@ const PACING_TARGETS = {
   rainUnlocked: 420,
   rivalStarted: 480,
   rivalWon: 600,
+  electricUnlocked: 900,
+  signalWon: 1080,
+  iceUnlocked: 1500,
+  archiveWon: 1740,
+  solarUnlocked: 2160,
+  engineWon: 2460,
+  auroraUnlocked: 2880,
+  skyRestored: 3300,
 } as const;
 type PacingMilestone = keyof typeof PACING_TARGETS;
+type BalanceFlightSample = {
+  day: number;
+  flight: number;
+  mapRank: number;
+  durationSeconds: number;
+  harvested: number;
+  harvestPerMinute: number;
+  grossValue: number;
+  valuePerMinute: number;
+  fuelUsedPercent: number;
+  maxCombo: number;
+  feverActivations: number;
+  emergencyReturn: boolean;
+};
 const clampVolume = (value: number): number => Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
 const emptyCloudStock = (): Record<CloudKind, number> => ({ cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 });
 const freshProcessingState = (): ProcessingState => ({ jobs: [], completedCoins: 0, completedMaterials: emptyCloudStock(), totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now() });
@@ -267,6 +289,8 @@ export class CloudHarvestGame {
   private discoveryBanner?: { kind: CloudKind; life: number; maxLife: number };
   private pacingSeconds = 0;
   private pacingMilestones: Partial<Record<PacingMilestone, number>> = {};
+  private balanceFlightStartedAt = 0;
+  private balanceFlights: BalanceFlightSample[] = [];
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -315,6 +339,72 @@ export class CloudHarvestGame {
       seconds: this.pacingMilestones[id] ?? null,
       targetSeconds: PACING_TARGETS[id],
     }));
+  }
+
+  getBalanceReport() {
+    const flights = structuredClone(this.balanceFlights);
+    const latest = flights.at(-1);
+    const nextRank = RANKS[this.state.rank + 1];
+    const processingWork = this.state.processing.jobs.reduce((total, job) => total + Math.max(0, job.workRequired - job.progress), 0);
+    const processingBacklogSeconds = processingWork / Math.max(.01, this.getProcessingSpeed() * this.getProcessingLineCount());
+    const moneyProgress = nextRank ? Math.min(1, this.state.money / Math.max(1, nextRank.promotionCost)) : 1;
+    const harvestProgress = nextRank ? Math.min(1, this.state.rankHarvested / Math.max(1, nextRank.requiredHarvest)) : 1;
+    const targetHarvestPerMinute = [42, 38, 34, 32, 30, 28][latest?.mapRank ?? this.run.mapRank] ?? 28;
+    const diagnostics: { tone: "good" | "watch" | "risk"; title: string; detail: string }[] = [];
+    if (latest) {
+      diagnostics.push(latest.harvestPerMinute >= targetHarvestPerMinute
+        ? { tone: "good", title: "수확 템포 정상", detail: `${latest.harvestPerMinute.toFixed(1)}/분 · 목표 ${targetHarvestPerMinute}/분 이상` }
+        : { tone: "watch", title: "수확 템포 정체", detail: `${latest.harvestPerMinute.toFixed(1)}/분 · 목표보다 ${(targetHarvestPerMinute - latest.harvestPerMinute).toFixed(1)} 부족` });
+      if (latest.fuelUsedPercent < 38) diagnostics.push({ tone: "watch", title: "연료 긴장도 낮음", detail: `비행 종료까지 ${100 - latest.fuelUsedPercent}%가 남았습니다. 고도 연료 배율을 점검하세요.` });
+      else if (latest.fuelUsedPercent > 92 || latest.emergencyReturn) diagnostics.push({ tone: "risk", title: "연료 실패 위험", detail: latest.emergencyReturn ? "비상 귀환으로 화물을 잃었습니다." : "잔여 연료가 8% 미만입니다." });
+      else diagnostics.push({ tone: "good", title: "연료 압박 정상", detail: `연료 ${latest.fuelUsedPercent}% 사용 · 선택 가능한 귀환 구간` });
+    }
+    if (processingBacklogSeconds > 90) diagnostics.push({ tone: "risk", title: "가공 적체 심각", detail: `현재 처리 예상 ${Math.ceil(processingBacklogSeconds)}초 · 비행 한 회보다 오래 대기할 수 있습니다.` });
+    else if (processingBacklogSeconds > 35) diagnostics.push({ tone: "watch", title: "가공 설비 투자 필요", detail: `현재 처리 예상 ${Math.ceil(processingBacklogSeconds)}초 · 컨베이어나 병렬 라인을 권장합니다.` });
+    else diagnostics.push({ tone: "good", title: "가공 흐름 정상", detail: `현재 처리 예상 ${Math.ceil(processingBacklogSeconds)}초` });
+    if (nextRank && Math.abs(moneyProgress - harvestProgress) >= .38) {
+      const moneyGate = moneyProgress < harvestProgress;
+      diagnostics.push({ tone: "watch", title: moneyGate ? "코인 병목" : "납품 병목", detail: moneyGate ? "납품량보다 승급 자금이 늦습니다." : "승급 자금보다 현 고도 납품량이 늦습니다." });
+    }
+    return {
+      elapsedSeconds: Math.round(this.pacingSeconds * 10) / 10,
+      activeFlightSeconds: this.atFactory ? 0 : Math.max(0, Math.round((this.pacingSeconds - this.balanceFlightStartedAt) * 10) / 10),
+      company: {
+        day: this.run.day, flight: this.run.flight, rank: this.state.rank, money: Math.floor(this.state.money),
+        harvested: this.state.harvested, rankHarvested: this.state.rankHarvested, rankFlights: this.state.rankFlights,
+        skills: (Object.values(this.state.career.skills) as number[]).filter((level) => level > 0).length,
+        upgrades: (Object.values(this.state.levels) as number[]).reduce((total, level) => total + level, 0),
+      },
+      nextUnlock: nextRank ? {
+        name: nextRank.name, money: this.state.money, moneyRequired: nextRank.promotionCost,
+        harvested: this.state.rankHarvested, harvestRequired: nextRank.requiredHarvest, moneyProgress, harvestProgress,
+      } : null,
+      processing: { jobs: this.state.processing.jobs.length, backlogSeconds: Math.round(processingBacklogSeconds), lines: this.getProcessingLineCount(), speed: this.getProcessingSpeed() },
+      milestones: this.getPacingReport(),
+      flights,
+      diagnostics,
+    };
+  }
+
+  private recordBalanceFlight(report: FlightReport): void {
+    if (!import.meta.env.DEV) return;
+    const durationSeconds = Math.max(1, Math.round((this.pacingSeconds - this.balanceFlightStartedAt) * 10) / 10);
+    const sample: BalanceFlightSample = {
+      day: report.day,
+      flight: report.flight,
+      mapRank: report.mapRank,
+      durationSeconds,
+      harvested: report.totalCollected,
+      harvestPerMinute: report.totalCollected / durationSeconds * 60,
+      grossValue: report.grossValue,
+      valuePerMinute: report.grossValue / durationSeconds * 60,
+      fuelUsedPercent: Math.round((1 - report.fuelEfficiency) * 100),
+      maxCombo: report.maxCombo,
+      feverActivations: report.feverActivations,
+      emergencyReturn: report.emergencyReturn,
+    };
+    this.balanceFlights.push(sample);
+    if (this.balanceFlights.length > 12) this.balanceFlights.shift();
   }
 
   private markPacingMilestone(id: PacingMilestone): void {
@@ -563,6 +653,7 @@ export class CloudHarvestGame {
     if (this.run.openSky.status === "active") this.finishOpenSky(false, "return");
     this.run.emergencyReturn = false;
     this.pendingFlightReport = this.captureFlightReport(false);
+    this.recordBalanceFlight(this.pendingFlightReport);
     this.returning = true;
     this.returnTimer = 0;
     this.transitionWhooshPlayed = false;
@@ -607,6 +698,7 @@ export class CloudHarvestGame {
     if (this.run.openSky.status === "active") this.finishOpenSky(false, "fuel");
     const discarded = this.getCargoCount();
     this.pendingFlightReport = this.captureFlightReport(true);
+    this.recordBalanceFlight(this.pendingFlightReport);
     this.run.cargo = emptyCloudStock();
     this.run.cargoValue = emptyCloudStock();
     this.run.cargoBonus = 0;
@@ -901,6 +993,7 @@ export class CloudHarvestGame {
     this.run.emergencyReturn = false;
     this.flightStats = freshFlightStats();
     this.pendingFlightReport = undefined;
+    this.balanceFlightStartedAt = this.pacingSeconds;
     this.run.processingUsage = {};
     this.prepareRivalRace(mapRank);
     this.prepareSignalTrace(mapRank);
@@ -1100,7 +1193,11 @@ export class CloudHarvestGame {
     }
     this.state.money -= next.promotionCost;
     this.state.rank += 1;
-    if (this.state.rank === 1) this.markPacingMilestone("rainUnlocked");
+    const rankMilestones: Partial<Record<number, PacingMilestone>> = {
+      1: "rainUnlocked", 2: "electricUnlocked", 3: "iceUnlocked", 4: "solarUnlocked", 5: "auroraUnlocked",
+    };
+    const rankMilestone = rankMilestones[this.state.rank];
+    if (rankMilestone) this.markPacingMilestone(rankMilestone);
     this.state.selectedMap = this.state.rank;
     this.state.rankHarvested = 0;
     this.state.rankFlights = 0;
@@ -1147,6 +1244,10 @@ export class CloudHarvestGame {
     this.dayComplete = false;
     this.flightStats = freshFlightStats();
     this.pendingFlightReport = undefined;
+    this.pacingSeconds = 0;
+    this.pacingMilestones = {};
+    this.balanceFlightStartedAt = 0;
+    this.balanceFlights = [];
     this.goldenFront = false;
     this.goldenFrontClaimed = false;
     this.clouds = [];
@@ -1890,6 +1991,7 @@ export class CloudHarvestGame {
       trace.status = "won";
       trace.timeLeft = Math.max(0, trace.timeLeft);
       this.state.story.electricSignalCleared = true;
+      this.markPacingMilestone("signalWon");
       this.state.money += trace.reward;
       this.state.totalEarned += trace.reward;
       this.state.materials.electric += 3;
@@ -2034,6 +2136,7 @@ export class CloudHarvestGame {
     if (success) {
       archive.status = "won";
       this.state.story.iceArchiveRecovered = true;
+      this.markPacingMilestone("archiveWon");
       this.state.money += archive.reward;
       this.state.totalEarned += archive.reward;
       this.state.materials.ice += 4;
@@ -2216,6 +2319,7 @@ export class CloudHarvestGame {
       engine.charge = engine.chargeTarget;
       engine.heat = Math.min(engine.heat, 72);
       this.state.story.solarEngineDisabled = true;
+      this.markPacingMilestone("engineWon");
       this.state.money += engine.reward;
       this.state.totalEarned += engine.reward;
       this.state.materials.solar += 5;
@@ -2445,6 +2549,7 @@ export class CloudHarvestGame {
       finale.circuits = finale.circuitTarget;
       finale.instability = Math.min(finale.instability, 70);
       this.state.story.skyRestored = true;
+      this.markPacingMilestone("skyRestored");
       this.state.money += finale.reward;
       this.state.totalEarned += finale.reward;
       this.state.materials.aurora += 8;

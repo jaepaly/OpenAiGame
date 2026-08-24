@@ -393,6 +393,19 @@ app.innerHTML = `
         </div>
       </section>
 
+      <button class="balance-toggle" id="balanceToggle" type="button" hidden><b>BAL</b><span>운항 분석</span></button>
+      <aside class="balance-panel" id="balancePanel" aria-label="개발용 성장곡선 분석" aria-hidden="true" hidden>
+        <header><div><span>DEV TELEMETRY // LIVE</span><h2>성장곡선 계기판</h2></div><button id="balanceCloseButton" type="button" aria-label="밸런스 계기판 닫기">×</button></header>
+        <section class="balance-live" id="balanceLive"></section>
+        <section class="balance-unlock" id="balanceUnlock"></section>
+        <div class="balance-columns">
+          <section><header><span>PACING TARGETS</span><b>목표 시간 대비</b></header><div class="balance-milestones" id="balanceMilestones"></div></section>
+          <section><header><span>DIAGNOSIS</span><b>현재 병목</b></header><div class="balance-diagnostics" id="balanceDiagnostics"></div></section>
+        </div>
+        <section class="balance-flights"><header><span>RECENT FLIGHTS</span><b>최근 비행 12회</b></header><div id="balanceFlights"></div></section>
+        <footer><span>URL에 <b>?balance=1</b>을 붙였을 때만 표시됩니다.</span><button id="balanceExportButton" type="button">JSON 저장</button></footer>
+      </aside>
+
       <section class="title-screen show" id="titleScreen" role="dialog" aria-modal="true" aria-label="구름 수확 회사 타이틀" aria-hidden="false">
         <div class="title-sky" aria-hidden="true">
           <i class="title-aurora aurora-one"></i><i class="title-aurora aurora-two"></i>
@@ -507,6 +520,15 @@ const pauseButton = required<HTMLButtonElement>("#pauseButton");
 const pauseOverlay = required<HTMLElement>("#pauseOverlay");
 const pauseResumeButton = required<HTMLButtonElement>("#pauseResumeButton");
 const pauseSoundToggle = required<HTMLButtonElement>("#pauseSoundToggle");
+const balanceToggle = required<HTMLButtonElement>("#balanceToggle");
+const balancePanel = required<HTMLElement>("#balancePanel");
+const balanceCloseButton = required<HTMLButtonElement>("#balanceCloseButton");
+const balanceExportButton = required<HTMLButtonElement>("#balanceExportButton");
+const balanceLive = required<HTMLElement>("#balanceLive");
+const balanceUnlock = required<HTMLElement>("#balanceUnlock");
+const balanceMilestones = required<HTMLElement>("#balanceMilestones");
+const balanceDiagnostics = required<HTMLElement>("#balanceDiagnostics");
+const balanceFlights = required<HTMLElement>("#balanceFlights");
 const musicVolume = required<HTMLInputElement>("#musicVolume");
 const musicVolumeValue = required<HTMLOutputElement>("#musicVolumeValue");
 const sfxVolume = required<HTMLInputElement>("#sfxVolume");
@@ -994,10 +1016,77 @@ if (import.meta.env.DEV) {
   const developmentWindow = window as typeof window & {
     __cloudHarvestGame?: CloudHarvestGame;
     __cloudHarvestPacing?: () => ReturnType<CloudHarvestGame["getPacingReport"]>;
+    __cloudHarvestBalance?: () => ReturnType<CloudHarvestGame["getBalanceReport"]>;
   };
   developmentWindow.__cloudHarvestGame = game;
   developmentWindow.__cloudHarvestPacing = () => game.getPacingReport();
+  developmentWindow.__cloudHarvestBalance = () => game.getBalanceReport();
 }
+
+const BALANCE_MILESTONE_LABELS: Record<string, string> = {
+  firstHarvest: "첫 구름", firstReturn: "첫 귀환", firstContract: "첫 가공", firstShipment: "첫 출하",
+  firstSkill: "첫 특성", firstUpgrade: "첫 장비", rainUnlocked: "비구름 해금", rivalStarted: "경쟁 시작",
+  rivalWon: "경쟁 승리", electricUnlocked: "전기 해금", signalWon: "신호 추적", iceUnlocked: "빙정 해금",
+  archiveWon: "기록 복원", solarUnlocked: "태양 해금", engineWon: "엔진 정지", auroraUnlocked: "오로라 해금", skyRestored: "하늘 복구",
+};
+const balanceEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).get("balance") === "1";
+let balanceTimer = 0;
+const balanceTime = (seconds: number | null): string => {
+  if (seconds === null) return "--:--";
+  const whole = Math.max(0, Math.round(seconds));
+  return `${String(Math.floor(whole / 60)).padStart(2, "0")}:${String(whole % 60).padStart(2, "0")}`;
+};
+const setBalanceOpen = (open: boolean): void => {
+  if (!balanceEnabled) return;
+  balancePanel.classList.toggle("show", open);
+  balancePanel.setAttribute("aria-hidden", String(!open));
+  balanceToggle.classList.toggle("active", open);
+};
+const renderBalancePanel = (): void => {
+  if (!balanceEnabled) return;
+  const report = game.getBalanceReport();
+  balanceLive.innerHTML = `
+    <article><small>SESSION</small><strong>${balanceTime(report.elapsedSeconds)}</strong><span>실플레이 시간</span></article>
+    <article><small>OPERATION</small><strong>DAY ${report.company.day} · F${report.company.flight}</strong><span>${RANKS[report.company.rank].code} 고도</span></article>
+    <article><small>OUTPUT</small><strong>${report.company.harvested.toLocaleString()} CLOUD</strong><span>◈ ${report.company.money.toLocaleString()}</span></article>
+    <article><small>GROWTH</small><strong>${report.company.skills} SYS · ${report.company.upgrades} PART</strong><span>특성 · 장비 총합</span></article>
+    <article><small>PROCESS</small><strong>${report.processing.backlogSeconds}s</strong><span>${report.processing.jobs}묶음 · ${report.processing.lines}라인</span></article>`;
+  if (report.nextUnlock) {
+    const moneyPercent = Math.round(report.nextUnlock.moneyProgress * 100);
+    const harvestPercent = Math.round(report.nextUnlock.harvestProgress * 100);
+    balanceUnlock.innerHTML = `<header><span>NEXT ALTITUDE</span><strong>${report.nextUnlock.name}</strong></header>
+      <div><small>COIN ${Math.floor(report.nextUnlock.money).toLocaleString()} / ${report.nextUnlock.moneyRequired.toLocaleString()}</small><i><b style="width:${moneyPercent}%"></b></i><em>${moneyPercent}%</em></div>
+      <div><small>CARGO ${report.nextUnlock.harvested.toLocaleString()} / ${report.nextUnlock.harvestRequired.toLocaleString()}</small><i><b style="width:${harvestPercent}%"></b></i><em>${harvestPercent}%</em></div>`;
+  } else balanceUnlock.innerHTML = `<header><span>ALTITUDE CAP</span><strong>최종 고도 도달</strong></header><p>유한 성장망과 엔딩 사건을 확인하세요.</p>`;
+  balanceMilestones.innerHTML = report.milestones.map((milestone) => {
+    const overdue = milestone.seconds === null && report.elapsedSeconds > milestone.targetSeconds;
+    const ratio = milestone.seconds === null ? report.elapsedSeconds / milestone.targetSeconds : milestone.seconds / milestone.targetSeconds;
+    const tone = milestone.seconds === null ? overdue ? "risk" : "pending" : ratio <= 1 ? "good" : ratio <= 1.25 ? "watch" : "risk";
+    return `<div class="${tone}"><span>${BALANCE_MILESTONE_LABELS[milestone.id] ?? milestone.id}</span><i><b style="width:${Math.min(100, ratio * 100)}%"></b></i><strong>${balanceTime(milestone.seconds)} <small>/ ${balanceTime(milestone.targetSeconds)}</small></strong></div>`;
+  }).join("");
+  balanceDiagnostics.innerHTML = report.diagnostics.map((item) => `<article class="${item.tone}"><b>${item.title}</b><p>${item.detail}</p></article>`).join("")
+    || `<article><b>비행 기록 대기</b><p>첫 귀환 후 수확·연료·가공 진단이 표시됩니다.</p></article>`;
+  balanceFlights.innerHTML = report.flights.length > 0 ? `<table><thead><tr><th>FLIGHT</th><th>TIME</th><th>CLOUD/M</th><th>VALUE/M</th><th>FUEL</th><th>FEVER</th></tr></thead><tbody>${report.flights.map((flight) => `<tr class="${flight.emergencyReturn ? "risk" : ""}"><td>D${flight.day}-F${flight.flight} · ${RANKS[flight.mapRank].code}</td><td>${balanceTime(flight.durationSeconds)}</td><td>${flight.harvestPerMinute.toFixed(1)}</td><td>◈${Math.round(flight.valuePerMinute).toLocaleString()}</td><td>${flight.fuelUsedPercent}%</td><td>${flight.feverActivations}</td></tr>`).join("")}</tbody></table>`
+    : `<p class="balance-empty">비행을 마치면 이곳에 1분당 생산량과 연료 사용률이 기록됩니다.</p>`;
+};
+if (balanceEnabled) {
+  balanceToggle.hidden = false;
+  balancePanel.hidden = false;
+  setBalanceOpen(true);
+  renderBalancePanel();
+  balanceTimer = window.setInterval(renderBalancePanel, 500);
+}
+balanceToggle.addEventListener("click", () => setBalanceOpen(!balancePanel.classList.contains("show")));
+balanceCloseButton.addEventListener("click", () => setBalanceOpen(false));
+balanceExportButton.addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(game.getBalanceReport(), null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `sky-harvest-balance-${Date.now()}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+});
 storySystemReady = true;
 window.setTimeout(() => { if (!titleScreenOpen) syncStoryTriggers(game.getState()); }, 360);
 if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("report-preview")) {
@@ -2581,4 +2670,7 @@ resetButton.addEventListener("click", () => {
   }
 });
 
-window.addEventListener("beforeunload", () => game.destroy());
+window.addEventListener("beforeunload", () => {
+  window.clearInterval(balanceTimer);
+  game.destroy();
+});
