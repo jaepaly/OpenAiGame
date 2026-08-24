@@ -1365,6 +1365,30 @@ function renderStoryBeat(): void {
   if (nextLabel) nextLabel.textContent = activeStoryBeat === scene.beats.length - 1 ? "장면 완료" : "다음";
 }
 
+const FRONTIER_STORY_RANKS: Partial<Record<StorySceneId, number>> = {
+  rainFrontier: 1,
+  electricFrontier: 2,
+  iceFrontier: 3,
+  solarFrontier: 4,
+  auroraFrontier: 5,
+};
+
+function revealUnlockedRoute(sceneId: StorySceneId): void {
+  const unlockedRank = FRONTIER_STORY_RANKS[sceneId];
+  if (unlockedRank === undefined || !game.isAtFactory() || game.getState().rank < unlockedRank) return;
+  document.body.classList.remove("garage-open");
+  document.body.classList.add("base-open");
+  garageOverlay.classList.remove("show");
+  processingOverlay.classList.remove("show");
+  factoryOverlay.classList.remove("show");
+  baseHub.classList.add("show");
+  renderRouteList();
+  routeOverlay.classList.add("show");
+  window.requestAnimationFrame(() => {
+    routeList.querySelector<HTMLButtonElement>(`[data-map="${unlockedRank}"]`)?.focus({ preventScroll: true });
+  });
+}
+
 function advanceStory(): void {
   if (!activeStoryScene || storyTransitioning) return;
   const scene = STORY_SCENES[activeStoryScene];
@@ -1391,6 +1415,7 @@ function finishStoryScene(): void {
     storyTransitioning = false;
     syncStoryTriggers(game.getState());
     openNextStoryScene();
+    if (!activeStoryScene && storyQueue.length === 0) revealUnlockedRoute(completed);
   }, 280);
   if (completed === "epilogue") window.setTimeout(() => showEnding(game.getState(), endingReturnToResearch), 420);
 }
