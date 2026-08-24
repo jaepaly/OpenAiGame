@@ -7,7 +7,7 @@ import sonaNeutralPortrait from "./assets/characters/sona-neutral.png";
 import sonaSeriousPortrait from "./assets/characters/sona-serious.png";
 import sonaWorriedPortrait from "./assets/characters/sona-worried.png";
 import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
-import { CloudHarvestGame, type RadioCall } from "./game";
+import { CloudHarvestGame, getPromotionEventGate, type RadioCall } from "./game";
 import type { ContractId, GameState, GrowthMissionId, InfiniteResearchId, ResearchId, RunSkillId, RunState, StorySceneId, UpgradeId } from "./types";
 
 const app = document.querySelector<HTMLDivElement>("#app");
@@ -1505,13 +1505,15 @@ function renderState(state: GameState): void {
     const moneyDone = state.money >= next.promotionCost;
     const harvestDone = state.rankHarvested >= next.requiredHarvest;
     const flightDone = state.rankFlights >= 1;
+    const eventGate = getPromotionEventGate(state);
     promotionRequirements.innerHTML = `
       <span class="${moneyDone ? "done" : ""}">◈ ${Math.floor(state.money).toLocaleString()} / ${next.promotionCost.toLocaleString()}</span>
       <span class="${harvestDone ? "done" : ""}">☁ 현 고도 납품 ${state.rankHarvested} / ${next.requiredHarvest}</span>
       <span class="${flightDone ? "done" : ""}">RTB 안전 귀환 ${state.rankFlights} / 1</span>
+      ${eventGate ? `<span class="${eventGate.done ? "done" : ""}">◆ ${eventGate.label}</span>` : ""}
     `;
-    promoteButton.disabled = !(moneyDone && harvestDone && flightDone);
-    promoteButton.textContent = `${next.altitude} 항로 해금`;
+    promoteButton.disabled = !(moneyDone && harvestDone && flightDone && (eventGate?.done ?? true));
+    promoteButton.textContent = eventGate && !eventGate.done ? "항로 사건 필요" : `${next.altitude} 항로 해금`;
   }
   if (storySystemReady) syncStoryTriggers(state);
 }
@@ -1627,6 +1629,7 @@ baseGarageButton.addEventListener("click", () => {
 function renderRouteList(): void {
   const company = game.getState();
   const currentMission = GROWTH_MISSIONS[company.growthMission.step]?.id;
+  const promotionEventGate = getPromotionEventGate(company);
   routeList.innerHTML = RANKS.map((map, mapRank) => {
     const locked = mapRank > company.rank;
     const nextUnlock = mapRank === company.rank + 1;
@@ -1669,9 +1672,10 @@ function renderRouteList(): void {
               <span class="${moneyReady ? "done" : ""}">◈ ${Math.floor(company.money).toLocaleString()} / ${map.promotionCost.toLocaleString()}</span>
               <span class="${harvestReady ? "done" : ""}">☁ 납품 ${company.rankHarvested.toLocaleString()} / ${map.requiredHarvest.toLocaleString()}</span>
               <span class="${returnReady ? "done" : ""}">↩ 안전 귀환 ${company.rankFlights} / 1</span>
+              ${promotionEventGate ? `<span class="${promotionEventGate.done ? "done" : ""}">◆ ${promotionEventGate.label}</span>` : ""}
             </div>
             <button class="route-unlock-button" data-promote-map="${mapRank}" ${canUnlock ? "" : "disabled"}>
-              ${canUnlock ? `${map.altitude} 고도 해금` : "승급 조건 미달"}
+              ${canUnlock ? `${map.altitude} 고도 해금` : promotionEventGate && !promotionEventGate.done ? `${promotionEventGate.label} 필요` : "승급 조건 미달"}
             </button>` : `<em>직전 고도를 먼저 해금해야 합니다</em>`}
         </article>`;
     }

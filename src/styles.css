@@ -438,7 +438,7 @@ body.base-open .fuel-warning, body.garage-open .fuel-warning, .returning .fuel-w
 @keyframes processing-ready { to { filter: brightness(1.08); } }
 
 .promotion-card {
-  position: absolute; z-index: 5; right: 22px; top: 90px; width: 292px; min-height: 88px; padding: 9px 10px;
+  position: absolute; z-index: 5; right: 22px; top: 90px; width: min(410px,calc(100% - 44px)); min-height: 104px; padding: 11px 12px;
   display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 8px; background: rgba(33,83,105,.78);
   border: 2px solid rgba(255,255,255,.62); border-radius: 18px;
   box-shadow: 0 6px 0 rgba(20,59,78,.2),0 12px 26px rgba(35,94,116,.14); backdrop-filter: blur(9px);
@@ -446,14 +446,15 @@ body.base-open .fuel-warning, body.garage-open .fuel-warning, .returning .fuel-w
 .promotion-icon { width: 44px; height: 44px; display: grid; place-items: center; background: #e6f8fb; border-radius: 50%; font-size: 25px; }
 .promotion-copy { min-width: 0; }
 .promotion-copy .eyebrow { color: #82e7f4; }
-.promotion-copy strong { display: block; margin-top: 3px; overflow: hidden; color: white; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-.promotion-copy p { margin: 1px 0 0; overflow: hidden; color: rgba(255,255,255,.62); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.promotion-requirements { grid-column: 1/3; display: flex; gap: 5px; padding-left: 3px; }
-.promotion-requirements span { padding: 3px 7px; color: rgba(255,255,255,.76); background: rgba(9,40,55,.28); border-radius: 7px; font-size: 9px; font-weight: 900; }
+.promotion-copy strong { display: block; margin-top: 3px; overflow: hidden; color: white; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.promotion-copy p { margin: 2px 0 0; overflow: hidden; color: rgba(255,255,255,.7); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.promotion-requirements { grid-column: 1/3; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; padding-left: 3px; }
+.promotion-requirements span { min-height: 25px; padding: 4px 7px; display: grid; place-items: center; color: rgba(255,255,255,.8); background: rgba(9,40,55,.28); border-radius: 7px; font-size: 10px; font-weight: 900; text-align: center; }
+.promotion-requirements span:last-child:nth-child(odd) { grid-column: 1/-1; }
 .promotion-requirements .done { color: #11856d; background: #dcf5eb; }
 .promote-button {
   grid-row: 1/3; grid-column: 3; width: 78px; align-self: stretch; padding: 5px 7px; color: #294b5b;
-  background: var(--yellow); border: 0; border-radius: 12px; font-size: 9px; font-weight: 900;
+  background: var(--yellow); border: 0; border-radius: 12px; font-size: 10px; font-weight: 900;
   box-shadow: 0 4px 0 #e3a93e; cursor: pointer;
 }
 .promote-button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 0 #e3a93e; }
@@ -795,8 +796,9 @@ body.base-open .promotion-card { top: 28px; }
 .route-rival-event.open-sky { color: #eef7ff; background: linear-gradient(90deg,rgba(22,66,92,.86),rgba(65,38,91,.86)); border-color: #bdefff; }
 .route-rival-event.open-sky i { color: #222650; background: linear-gradient(90deg,#9bf5ff,#e3bdff); }
 .route-card em { width: 100%; margin-top: auto; padding-top: 17px; color: white; text-align: center; font-size: 15px; font-style: normal; font-weight: 900; }
-.route-unlock-requirements { width: 100%; margin-top: 13px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.route-unlock-requirements { width: 100%; margin-top: 13px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; }
 .route-unlock-requirements span { min-height: 40px; padding: 7px 5px; display: grid; place-items: center; color: #d7e5e8; background: rgba(3,20,29,.58); border: 1px solid #476978; border-radius: 9px; font-size: 11px; font-weight: 900; text-align: center; line-height: 1.25; }
+.route-unlock-requirements span:last-child:nth-child(odd) { grid-column: 1/-1; }
 .route-unlock-requirements span.done { color: #133847; background: #7ff5df; border-color: #d9fff7; }
 .route-unlock-button { width: 100%; min-height: 48px; margin-top: 9px; padding: 9px 12px; color: #17394a; background: #fff36f; border: 3px solid #fff9b5; border-radius: 12px; box-shadow: 0 5px 0 #9d742c; font-size: 15px; font-weight: 900; cursor: pointer; transition: .14s ease; }
 .route-unlock-button:not(:disabled):hover { transform: translateY(-3px); box-shadow: 0 8px 0 #9d742c; }

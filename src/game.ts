@@ -24,6 +24,16 @@ type DroneBeam = { x: number; y: number; targetX: number; targetY: number };
 type HarvestLink = { x: number; y: number; targetX: number; targetY: number; life: number; maxLife: number; color: string };
 type HarvestSource = "manual" | "drone" | "cascade";
 
+export function getPromotionEventGate(state: GameState): { label: string; done: boolean } | null {
+  switch (state.rank) {
+    case 1: return { label: "LIVE RACE 승리", done: state.story.rivalBeaten };
+    case 2: return { label: "THUNDER TRACE 완료", done: state.story.electricSignalCleared };
+    case 3: return { label: "FROZEN ARCHIVE 복원", done: state.story.iceArchiveRecovered };
+    case 4: return { label: "PRESSURE ENGINE 정지", done: state.story.solarEngineDisabled };
+    default: return null;
+  }
+}
+
 const MAX_PARTICLES = 850;
 const MAX_FLOATING_TEXTS = 30;
 const MAX_SHOCKWAVES = 24;
@@ -869,8 +879,14 @@ export class CloudHarvestGame {
 
   canPromote(): boolean {
     const next = RANKS[this.state.rank + 1];
+    const eventGate = this.getPromotionGate();
     return Boolean(this.atFactory && next && this.state.rankFlights >= 1
-      && this.state.money >= next.promotionCost && this.state.rankHarvested >= next.requiredHarvest);
+      && this.state.money >= next.promotionCost && this.state.rankHarvested >= next.requiredHarvest
+      && (eventGate?.done ?? true));
+  }
+
+  getPromotionGate(): { label: string; done: boolean } | null {
+    return getPromotionEventGate(this.state);
   }
 
   promote(): boolean {
@@ -878,6 +894,11 @@ export class CloudHarvestGame {
     if (!next) return false;
     if (!this.atFactory) {
       this.onToast("고도 승급은 기지 관제실에서만 승인할 수 있습니다.", "warning");
+      return false;
+    }
+    const eventGate = this.getPromotionGate();
+    if (eventGate && !eventGate.done) {
+      this.onToast(`${eventGate.label} 후 다음 고도를 해금할 수 있습니다.`, "warning");
       return false;
     }
     if (!this.canPromote()) {
@@ -4057,7 +4078,10 @@ export class CloudHarvestGame {
   }
 
   private getFuelCapacity(): number {
-    return 9 + this.run.skills.auxTank * 3 + this.run.skills.recoveryReservoir * 3 + this.state.infiniteResearch.fuel * .75;
+    // 첫 튜토리얼 비행은 의도한 5~6개 수확 리듬을 유지하고,
+    // 해금 이후 저고도 순풍 회랑을 다시 찾을 때만 항로 연료 보너스를 적용한다.
+    const routeFuelBonus = this.state.rank > 0 ? FLIGHT_ROUTES[this.run.routeId].fuelBonus : 0;
+    return 9 + routeFuelBonus + this.run.skills.auxTank * 3 + this.run.skills.recoveryReservoir * 3 + this.state.infiniteResearch.fuel * .75;
   }
 
   private getMaxClouds(): number {
