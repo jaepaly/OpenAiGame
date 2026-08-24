@@ -398,6 +398,15 @@ app.innerHTML = `
         <header><div><span>DEV TELEMETRY // LIVE</span><h2>성장곡선 계기판</h2></div><button id="balanceCloseButton" type="button" aria-label="밸런스 계기판 닫기">×</button></header>
         <section class="balance-live" id="balanceLive"></section>
         <section class="balance-unlock" id="balanceUnlock"></section>
+        <section class="balance-lab">
+          <header><div><span>TEST SANDBOX</span><b>고도별 대표 성장 상태</b></div><div><button id="balanceClearButton" type="button">샘플 초기화</button><button id="balanceRestoreButton" type="button" hidden>실제 저장 복귀</button></div></header>
+          <div class="balance-presets" id="balancePresets"></div>
+          <p>프리셋 플레이는 실제 로컬 저장을 덮어쓰지 않습니다. 각 고도의 핵심 사건이 활성화된 상태로 출격합니다.</p>
+        </section>
+        <section class="balance-simulation">
+          <header><span>FULL-RUN PROJECTION</span><b>모델값은 귀환 실측값으로 자동 교체</b></header>
+          <div id="balanceSimulation"></div>
+        </section>
         <div class="balance-columns">
           <section><header><span>PACING TARGETS</span><b>목표 시간 대비</b></header><div class="balance-milestones" id="balanceMilestones"></div></section>
           <section><header><span>DIAGNOSIS</span><b>현재 병목</b></header><div class="balance-diagnostics" id="balanceDiagnostics"></div></section>
@@ -526,6 +535,10 @@ const balanceCloseButton = required<HTMLButtonElement>("#balanceCloseButton");
 const balanceExportButton = required<HTMLButtonElement>("#balanceExportButton");
 const balanceLive = required<HTMLElement>("#balanceLive");
 const balanceUnlock = required<HTMLElement>("#balanceUnlock");
+const balancePresets = required<HTMLElement>("#balancePresets");
+const balanceSimulation = required<HTMLElement>("#balanceSimulation");
+const balanceClearButton = required<HTMLButtonElement>("#balanceClearButton");
+const balanceRestoreButton = required<HTMLButtonElement>("#balanceRestoreButton");
 const balanceMilestones = required<HTMLElement>("#balanceMilestones");
 const balanceDiagnostics = required<HTMLElement>("#balanceDiagnostics");
 const balanceFlights = required<HTMLElement>("#balanceFlights");
@@ -1045,6 +1058,8 @@ const setBalanceOpen = (open: boolean): void => {
 const renderBalancePanel = (): void => {
   if (!balanceEnabled) return;
   const report = game.getBalanceReport();
+  const simulation = game.getBalanceSimulation();
+  balanceRestoreButton.hidden = !report.sandbox;
   balanceLive.innerHTML = `
     <article><small>SESSION</small><strong>${balanceTime(report.elapsedSeconds)}</strong><span>실플레이 시간</span></article>
     <article><small>OPERATION</small><strong>DAY ${report.company.day} · F${report.company.flight}</strong><span>${RANKS[report.company.rank].code} 고도</span></article>
@@ -1058,6 +1073,21 @@ const renderBalancePanel = (): void => {
       <div><small>COIN ${Math.floor(report.nextUnlock.money).toLocaleString()} / ${report.nextUnlock.moneyRequired.toLocaleString()}</small><i><b style="width:${moneyPercent}%"></b></i><em>${moneyPercent}%</em></div>
       <div><small>CARGO ${report.nextUnlock.harvested.toLocaleString()} / ${report.nextUnlock.harvestRequired.toLocaleString()}</small><i><b style="width:${harvestPercent}%"></b></i><em>${harvestPercent}%</em></div>`;
   } else balanceUnlock.innerHTML = `<header><span>ALTITUDE CAP</span><strong>최종 고도 도달</strong></header><p>유한 성장망과 엔딩 사건을 확인하세요.</p>`;
+  balancePresets.innerHTML = RANKS.map((rank, mapRank) => `
+    <button type="button" data-balance-preset="${mapRank}" class="${report.sandbox && report.company.rank === mapRank ? "active" : ""}" style="--preset-color:${rank.color}">
+      <small>${rank.code}</small><strong>${rank.icon} ${rank.altitude}</strong><em>즉시 출격</em>
+    </button>`).join("");
+  balanceSimulation.innerHTML = `<table><thead><tr><th>고도</th><th>근거</th><th>비행</th><th>구름/분</th><th>가치/분</th><th>연료</th><th>가공</th><th>다음 구간</th></tr></thead><tbody>${simulation.map((row) => `
+    <tr class="${row.tone}">
+      <td><b>${row.code}</b><small>${row.nextName}</small></td>
+      <td><em class="${row.source.toLowerCase()}">${row.source}${row.sampleCount ? ` ×${row.sampleCount}` : ""}</em></td>
+      <td>${balanceTime(row.flightSeconds)}</td>
+      <td>${row.harvestPerMinute.toFixed(1)}</td>
+      <td>◈${Math.round(row.valuePerMinute).toLocaleString()}</td>
+      <td>${Math.round(row.fuelUsedPercent)}%</td>
+      <td>${Math.round(row.processingSeconds)}s</td>
+      <td><strong>${row.projectedFlights}회 · ${row.projectedMinutes.toFixed(1)}분</strong><small>목표 ${row.targetMinutes}분</small></td>
+    </tr>`).join("")}</tbody></table>`;
   balanceMilestones.innerHTML = report.milestones.map((milestone) => {
     const overdue = milestone.seconds === null && report.elapsedSeconds > milestone.targetSeconds;
     const ratio = milestone.seconds === null ? report.elapsedSeconds / milestone.targetSeconds : milestone.seconds / milestone.targetSeconds;
@@ -1078,6 +1108,21 @@ if (balanceEnabled) {
 }
 balanceToggle.addEventListener("click", () => setBalanceOpen(!balancePanel.classList.contains("show")));
 balanceCloseButton.addEventListener("click", () => setBalanceOpen(false));
+balancePresets.addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-balance-preset]");
+  if (!button) return;
+  const mapRank = Number(button.dataset.balancePreset);
+  if (!game.startBalancePreset(mapRank)) return;
+  closeBaseOverlaysForLaunch();
+  setBalanceOpen(false);
+  renderBalancePanel();
+});
+balanceClearButton.addEventListener("click", () => {
+  game.clearBalanceSamples();
+  game.playUiSound("back");
+  renderBalancePanel();
+});
+balanceRestoreButton.addEventListener("click", () => window.location.reload());
 balanceExportButton.addEventListener("click", () => {
   const blob = new Blob([JSON.stringify(game.getBalanceReport(), null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -1813,6 +1858,22 @@ function closeFlightReport(): void {
   flightReportOverlay.classList.remove("show");
   flightReportOverlay.setAttribute("aria-hidden", "true");
   document.body.classList.remove("report-open");
+}
+
+function closeBaseOverlaysForLaunch(): void {
+  closeFlightReport();
+  pendingFlightReport = null;
+  pendingProcessingResult = null;
+  routeOverlay.classList.remove("show");
+  processingOverlay.classList.remove("show");
+  baseHub.classList.remove("show");
+  factoryOverlay.classList.remove("show");
+  factoryPanel.classList.remove("settled");
+  factoryReceipt.classList.remove("show");
+  document.body.classList.remove("returning");
+  document.body.classList.remove("base-open");
+  document.body.classList.add("launching");
+  window.setTimeout(() => document.body.classList.remove("launching"), 1850);
 }
 
 function accumulateProcessingResult(result: ProcessingEnqueueResult): ProcessingEnqueueResult {
@@ -2579,19 +2640,7 @@ routeList.addEventListener("click", (event) => {
 
   const button = target.closest<HTMLButtonElement>("[data-map]");
   if (!button || !game.launchFlight(Number(button.dataset.map))) return;
-  closeFlightReport();
-  pendingFlightReport = null;
-  pendingProcessingResult = null;
-  routeOverlay.classList.remove("show");
-  processingOverlay.classList.remove("show");
-  baseHub.classList.remove("show");
-  factoryOverlay.classList.remove("show");
-  factoryPanel.classList.remove("settled");
-  factoryReceipt.classList.remove("show");
-  document.body.classList.remove("returning");
-  document.body.classList.remove("base-open");
-  document.body.classList.add("launching");
-  window.setTimeout(() => document.body.classList.remove("launching"), 1850);
+  closeBaseOverlaysForLaunch();
 });
 skillTreeTabs.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-tree-tab]");

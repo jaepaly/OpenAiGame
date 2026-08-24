@@ -119,6 +119,35 @@ type BalanceFlightSample = {
   feverActivations: number;
   emergencyReturn: boolean;
 };
+type BalancePresetDefinition = {
+  day: number;
+  flight: number;
+  skillCount: number;
+  levels: Partial<Record<UpgradeId, number>>;
+  research: Partial<Record<ResearchId, number>>;
+};
+const BALANCE_HARVEST_TARGETS = [42, 38, 34, 32, 30, 28] as const;
+const BALANCE_SEGMENT_TARGETS = [7, 8, 10, 11, 12, 7] as const;
+const BALANCE_SKILL_SEQUENCE: RunSkillId[] = [
+  "overclock", "profitRain", "twinDrone", "auxTank",
+  "intakeServo", "comboCapacitor", "droneAI", "aeroDrive",
+  "wideIntake", "feverDrive", "chainBurst", "ecoThrusters",
+  "pressureChamber", "feverInjector", "relayBurst", "vacuumRecycler",
+  "massInduction", "stormCatalyst", "salvageProtocol", "fuelCondenser",
+  "blackHole", "goldenStorm", "droneFleet", "comboGenerator",
+  "eventHorizon", "sunStorm", "nanoSwarm", "recoveryReservoir",
+  "vacuumMomentum", "jackpotPulse", "swarmMatrix", "stormFuel",
+  "denseRadar", "yieldBoost", "cargoBay", "feverReserve",
+  "cycloneCore", "cascadeGrid", "stormDrones", "goldenVacuum", "chainReactor", "cargoCyclone",
+];
+const BALANCE_PRESETS: BalancePresetDefinition[] = [
+  { day: 1, flight: 2, skillCount: 0, levels: {}, research: {} },
+  { day: 2, flight: 2, skillCount: 8, levels: { power: 2, radius: 1, value: 1, conveyor: 1, hopper: 1 }, research: { logistics: 1 } },
+  { day: 3, flight: 2, skillCount: 16, levels: { power: 4, radius: 3, value: 3, drone: 1, insulation: 1, conveyor: 2, processingLine: 1, hopper: 2 }, research: { logistics: 1, refining: 1, forecasting: 1 } },
+  { day: 4, flight: 2, skillCount: 24, levels: { power: 6, radius: 5, value: 5, drone: 2, insulation: 2, conveyor: 4, processingLine: 1, hopper: 4 }, research: { logistics: 2, refining: 2, forecasting: 1 } },
+  { day: 5, flight: 2, skillCount: 32, levels: { power: 9, radius: 7, value: 8, drone: 4, insulation: 4, conveyor: 6, processingLine: 2, hopper: 6 }, research: { logistics: 3, refining: 3, forecasting: 2 } },
+  { day: 6, flight: 2, skillCount: 38, levels: { power: 12, radius: 10, value: 11, drone: 6, insulation: 6, conveyor: 9, processingLine: 3, hopper: 9 }, research: { logistics: 4, refining: 4, forecasting: 3 } },
+];
 const clampVolume = (value: number): number => Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
 const emptyCloudStock = (): Record<CloudKind, number> => ({ cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 });
 const freshProcessingState = (): ProcessingState => ({ jobs: [], completedCoins: 0, completedMaterials: emptyCloudStock(), totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now() });
@@ -291,6 +320,7 @@ export class CloudHarvestGame {
   private pacingMilestones: Partial<Record<PacingMilestone, number>> = {};
   private balanceFlightStartedAt = 0;
   private balanceFlights: BalanceFlightSample[] = [];
+  private balanceSandbox = false;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -367,6 +397,7 @@ export class CloudHarvestGame {
       diagnostics.push({ tone: "watch", title: moneyGate ? "코인 병목" : "납품 병목", detail: moneyGate ? "납품량보다 승급 자금이 늦습니다." : "승급 자금보다 현 고도 납품량이 늦습니다." });
     }
     return {
+      sandbox: this.balanceSandbox,
       elapsedSeconds: Math.round(this.pacingSeconds * 10) / 10,
       activeFlightSeconds: this.atFactory ? 0 : Math.max(0, Math.round((this.pacingSeconds - this.balanceFlightStartedAt) * 10) / 10),
       company: {
@@ -384,6 +415,160 @@ export class CloudHarvestGame {
       flights,
       diagnostics,
     };
+  }
+
+  getBalanceSimulation() {
+    return RANKS.map((rank, mapRank) => {
+      const preset = BALANCE_PRESETS[mapRank];
+      const presetSkills = new Set(BALANCE_SKILL_SEQUENCE.slice(0, preset.skillCount));
+      const hasSkill = (id: RunSkillId): number => presetSkills.has(id) ? 1 : 0;
+      const route = FLIGHT_ROUTES[rank.routeId];
+      const samples = this.balanceFlights.filter((flight) => flight.mapRank === mapRank);
+      const sampleAverage = (select: (sample: BalanceFlightSample) => number): number =>
+        samples.reduce((total, sample) => total + select(sample), 0) / Math.max(1, samples.length);
+      const fuelCapacity = 9 + (mapRank > 0 ? route.fuelBonus : 0)
+        + hasSkill("auxTank") * 3 + hasSkill("recoveryReservoir") * 3;
+      const recoveryLimit = hasSkill("fuelCondenser")
+        ? 3 + hasSkill("recoveryReservoir") * 4 + hasSkill("stormFuel") * 8
+        : 0;
+      const movementEfficiency = 1 - hasSkill("ecoThrusters") * .22;
+      const suctionEfficiency = 1 - hasSkill("vacuumRecycler") * .22;
+      const droneCount = (preset.levels.drone ?? 0) + hasSkill("twinDrone")
+        + hasSkill("droneFleet") * 2 + hasSkill("nanoSwarm") * 2;
+      const drainPerSecond = rank.fuelDrain * (
+        .55 * .32 * movementEfficiency
+        + .78 * .72 * suctionEfficiency
+        + Math.min(5, droneCount) * .018
+      );
+      const designFlightSeconds = Math.max(8, Math.min(120,
+        (fuelCapacity * .86 + recoveryLimit * .65) / Math.max(.05, drainPerSecond),
+      ));
+      const denseChance = Math.min(.72, .085 + mapRank * .018 + .035 + route.denseBonus
+        + hasSkill("denseRadar") * .03 + (preset.research.forecasting ?? 0) * .015);
+      const energizedWeight = rank.weights.electric + rank.weights.solar + rank.weights.aurora;
+      const rawCloudValue = CLOUD_ORDER.reduce((total, kind) => total + rank.weights[kind] * CLOUDS[kind].value, 0);
+      const permanentValue = (1 + (preset.levels.value ?? 0) * .24)
+        * (1 + (preset.research.refining ?? 0) * .05)
+        * route.valueMultiplier * (1 + hasSkill("yieldBoost") * .1);
+      const runValue = 1 + hasSkill("profitRain") * .4 + hasSkill("salvageProtocol") * .08;
+      const comboValue = 1.18 + mapRank * .08 + hasSkill("comboCapacitor") * .08 + hasSkill("vacuumMomentum") * .05;
+      const feverUptime = Math.min(.42, .05 + route.startingFever * .003
+        + hasSkill("feverDrive") * .12 + hasSkill("feverReserve") * .05);
+      const fullFeverValue = (hasSkill("goldenStorm") ? 1.5 : 1)
+        * (1 + hasSkill("jackpotPulse") * .15 + hasSkill("sunStorm") * .25 + hasSkill("goldenVacuum") * .2);
+      const feverValue = 1 + feverUptime * (fullFeverValue - 1);
+      const insulationValue = 1 + energizedWeight * (preset.levels.insulation ? .5 : 0);
+      const densityValue = 1 + denseChance * 2;
+      const designHarvestPerMinute = BALANCE_HARVEST_TARGETS[mapRank];
+      const designValuePerMinute = designHarvestPerMinute * rawCloudValue * permanentValue * runValue
+        * comboValue * feverValue * insulationValue * densityValue * rank.valueMultiplier;
+      const source = samples.length > 0 ? "LIVE" as const : "MODEL" as const;
+      const flightSeconds = source === "LIVE" ? sampleAverage((sample) => sample.durationSeconds) : designFlightSeconds;
+      const harvestPerMinute = source === "LIVE" ? sampleAverage((sample) => sample.harvestPerMinute) : designHarvestPerMinute;
+      const valuePerMinute = source === "LIVE" ? sampleAverage((sample) => sample.valuePerMinute) : designValuePerMinute;
+      const fuelUsedPercent = source === "LIVE" ? sampleAverage((sample) => sample.fuelUsedPercent) : 86;
+      const harvestPerFlight = harvestPerMinute * flightSeconds / 60;
+      const valuePerFlight = valuePerMinute * flightSeconds / 60;
+      const weightedProcessingSeconds = CLOUD_ORDER.reduce((total, kind) =>
+        total + rank.weights[kind] * PROCESSING_SECONDS[kind], 0);
+      const processingSpeed = 1 + (preset.levels.conveyor ?? 0) * .22
+        + (preset.research.refining ?? 0) * .04 + (preset.research.logistics ?? 0) * .02
+        + hasSkill("yieldBoost") * .25;
+      const processingLines = Math.min(6, 1 + (preset.levels.processingLine ?? 0) + hasSkill("swarmMatrix"));
+      const processingSeconds = harvestPerFlight * weightedProcessingSeconds * 1.35
+        / Math.max(.01, processingSpeed * processingLines);
+      const nextRank = RANKS[mapRank + 1];
+      const harvestFlights = nextRank ? Math.ceil(nextRank.requiredHarvest / Math.max(1, harvestPerFlight)) : 1;
+      const coinFlights = nextRank ? Math.ceil(nextRank.promotionCost / Math.max(1, valuePerFlight * 1.24)) : 1;
+      const projectedFlights = Math.max(harvestFlights, coinFlights);
+      const projectedMinutes = nextRank
+        ? projectedFlights * (flightSeconds + 38 + mapRank * 4) / 60
+        : (flightSeconds + 120) / 60;
+      const targetMinutes = BALANCE_SEGMENT_TARGETS[mapRank];
+      const paceRatio = projectedMinutes / targetMinutes;
+      const tone = paceRatio < .68 ? "fast" as const : paceRatio > 1.38 ? "slow" as const : "good" as const;
+      return {
+        mapRank, code: rank.code, name: rank.name, source, sampleCount: samples.length,
+        fuelCapacity, fuelUsedPercent, flightSeconds, harvestPerMinute, valuePerMinute,
+        harvestPerFlight, valuePerFlight, processingSeconds, projectedFlights, projectedMinutes,
+        targetMinutes, tone, nextName: nextRank?.name ?? "하늘 순환 복구",
+      };
+    });
+  }
+
+  startBalancePreset(mapRank: number): boolean {
+    if (!import.meta.env.DEV || !Number.isInteger(mapRank) || !RANKS[mapRank] || !BALANCE_PRESETS[mapRank]) return false;
+    const preset = BALANCE_PRESETS[mapRank];
+    const previousAudio = { sound: this.state.sound, musicVolume: this.state.musicVolume, sfxVolume: this.state.sfxVolume };
+    const nextState = structuredClone(INITIAL_STATE) as GameState;
+    nextState.sound = previousAudio.sound;
+    nextState.musicVolume = previousAudio.musicVolume;
+    nextState.sfxVolume = previousAudio.sfxVolume;
+    nextState.rank = mapRank;
+    nextState.selectedMap = mapRank;
+    nextState.levels = { ...nextState.levels, ...preset.levels };
+    nextState.research = { ...nextState.research, ...preset.research };
+    nextState.growthMission = { step: GROWTH_MISSIONS.length, safeReturns: 3, contractsSigned: 3, shipmentsClaimed: 3, rainHarvested: 12 };
+    const nextRank = RANKS[mapRank + 1];
+    nextState.money = Math.round((nextRank?.promotionCost ?? 180000) * .35);
+    nextState.totalEarned = Math.max(nextState.money, RANKS.slice(1, mapRank + 1).reduce((total, item) => total + item.promotionCost, 0));
+    nextState.rankHarvested = Math.round((nextRank?.requiredHarvest ?? 700) * .25);
+    nextState.harvested = RANKS.slice(1, mapRank + 1).reduce((total, item) => total + item.requiredHarvest, 0) + nextState.rankHarvested;
+    nextState.rankFlights = 1;
+    CLOUD_ORDER.forEach((kind, index) => {
+      nextState.materials[kind] = index <= mapRank ? Math.max(12, 70 + mapRank * 18 - index * 16) : 0;
+    });
+    const presetSkills = BALANCE_SKILL_SEQUENCE.slice(0, preset.skillCount);
+    presetSkills.forEach((id) => { nextState.career.skills[id] = 1; });
+    nextState.career.day = preset.day;
+    nextState.career.level = Math.max(1, presetSkills.length + 1);
+    nextState.career.xp = 0;
+    nextState.career.xpNext = 6 + presetSkills.length * 2;
+    const seen: StorySceneId[] = ["prologue", "firstReturn"];
+    if (mapRank >= 1) seen.push("rainFrontier");
+    if (mapRank >= 2) seen.push("rivalAftermath", "electricFrontier");
+    if (mapRank >= 3) seen.push("iceFrontier");
+    if (mapRank >= 4) seen.push("solarFrontier");
+    if (mapRank >= 5) seen.push("auroraFrontier");
+    nextState.story = {
+      seen, rivalBeaten: mapRank >= 2, electricSignalCleared: mapRank >= 3,
+      iceArchiveRecovered: mapRank >= 4, solarEngineDisabled: mapRank >= 5, skyRestored: false,
+    };
+    this.balanceSandbox = true;
+    this.state = nextState;
+    this.run = freshRunState(preset.day);
+    this.restoreCareerProgress();
+    this.run.flight = preset.flight;
+    this.run.materials = structuredClone(this.state.materials);
+    this.atFactory = true;
+    this.returning = false;
+    this.returnTimer = 0;
+    this.launching = false;
+    this.launchTimer = 0;
+    this.dayComplete = false;
+    this.storyPaused = false;
+    this.endingPaused = false;
+    this.menuPaused = false;
+    this.pausedForLevel = false;
+    this.pendingFlightReport = undefined;
+    this.flightStats = freshFlightStats();
+    this.pacingSeconds = [0, 420, 900, 1500, 2160, 2880][mapRank] ?? 0;
+    this.pacingMilestones = {};
+    (Object.keys(PACING_TARGETS) as PacingMilestone[]).forEach((id) => {
+      if (PACING_TARGETS[id] <= this.pacingSeconds) this.pacingMilestones[id] = PACING_TARGETS[id];
+    });
+    this.balanceFlightStartedAt = this.pacingSeconds;
+    const launched = this.launchFlight(mapRank);
+    if (launched) {
+      this.onRunChange(this.getRunState());
+      this.onToast(`DEV SANDBOX — ${RANKS[mapRank].code} 대표 성장 상태로 출격`, "success");
+    }
+    return launched;
+  }
+
+  clearBalanceSamples(): void {
+    if (!import.meta.env.DEV) return;
+    this.balanceFlights = [];
   }
 
   private recordBalanceFlight(report: FlightReport): void {
@@ -1224,6 +1409,10 @@ export class CloudHarvestGame {
   }
 
   reset(): void {
+    if (this.balanceSandbox) {
+      window.location.reload();
+      return;
+    }
     localStorage.removeItem(SAVE_KEY);
     this.state = structuredClone(INITIAL_STATE);
     this.state.processing = freshProcessingState();
@@ -4517,7 +4706,7 @@ export class CloudHarvestGame {
   private commit(): void {
     this.advanceGrowthMissions();
     this.syncCareerProgress();
-    localStorage.setItem(SAVE_KEY, JSON.stringify(this.state));
+    if (!this.balanceSandbox) localStorage.setItem(SAVE_KEY, JSON.stringify(this.state));
     this.onStateChange(this.getState());
   }
   private loadState(): GameState {
