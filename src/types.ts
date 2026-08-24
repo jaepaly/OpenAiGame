@@ -7,7 +7,7 @@ export type ResearchId = "logistics" | "refining" | "forecasting";
 export type InfiniteResearchId = "speed" | "power" | "fuel" | "drone" | "yield";
 export type StorySceneId =
   | "prologue" | "firstReturn" | "rainFrontier" | "rivalAftermath"
-  | "electricFrontier" | "iceFrontier" | "solarFrontier" | "auroraFrontier";
+  | "electricFrontier" | "iceFrontier" | "solarFrontier" | "auroraFrontier" | "epilogue";
 
 export interface CloudDefinition {
   kind: CloudKind;

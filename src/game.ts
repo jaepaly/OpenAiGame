@@ -23,7 +23,7 @@ type CascadeHarvest = { cloudId: number; delay: number; depth: number };
 type DroneBeam = { x: number; y: number; targetX: number; targetY: number };
 type HarvestLink = { x: number; y: number; targetX: number; targetY: number; life: number; maxLife: number; color: string };
 type HarvestSource = "manual" | "drone" | "cascade";
-type MusicScene = "title" | "factory" | "flight" | "fever" | "event" | "story" | "transition" | "pause";
+type MusicScene = "title" | "factory" | "flight" | "fever" | "event" | "story" | "ending" | "transition" | "pause";
 export type UiSoundCue = "tap" | "confirm" | "back" | "warning" | "processing" | "payout" | "return";
 type MusicProfile = {
   tempo: number;
@@ -56,6 +56,7 @@ const MUSIC_PROFILES: Record<MusicScene, MusicProfile> = {
   fever: { tempo: 154, root: 60, notes: [0, 7, 12, 16, 19, 16, 12, 7, 4, 11, 16, 19, 23, 19, 16, 11], bass: [0, 5, 9, 7], wave: "square", volume: .82 },
   event: { tempo: 132, root: 58, notes: [0, 3, 7, 10, 12, 10, 7, 3, 5, 8, 12, 15, 12, 8, 7, 3], bass: [0, 3, 5, 7], wave: "sawtooth", volume: .72 },
   story: { tempo: 74, root: 57, notes: [0, null, null, 7, null, 4, null, 11], bass: [0, 5, 0, 7], wave: "sine", volume: .42 },
+  ending: { tempo: 84, root: 60, notes: [0, 4, 7, 12, 11, 7, 4, 7, 9, 12, 16, 14, 12, 9, 7, 4], bass: [0, 5, 9, 7], wave: "triangle", volume: .56 },
   transition: { tempo: 140, root: 52, notes: [0, 7, 12, 16, 19, 24, 19, 16], bass: [0, 7, 9, 7], wave: "sawtooth", volume: .76 },
   pause: { tempo: 70, root: 55, notes: [0, null, 7, null, 4, null, 11, null], bass: [0, 5, 0, 7], wave: "sine", volume: .34 },
 };
@@ -194,6 +195,7 @@ export class CloudHarvestGame {
   private running = true;
   private pausedForLevel = false;
   private storyPaused = false;
+  private endingPaused = false;
   private titlePaused = false;
   private menuPaused = false;
   private player = { x: 480, y: 380, targetX: 480, targetY: 380 };
@@ -456,6 +458,14 @@ export class CloudHarvestGame {
 
   setStoryPaused(paused: boolean): void {
     this.storyPaused = paused;
+    this.pointer.active = false;
+    this.touchDirect = false;
+    this.keys.clear();
+    this.playerVelocity = { x: 0, y: 0 };
+  }
+
+  setEndingPaused(paused: boolean): void {
+    this.endingPaused = paused;
     this.pointer.active = false;
     this.touchDirect = false;
     this.keys.clear();
@@ -1120,6 +1130,7 @@ export class CloudHarvestGame {
     this.playerVelocity = { x: 0, y: 0 };
     this.pausedForLevel = false;
     this.storyPaused = false;
+    this.endingPaused = false;
     this.menuPaused = false;
     this.atFactory = false;
     this.returning = false;
@@ -1201,7 +1212,7 @@ export class CloudHarvestGame {
 
     const controlCodes = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight", "Space"]);
     window.addEventListener("keydown", (event) => {
-      if (!controlCodes.has(event.code) || this.atFactory || this.pausedForLevel || this.storyPaused || this.menuPaused) return;
+      if (!controlCodes.has(event.code) || this.atFactory || this.pausedForLevel || this.storyPaused || this.endingPaused || this.menuPaused) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("button, input, textarea, select")) return;
       event.preventDefault();
@@ -1340,10 +1351,10 @@ export class CloudHarvestGame {
     const dt = Math.min((time - this.lastTime) / 1000 || 0, 0.033);
     this.lastTime = time;
     this.updateAdaptiveAudio();
-    if (!this.storyPaused && !this.titlePaused && !this.menuPaused) this.pacingSeconds += dt;
+    if (!this.storyPaused && !this.endingPaused && !this.titlePaused && !this.menuPaused) this.pacingSeconds += dt;
     if (!this.titlePaused) this.updateProcessing(dt);
     if (!this.menuPaused && this.impactFreeze > 0) this.impactFreeze -= dt;
-    else if (!this.menuPaused && !this.pausedForLevel && !this.storyPaused && !this.titlePaused && (!this.atFactory || this.launching || this.returning)) this.update(dt);
+    else if (!this.menuPaused && !this.pausedForLevel && !this.storyPaused && !this.endingPaused && !this.titlePaused && (!this.atFactory || this.launching || this.returning)) this.update(dt);
     this.render(time / 1000);
     requestAnimationFrame((next) => this.frame(next));
   }
@@ -4486,6 +4497,7 @@ export class CloudHarvestGame {
   private getMusicScene(): MusicScene {
     if (this.titlePaused) return "title";
     if (this.menuPaused) return "pause";
+    if (this.endingPaused) return "ending";
     if (this.storyPaused) return "story";
     if (this.launching || this.returning) return "transition";
     if (this.atFactory) return "factory";
@@ -4534,10 +4546,10 @@ export class CloudHarvestGame {
   private updateEngineAudio(scene: MusicScene): void {
     if (!this.audioContext || !this.engineOscillator || !this.engineFilter || !this.engineGain) return;
     const now = this.audioContext.currentTime;
-    const suction = scene !== "title" && scene !== "factory" && scene !== "story" && this.isSuctionActive();
+    const suction = scene !== "title" && scene !== "factory" && scene !== "story" && scene !== "ending" && this.isSuctionActive();
     const moving = Math.hypot(this.playerVelocity.x, this.playerVelocity.y) > 28;
     const targetGain = scene === "transition" ? .028
-      : scene === "title" || scene === "factory" || scene === "story" || scene === "pause" ? .0001
+      : scene === "title" || scene === "factory" || scene === "story" || scene === "ending" || scene === "pause" ? .0001
       : suction ? (scene === "fever" ? .024 : .016)
       : moving ? .007
       : .0024;

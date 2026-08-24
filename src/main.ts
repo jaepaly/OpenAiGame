@@ -228,7 +228,7 @@ app.innerHTML = `
       </section>
 
       <nav class="base-hub" id="baseHub" aria-label="구름 수확 기지 시설">
-        <div class="base-hub-status"><small>DOCKING COMPLETE</small><strong id="baseHubStatus">화물 정산 완료 · 다음 작전을 준비하세요</strong></div>
+        <div class="base-hub-status"><small>DOCKING COMPLETE</small><strong id="baseHubStatus">화물 정산 완료 · 다음 작전을 준비하세요</strong><button class="final-directive-button" id="finalDirectiveButton" hidden><b id="finalDirectiveCode">FINAL DIRECTIVE</b><span id="finalDirectiveLabel">기상 순환망 복구</span><em>→</em></button></div>
         <button class="base-facility workshop" id="baseGarageButton"><b>MK · FACILITY 01</b><span>장비 정비소</span><small>영구 장비를 장착하고 강화합니다.</small><em>정비소 입장 →</em></button>
         <button class="base-facility blueprint" id="skillTreeButton"><b>TREE · FACILITY 02</b><span>특성 설계실</span><small>수확한 구름으로 시스템을 해금합니다.</small><em>특성 트리 열기 →</em></button>
         <button class="base-facility processing" id="processingFacilityButton"><b>PROC · FACILITY 03</b><span>구름 가공동</span><small>진행 중인 가공과 완성품을 관리합니다.</small><em>가공동 입장 →</em></button>
@@ -322,6 +322,35 @@ app.innerHTML = `
               </div>
             </article>
           </div>
+        </div>
+      </section>
+
+      <section class="ending-overlay" id="endingOverlay" role="dialog" aria-modal="true" aria-label="구름 수확 회사 엔딩" aria-hidden="true">
+        <div class="ending-weather" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><b></b><b></b><b></b></div>
+        <div class="ending-panel">
+          <header class="ending-heading">
+            <div class="ending-company-mark"><span>☁</span><i></i></div>
+            <div><span>OPEN SKY RESTORED // TRUE END</span><h2>43일 만의 비</h2><p>작은 수확 회사가 멈춰 있던 하늘을 다시 움직였습니다.</p></div>
+            <strong>THE SKY<br>IS OPEN</strong>
+          </header>
+          <section class="ending-stats" aria-label="회사 최종 기록">
+            <article><small>TOTAL HARVEST</small><strong id="endingHarvested">0</strong><span>구름 수확</span></article>
+            <article><small>LIFETIME VALUE</small><strong id="endingEarned">◈ 0</strong><span>누적 생산 가치</span></article>
+            <article><small>COMPANY AGE</small><strong id="endingDays">DAY 1</strong><span>운항 기록</span></article>
+            <article><small>BEST COMBO</small><strong id="endingCombo">×0</strong><span>최고 연속 수확</span></article>
+          </section>
+          <section class="ending-crew">
+            <article class="moka"><img src="${mokaNeutralPortrait}" alt="정비사 모카"><div><span>수석 정비사 모카</span><p>“회사는 살았고, 비행선도 아직 뜹니다. 그러면 내일도 출격해야죠.”</p></div></article>
+            <article class="sona"><img src="${sonaNeutralPortrait}" alt="관측 연구원 소나"><div><span>관측 연구원 소나</span><p>“순환망은 정상이에요. 이제 우리가 모은 구름이 필요한 곳으로 흐를 거예요.”</p></div></article>
+          </section>
+          <section class="ending-credits">
+            <header><span>SKY HARVEST COMPANY</span><strong>구름 수확 회사</strong><small>A GAME BUILT WITH OPENAI CODEX</small></header>
+            <div><p><small>GAME DIRECTION</small><b>PLAYER</b></p><p><small>DESIGN & DEVELOPMENT PARTNER</small><b>OPENAI CODEX</b></p><p><small>CHARACTER ART DIRECTION</small><b>PLAYER</b></p><p><small>PROCEDURAL AUDIO</small><b>WEB AUDIO SYSTEM</b></p></div>
+          </section>
+          <footer class="ending-actions">
+            <button id="endingReplayButton"><span>에필로그 다시 보기</span><small>STORY ARCHIVE</small></button>
+            <button class="continue" id="endingContinueButton"><span>끝없는 하늘로</span><small>무한 연구와 수확을 계속합니다</small><b>→</b></button>
+          </footer>
         </div>
       </section>
 
@@ -566,6 +595,9 @@ const skillTreeButton = required<HTMLButtonElement>("#skillTreeButton");
 const processingFacilityButton = required<HTMLButtonElement>("#processingFacilityButton");
 const baseHub = required<HTMLElement>("#baseHub");
 const baseHubStatus = required<HTMLElement>("#baseHubStatus");
+const finalDirectiveButton = required<HTMLButtonElement>("#finalDirectiveButton");
+const finalDirectiveCode = required<HTMLElement>("#finalDirectiveCode");
+const finalDirectiveLabel = required<HTMLElement>("#finalDirectiveLabel");
 const routeOverlay = required<HTMLElement>("#routeOverlay");
 const routeList = required<HTMLElement>("#routeList");
 const routeBackButton = required<HTMLButtonElement>("#routeBackButton");
@@ -609,6 +641,13 @@ const storySpeaker = required<HTMLElement>("#storySpeaker");
 const storyText = required<HTMLElement>("#storyText");
 const storyProgress = required<HTMLElement>("#storyProgress");
 const storyNextButton = required<HTMLButtonElement>("#storyNextButton");
+const endingOverlay = required<HTMLElement>("#endingOverlay");
+const endingHarvested = required<HTMLElement>("#endingHarvested");
+const endingEarned = required<HTMLElement>("#endingEarned");
+const endingDays = required<HTMLElement>("#endingDays");
+const endingCombo = required<HTMLElement>("#endingCombo");
+const endingReplayButton = required<HTMLButtonElement>("#endingReplayButton");
+const endingContinueButton = required<HTMLButtonElement>("#endingContinueButton");
 
 let toastTimer = 0;
 const showToast = (message: string, tone: "normal" | "success" | "warning" = "normal") => {
@@ -632,7 +671,11 @@ let infiniteResearchUnlockedPreviously = false;
 let pendingFlightReport: FlightReport | null = null;
 let pendingProcessingResult: ProcessingEnqueueResult | null = null;
 let flightReportDayComplete = false;
+let flightReportFinaleReady = false;
 let flightReportAnimation = 0;
+let endingOpen = false;
+let endingReturnToResearch = false;
+let endingAnimation = 0;
 
 type StoryTone = "narrator" | "moka" | "sona" | "rival";
 type StoryPortrait =
@@ -845,6 +888,17 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
       { speaker: "NARRATION", name: "구름 수확 회사", role: "FINAL SORTIE // READY", mark: "∞", tone: "narrator", text: "생존을 위해 시작한 첫 비행은 하늘을 되돌리기 위한 마지막 작전이 되었다. 수확선이 오로라 순환핵을 향해 기수를 돌렸다." },
     ],
   },
+  epilogue: {
+    chapter: "EPILOGUE // THE FIRST RAIN",
+    title: "43일 만의 비",
+    beats: [
+      { speaker: "NARRATION", name: "서부 7구역", role: "WEATHER CYCLE // RESTORED", mark: "☂", tone: "narrator", text: "인공 기압장이 멈춘 뒤 열세 시간. 메말랐던 도시의 창문에 첫 빗방울이 부딪혔다." },
+      { speaker: "소나", name: "관측 연구원 소나", role: "CITY WEATHER LINK", mark: "SN", tone: "sona", portrait: "sona-neutral", text: "강수량 정상, 지하 저수조 유입 확인. 우리가 되돌린 구름이 도시 전역에 비를 내리고 있어요. 정말로 해냈네요." },
+      { speaker: "모카", name: "정비사 모카", role: "SHIP MECHANIC // CO-FOUNDER", mark: "MK", tone: "moka", portrait: "moka-neutral", text: "빚 독촉장은 아직 열한 장 남았고 비행선은 또 삐걱거리지만… 이제 이 회사를 닫을 이유는 하나도 없겠어요." },
+      { speaker: "쾌청산업 관제", name: "쾌청산업", role: "ROUTE AUTHORITY // WITHDRAWN", mark: "QS", tone: "rival", text: "독점 항로 지정은 철회됐다. 구름 수확 회사의 순환 복구 기여를 공식 기록한다. 다음 하늘에서는 정식으로 경쟁하지." },
+      { speaker: "NARRATION", name: "구름 수확 회사", role: "TOMORROW'S FLIGHT PLAN", mark: "☁", tone: "narrator", text: "회사는 하늘을 구했고, 하늘은 회사를 살렸다. 그러나 격납고의 출격등은 꺼지지 않았다. 필요한 곳에 구름이 있는 한 수확은 계속될 것이다." },
+    ],
+  },
 };
 
 const storyQueue: StorySceneId[] = [];
@@ -904,9 +958,30 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("repo
     });
   }, 120);
 }
+if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("ending-preview")) {
+  window.setTimeout(() => {
+    (["prologue", "firstReturn", "rainFrontier", "rivalAftermath", "electricFrontier", "iceFrontier", "solarFrontier", "auroraFrontier", "epilogue"] as StorySceneId[])
+      .forEach((scene) => game.completeStoryScene(scene));
+    titleScreenOpen = false;
+    titleScreen.classList.remove("show");
+    titleScreen.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("title-open");
+    titleBlockedElements.forEach((element) => { element.inert = false; });
+    game.setTitlePaused(false);
+    const previewState = game.getState();
+    previewState.harvested = 5284;
+    previewState.totalEarned = 184500;
+    previewState.bestCombo = 83;
+    previewState.rank = 5;
+    previewState.career.day = 16;
+    previewState.story.skyRestored = true;
+    previewState.story.seen.push("epilogue");
+    showEnding(previewState, false);
+  }, 120);
+}
 
 function openPauseMenu(): void {
-  if (pauseMenuOpen || titleScreenOpen || storyOverlay.classList.contains("show")) return;
+  if (pauseMenuOpen || titleScreenOpen || storyOverlay.classList.contains("show") || endingOpen) return;
   pauseMenuOpen = true;
   pausePreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   game.unlockAudio();
@@ -971,7 +1046,9 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (storyOverlay.classList.contains("show")) return;
-  if (flightReportOverlay.classList.contains("show")) {
+  if (endingOpen) {
+    closeEnding();
+  } else if (flightReportOverlay.classList.contains("show")) {
     closeFlightReport();
     baseHub.classList.add("show");
   } else if (garageOverlay.classList.contains("show")) {
@@ -1118,6 +1195,58 @@ function finishStoryScene(): void {
     syncStoryTriggers(game.getState());
     openNextStoryScene();
   }, 280);
+  if (completed === "epilogue") window.setTimeout(() => showEnding(game.getState(), endingReturnToResearch), 420);
+}
+
+function showEnding(state: GameState = game.getState(), returnToResearch = false): void {
+  endingOpen = true;
+  endingReturnToResearch = returnToResearch;
+  game.setEndingPaused(true);
+  document.body.classList.add("ending-open");
+  endingOverlay.classList.add("show");
+  endingOverlay.setAttribute("aria-hidden", "false");
+  const start = performance.now();
+  window.cancelAnimationFrame(endingAnimation);
+  const animateEndingStats = (now: number) => {
+    const progress = Math.min(1, (now - start) / 1050);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    endingHarvested.textContent = Math.round(state.harvested * eased).toLocaleString();
+    endingEarned.textContent = `◈ ${Math.round(state.totalEarned * eased).toLocaleString()}`;
+    endingDays.textContent = `DAY ${Math.max(1, Math.round(state.career.day * eased))}`;
+    endingCombo.textContent = `×${Math.round(state.bestCombo * eased).toLocaleString()}`;
+    if (progress < 1) endingAnimation = window.requestAnimationFrame(animateEndingStats);
+  };
+  endingAnimation = window.requestAnimationFrame(animateEndingStats);
+  game.playUiSound("payout");
+  window.setTimeout(() => endingContinueButton.focus({ preventScroll: true }), 520);
+}
+
+function closeEnding(restoreDestination = true): void {
+  if (!endingOpen) return;
+  endingOpen = false;
+  window.cancelAnimationFrame(endingAnimation);
+  endingOverlay.classList.remove("show");
+  endingOverlay.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("ending-open");
+  game.setEndingPaused(false);
+  if (!restoreDestination) return;
+  if (endingReturnToResearch && game.isDayComplete()) {
+    baseHub.classList.remove("show");
+    factoryOverlay.classList.add("show");
+    factoryPanel.classList.add("settled");
+    factoryReceipt.classList.add("show");
+    factoryOverlay.scrollTop = 0;
+  } else {
+    baseHub.classList.add("show");
+  }
+  endingReturnToResearch = false;
+}
+
+function replayEpilogue(): void {
+  if (activeStoryScene || storyTransitioning) return;
+  closeEnding(false);
+  storyQueue.unshift("epilogue");
+  openNextStoryScene();
 }
 
 const SKILL_NODE_LAYOUT: Record<RunSkillId, { x: number; y: number; branch: "vacuum" | "fever" | "automation" | "navigation" | "hybrid" }> = {
@@ -1556,6 +1685,8 @@ function accumulateProcessingResult(result: ProcessingEnqueueResult): Processing
 function showFlightReport(report: FlightReport, processingResult: ProcessingEnqueueResult | null, dayComplete = false): void {
   pendingFlightReport = report;
   flightReportDayComplete = dayComplete;
+  const companyState = game.getState();
+  flightReportFinaleReady = companyState.story.skyRestored && !companyState.story.seen.includes("epilogue");
   const rank = RANKS[report.mapRank];
   const route = FLIGHT_ROUTES[report.routeId];
   const fuelPercent = Math.round(report.fuelEfficiency * 100);
@@ -1636,8 +1767,8 @@ function showFlightReport(report: FlightReport, processingResult: ProcessingEnqu
   flightReportDialogue.textContent = dialogue;
   flightReportProcessing.disabled = false;
   flightReportSkill.disabled = report.emergencyReturn || report.totalCollected <= 0;
-  flightReportContinue.querySelector<HTMLElement>("span")!.textContent = dayComplete ? "오늘의 연구 선택" : "다음 비행 준비";
-  flightReportContinue.querySelector<HTMLElement>("small")!.textContent = dayComplete ? "DAY 성과 확정" : "출격 고도 선택";
+  flightReportContinue.querySelector<HTMLElement>("span")!.textContent = flightReportFinaleReady ? "에필로그 보기" : dayComplete ? "오늘의 연구 선택" : "다음 비행 준비";
+  flightReportContinue.querySelector<HTMLElement>("small")!.textContent = flightReportFinaleReady ? "43일 만의 비 · TRUE END" : dayComplete ? "DAY 성과 확정" : "출격 고도 선택";
 
   const start = performance.now();
   window.cancelAnimationFrame(flightReportAnimation);
@@ -1952,6 +2083,12 @@ function renderState(state: GameState): void {
   launchButton.classList.toggle("open-sky-ready", openSkyEventReady);
   const launchFacilityCode = launchButton.querySelector<HTMLElement>("b");
   if (launchFacilityCode) launchFacilityCode.textContent = openSkyEventReady ? "GO! · OPEN SKY" : solarEventReady ? "GO! · PRESSURE ENGINE" : archiveEventReady ? "GO! · FROZEN ARCHIVE" : signalEventReady ? "GO! · SIGNAL TRACE" : rivalEventReady ? "GO! · LIVE RACE" : "GO · FACILITY 04";
+  const epilogueSeen = state.story.seen.includes("epilogue");
+  finalDirectiveButton.hidden = state.rank < 5;
+  finalDirectiveButton.classList.toggle("restored", state.story.skyRestored);
+  finalDirectiveButton.classList.toggle("unread", state.story.skyRestored && !epilogueSeen);
+  finalDirectiveCode.textContent = state.story.skyRestored ? epilogueSeen ? "OPEN SKY ARCHIVE" : "FINAL REPORT READY" : "FINAL DIRECTIVE";
+  finalDirectiveLabel.textContent = state.story.skyRestored ? epilogueSeen ? "엔딩 기록 다시 보기" : "43일 만의 비 확인" : "오로라 순환망 복구";
   renderGrowthMission(state);
 
   cloudLegend.innerHTML = (Object.values(CLOUDS))
@@ -2107,6 +2244,12 @@ flightReportSkill.addEventListener("click", () => {
 });
 flightReportContinue.addEventListener("click", () => {
   closeFlightReport();
+  if (flightReportFinaleReady) {
+    endingReturnToResearch = flightReportDayComplete;
+    flightReportFinaleReady = false;
+    queueStoryScene("epilogue");
+    return;
+  }
   if (flightReportDayComplete) {
     baseHub.classList.remove("show");
     factoryOverlay.classList.add("show");
@@ -2224,6 +2367,20 @@ launchButton.addEventListener("click", () => {
   renderRouteList();
   routeOverlay.classList.add("show");
 });
+finalDirectiveButton.addEventListener("click", () => {
+  const state = game.getState();
+  if (!state.story.skyRestored) {
+    renderRouteList();
+    routeOverlay.classList.add("show");
+    return;
+  }
+  if (!state.story.seen.includes("epilogue")) {
+    endingReturnToResearch = game.isDayComplete();
+    queueStoryScene("epilogue");
+    return;
+  }
+  showEnding(state, false);
+});
 routeBackButton.addEventListener("click", () => routeOverlay.classList.remove("show"));
 routeList.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
@@ -2303,11 +2460,25 @@ skillTreeCloseButton.addEventListener("click", () => {
   skillHoverCard.classList.remove("show");
 });
 skillTreeButton.addEventListener("click", () => game.openSkillTree());
+endingContinueButton.addEventListener("click", () => closeEnding());
+endingReplayButton.addEventListener("click", replayEpilogue);
+endingOverlay.addEventListener("keydown", (event) => {
+  if (event.key !== "Tab") return;
+  const focusable = [endingReplayButton, endingContinueButton];
+  if (event.shiftKey && document.activeElement === focusable[0]) {
+    event.preventDefault();
+    focusable[1].focus();
+  } else if (!event.shiftKey && document.activeElement === focusable[1]) {
+    event.preventDefault();
+    focusable[0].focus();
+  }
+});
 resetButton.addEventListener("click", () => {
   if (window.confirm("현재 회사의 진행 상황을 지우고 처음부터 시작할까요?")) {
     document.body.classList.remove("base-open");
     processingOverlay.classList.remove("show");
     closeFlightReport();
+    closeEnding(false);
     pendingFlightReport = null;
     pendingProcessingResult = null;
     game.reset();
