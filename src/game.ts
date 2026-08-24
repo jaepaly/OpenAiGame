@@ -23,6 +23,16 @@ type CascadeHarvest = { cloudId: number; delay: number; depth: number };
 type DroneBeam = { x: number; y: number; targetX: number; targetY: number };
 type HarvestLink = { x: number; y: number; targetX: number; targetY: number; life: number; maxLife: number; color: string };
 type HarvestSource = "manual" | "drone" | "cascade";
+type MusicScene = "title" | "factory" | "flight" | "fever" | "event" | "story" | "transition";
+export type UiSoundCue = "tap" | "confirm" | "back" | "warning" | "processing" | "payout" | "return";
+type MusicProfile = {
+  tempo: number;
+  root: number;
+  notes: readonly (number | null)[];
+  bass: readonly number[];
+  wave: OscillatorType;
+  volume: number;
+};
 
 export function getPromotionEventGate(state: GameState): { label: string; done: boolean } | null {
   switch (state.rank) {
@@ -38,6 +48,16 @@ const MAX_PARTICLES = 850;
 const MAX_FLOATING_TEXTS = 30;
 const MAX_SHOCKWAVES = 24;
 const MAX_HARVEST_LINKS = 24;
+
+const MUSIC_PROFILES: Record<MusicScene, MusicProfile> = {
+  title: { tempo: 86, root: 60, notes: [0, null, 7, 11, 4, null, 12, 7], bass: [0, 5, 0, 7], wave: "triangle", volume: .72 },
+  factory: { tempo: 96, root: 55, notes: [0, 4, null, 7, 11, 7, 4, null], bass: [0, 0, 5, 7], wave: "triangle", volume: .62 },
+  flight: { tempo: 118, root: 57, notes: [0, 4, 7, 11, 7, 4, 12, 11, 9, 7, 4, 7, 11, 14, 12, 7], bass: [0, 5, 9, 7], wave: "triangle", volume: .68 },
+  fever: { tempo: 154, root: 60, notes: [0, 7, 12, 16, 19, 16, 12, 7, 4, 11, 16, 19, 23, 19, 16, 11], bass: [0, 5, 9, 7], wave: "square", volume: .82 },
+  event: { tempo: 132, root: 58, notes: [0, 3, 7, 10, 12, 10, 7, 3, 5, 8, 12, 15, 12, 8, 7, 3], bass: [0, 3, 5, 7], wave: "sawtooth", volume: .72 },
+  story: { tempo: 74, root: 57, notes: [0, null, null, 7, null, 4, null, 11], bass: [0, 5, 0, 7], wave: "sine", volume: .42 },
+  transition: { tempo: 140, root: 52, notes: [0, 7, 12, 16, 19, 24, 19, 16], bass: [0, 7, 9, 7], wave: "sawtooth", volume: .76 },
+};
 
 const SAVE_KEY = "cloud-harvest-inc-save-v2";
 const RIVAL_RACE_TARGET = 5;
@@ -223,6 +243,16 @@ export class CloudHarvestGame {
   private fuelPity = 0;
   private fuelPickupFlash = 0;
   private audioContext?: AudioContext;
+  private audioMaster?: GainNode;
+  private musicGain?: GainNode;
+  private sfxGain?: GainNode;
+  private engineOscillator?: OscillatorNode;
+  private engineFilter?: BiquadFilterNode;
+  private engineGain?: GainNode;
+  private audioUnlocked = false;
+  private musicScene: MusicScene = "title";
+  private musicNextNoteAt = 0;
+  private musicStep = 0;
   private lastHarvestToneAt = 0;
   private discoveredCloudKinds = new Set<CloudKind>(["cumulus"]);
   private discoveryBanner?: { kind: CloudKind; life: number; maxLife: number };
@@ -335,6 +365,55 @@ export class CloudHarvestGame {
 
   getSkillCost(id: RunSkillId) { return { ...RUN_SKILL_COSTS[id] }; }
 
+  unlockAudio(): void {
+    if (!this.state.sound) return;
+    this.ensureAudio();
+    if (!this.audioContext) return;
+    this.audioUnlocked = true;
+    if (this.audioContext.state === "suspended") void this.audioContext.resume();
+    if (this.musicNextNoteAt <= 0) this.musicNextNoteAt = this.audioContext.currentTime + .04;
+  }
+
+  getAudioStatus(): { enabled: boolean; unlocked: boolean; context: AudioContextState | "idle"; scene: MusicScene } {
+    return {
+      enabled: this.state.sound,
+      unlocked: this.audioUnlocked,
+      context: this.audioContext?.state ?? "idle",
+      scene: this.musicScene,
+    };
+  }
+
+  playUiSound(cue: UiSoundCue): void {
+    if (!this.state.sound) return;
+    this.unlockAudio();
+    switch (cue) {
+      case "tap":
+        this.playSynthTone(420, .045, .022, "triangle", 0, 510);
+        break;
+      case "back":
+        this.playSynthTone(510, .07, .028, "triangle", 0, 330);
+        break;
+      case "warning":
+        this.playSynthTone(185, .12, .042, "square");
+        this.playSynthTone(138, .16, .035, "square", .13);
+        break;
+      case "processing":
+        [330, 495, 660].forEach((frequency, index) => this.playSynthTone(frequency, .09, .034, "triangle", index * .055));
+        break;
+      case "payout":
+        [523, 659, 784, 1047].forEach((frequency, index) => this.playSynthTone(frequency, .16, .042, "triangle", index * .055));
+        break;
+      case "return":
+        this.playSynthTone(620, .16, .04, "triangle", 0, 310);
+        this.playSynthTone(310, .22, .03, "sine", .1, 240);
+        break;
+      default:
+        this.playSynthTone(440, .08, .03, "triangle", 0, 660);
+        this.playSynthTone(660, .12, .035, "triangle", .055, 880);
+        break;
+    }
+  }
+
   setStoryPaused(paused: boolean): void {
     this.storyPaused = paused;
     this.pointer.active = false;
@@ -406,6 +485,7 @@ export class CloudHarvestGame {
     this.player.targetX = this.getWorldWidth() * .5;
     this.player.targetY = this.getWorldHeight() * .53;
     this.onToast("관제탑 승인 — 기지 복귀 항로 진입", "success");
+    this.playUiSound("return");
     return true;
   }
 
@@ -418,10 +498,11 @@ export class CloudHarvestGame {
     if (ratio <= .15 && this.fuelWarningStage < 2) {
       this.fuelWarningStage = 2;
       this.onToast("연료 15% — 지금 귀환하지 않으면 화물을 모두 잃습니다!", "warning");
-      this.playTone(135, .18);
+      this.playUiSound("warning");
     } else if (ratio <= .35 && this.fuelWarningStage < 1) {
       this.fuelWarningStage = 1;
       this.onToast("연료 35% — 욕심낼지 귀환할지 결정하세요.", "warning");
+      this.playSynthTone(245, .1, .028, "square");
     }
     if (this.run.fuel > 0) return false;
     this.triggerEmergencyReturn();
@@ -452,7 +533,8 @@ export class CloudHarvestGame {
     this.player.targetY = this.getWorldHeight() * .53;
     this.onRunChange(this.getRunState());
     this.onToast(`연료 고갈! 수확한 구름 ${discarded}개 폐기 · 비상 견인 귀환`, "warning");
-    this.playTone(92, .36);
+    this.playSynthTone(126, .32, .055, "sawtooth", 0, 72);
+    this.playSynthTone(92, .4, .04, "square", .1, 58);
   }
 
   isAtFactory(): boolean { return this.atFactory; }
@@ -525,6 +607,7 @@ export class CloudHarvestGame {
     this.onToast(cargoRemaining > 0
       ? `${contract.name}에 ${materialsStored}개 배정 · 남은 화물 ${cargoRemaining}개`
       : `${jobs.length}개 가공 묶음 적재 — 비행 중에도 자동 처리됩니다.`, "success");
+    this.playUiSound("processing");
     return {
       payout, batches: jobs.length, seconds: estimate.seconds, materialsStored, cargoRemaining, flightCompleted,
       units: materialsStored,
@@ -547,7 +630,7 @@ export class CloudHarvestGame {
     this.markPacingMilestone("firstShipment");
     this.commit();
     this.onRunChange(this.getRunState());
-    this.playChord();
+    this.playUiSound("payout");
     const materialLabel = materialUnits > 0 ? ` · 특성 재료 +${materialUnits}` : "";
     this.onToast(`완성품 출하! ◈ ${coins.toLocaleString()} 정산${materialLabel}`, "success");
     return { coins, materials, materialUnits };
@@ -786,6 +869,7 @@ export class CloudHarvestGame {
     this.commit();
     this.onRunChange(this.getRunState());
     this.onToast(`${RESEARCH_PROJECTS[id].name} 연구 완료 — 모든 성장 유지 · DAY ${nextDay}`, "success");
+    this.playUiSound("confirm");
     return true;
   }
 
@@ -930,7 +1014,17 @@ export class CloudHarvestGame {
     return true;
   }
 
-  toggleSound(): void { this.state.sound = !this.state.sound; this.commit(); }
+  toggleSound(): void {
+    this.state.sound = !this.state.sound;
+    if (this.state.sound) {
+      this.unlockAudio();
+      this.setMasterVolume(.82, .04);
+      this.playUiSound("confirm");
+    } else {
+      this.setMasterVolume(0, .05);
+    }
+    this.commit();
+  }
 
   reset(): void {
     localStorage.removeItem(SAVE_KEY);
@@ -962,6 +1056,9 @@ export class CloudHarvestGame {
     this.formationCooldown = 4;
     this.clearCascade();
     for (let i = 0; i < Math.min(18, this.getMaxClouds()); i += 1) this.spawnCloud(true);
+    this.musicStep = 0;
+    this.musicNextNoteAt = this.audioContext ? this.audioContext.currentTime + .04 : 0;
+    this.setMasterVolume(.82, .05);
     this.emitAll();
     this.onToast("새로운 수확 비행선이 출격했습니다.");
   }
@@ -970,6 +1067,10 @@ export class CloudHarvestGame {
     this.state.processing.lastUpdatedAt = Date.now();
     this.commit();
     this.running = false;
+    if (this.engineOscillator) {
+      try { this.engineOscillator.stop(); } catch { /* 이미 종료된 오실레이터 */ }
+    }
+    if (this.audioContext && this.audioContext.state !== "closed") void this.audioContext.close();
   }
 
   private bindInput(): void {
@@ -1150,6 +1251,7 @@ export class CloudHarvestGame {
     if (!this.running) return;
     const dt = Math.min((time - this.lastTime) / 1000 || 0, 0.033);
     this.lastTime = time;
+    this.updateAdaptiveAudio();
     if (!this.storyPaused && !this.titlePaused) this.pacingSeconds += dt;
     if (!this.titlePaused) this.updateProcessing(dt);
     if (this.impactFreeze > 0) this.impactFreeze -= dt;
@@ -2420,7 +2522,7 @@ export class CloudHarvestGame {
     this.impactFlash = Math.min(.92, .22 + this.combo * .025 + cascadeDepth * .025);
     this.impactFreeze = this.run.feverActive ? 0 : Math.min(.025, .008 + this.combo * .0006);
     this.comboPunch = 1;
-    this.playHarvestTone(cloud.kind, cascadeDepth);
+    this.playHarvestTone(cloud.kind, cascadeDepth, cloud.dense);
     if (countsForRivalRace) {
       this.addFloatingText({
         x: cloud.x,
@@ -4238,7 +4340,157 @@ export class CloudHarvestGame {
     } catch { return structuredClone(INITIAL_STATE); }
   }
 
-  private ensureAudio(): void { if (this.state.sound && !this.audioContext) this.audioContext = new AudioContext(); }
+  private ensureAudio(): void {
+    if (!this.state.sound || this.audioContext) return;
+    const context = new AudioContext();
+    const master = context.createGain();
+    const music = context.createGain();
+    const sfx = context.createGain();
+    const compressor = context.createDynamicsCompressor();
+    const engine = context.createOscillator();
+    const engineFilter = context.createBiquadFilter();
+    const engineGain = context.createGain();
+    master.gain.value = .82;
+    music.gain.value = MUSIC_PROFILES[this.musicScene].volume;
+    sfx.gain.value = .9;
+    compressor.threshold.value = -16;
+    compressor.knee.value = 16;
+    compressor.ratio.value = 5;
+    compressor.attack.value = .003;
+    compressor.release.value = .18;
+    engine.type = "sawtooth";
+    engine.frequency.value = 72;
+    engineFilter.type = "lowpass";
+    engineFilter.frequency.value = 620;
+    engineFilter.Q.value = 1.4;
+    engineGain.gain.value = .0001;
+    music.connect(master);
+    sfx.connect(master);
+    engine.connect(engineFilter).connect(engineGain).connect(sfx);
+    master.connect(compressor).connect(context.destination);
+    engine.start();
+    this.audioContext = context;
+    this.audioMaster = master;
+    this.musicGain = music;
+    this.sfxGain = sfx;
+    this.engineOscillator = engine;
+    this.engineFilter = engineFilter;
+    this.engineGain = engineGain;
+    this.musicNextNoteAt = context.currentTime + .04;
+  }
+
+  private setMasterVolume(volume: number, seconds = .08): void {
+    if (!this.audioContext || !this.audioMaster) return;
+    const now = this.audioContext.currentTime;
+    this.audioMaster.gain.cancelScheduledValues(now);
+    this.audioMaster.gain.setValueAtTime(Math.max(.0001, this.audioMaster.gain.value), now);
+    this.audioMaster.gain.exponentialRampToValueAtTime(Math.max(.0001, volume), now + seconds);
+  }
+
+  private getMusicScene(): MusicScene {
+    if (this.titlePaused) return "title";
+    if (this.storyPaused) return "story";
+    if (this.launching || this.returning) return "transition";
+    if (this.atFactory) return "factory";
+    const eventActive = this.run.rivalRace.status === "active"
+      || this.run.signalTrace.status === "active"
+      || this.run.archiveRelay.status === "active"
+      || this.run.solarEngine.status === "active"
+      || this.run.openSky.status === "active";
+    if (this.run.feverActive) return "fever";
+    if (eventActive) return "event";
+    return "flight";
+  }
+
+  private updateAdaptiveAudio(): void {
+    const intendedScene = this.getMusicScene();
+    if (import.meta.env.DEV) {
+      this.canvas.dataset.audioScene = intendedScene;
+      this.canvas.dataset.audioState = this.audioContext?.state ?? "idle";
+      this.canvas.dataset.audioUnlocked = String(this.audioUnlocked);
+    }
+    if (!this.state.sound || !this.audioUnlocked || !this.audioContext || !this.musicGain || this.audioContext.state !== "running") return;
+    const context = this.audioContext;
+    const nextScene = intendedScene;
+    this.updateEngineAudio(nextScene);
+    if (nextScene !== this.musicScene) {
+      this.musicScene = nextScene;
+      this.musicStep = 0;
+      this.musicNextNoteAt = context.currentTime + .075;
+      const target = MUSIC_PROFILES[nextScene].volume;
+      this.musicGain.gain.cancelScheduledValues(context.currentTime);
+      this.musicGain.gain.setValueAtTime(this.musicGain.gain.value, context.currentTime);
+      this.musicGain.gain.linearRampToValueAtTime(target, context.currentTime + .28);
+    }
+    const profile = MUSIC_PROFILES[this.musicScene];
+    const stepDuration = 60 / profile.tempo / 2;
+    if (this.musicNextNoteAt < context.currentTime - .2) this.musicNextNoteAt = context.currentTime + .03;
+    let scheduled = 0;
+    while (this.musicNextNoteAt < context.currentTime + .14 && scheduled < 4) {
+      this.scheduleMusicStep(profile, this.musicStep, this.musicNextNoteAt, stepDuration);
+      this.musicNextNoteAt += stepDuration;
+      this.musicStep += 1;
+      scheduled += 1;
+    }
+  }
+
+  private updateEngineAudio(scene: MusicScene): void {
+    if (!this.audioContext || !this.engineOscillator || !this.engineFilter || !this.engineGain) return;
+    const now = this.audioContext.currentTime;
+    const suction = scene !== "title" && scene !== "factory" && scene !== "story" && this.isSuctionActive();
+    const moving = Math.hypot(this.playerVelocity.x, this.playerVelocity.y) > 28;
+    const targetGain = scene === "transition" ? .028
+      : scene === "title" || scene === "factory" || scene === "story" ? .0001
+      : suction ? (scene === "fever" ? .024 : .016)
+      : moving ? .007
+      : .0024;
+    const targetFrequency = scene === "transition" ? 148 : scene === "fever" ? 116 : suction ? 94 : moving ? 82 : 68;
+    const targetCutoff = scene === "transition" ? 1800 : scene === "fever" ? 1450 : suction ? 1050 : moving ? 760 : 520;
+    this.engineGain.gain.setTargetAtTime(targetGain, now, .045);
+    this.engineOscillator.frequency.setTargetAtTime(targetFrequency, now, .06);
+    this.engineFilter.frequency.setTargetAtTime(targetCutoff, now, .06);
+  }
+
+  private scheduleMusicStep(profile: MusicProfile, step: number, start: number, stepDuration: number): void {
+    const altitudeLift = this.musicScene === "flight" || this.musicScene === "event" || this.musicScene === "fever"
+      ? Math.min(5, this.run.mapRank)
+      : 0;
+    const note = profile.notes[step % profile.notes.length];
+    if (note !== null) {
+      const melodyFrequency = this.midiToFrequency(profile.root + altitudeLift + note);
+      const melodyDuration = this.musicScene === "story" ? stepDuration * 1.8 : stepDuration * .82;
+      this.scheduleMusicVoice(melodyFrequency, start, melodyDuration, this.musicScene === "fever" ? .025 : .021, profile.wave, this.musicScene === "event" ? 2100 : 2800);
+    }
+    if (step % 4 === 0) {
+      const bassStep = profile.bass[Math.floor(step / 4) % profile.bass.length];
+      this.scheduleMusicVoice(this.midiToFrequency(profile.root - 24 + bassStep), start, stepDuration * 3.3, .024, "sine", 720);
+    }
+    if (this.musicScene === "fever" && step % 2 === 0) {
+      this.scheduleMusicVoice(step % 4 === 0 ? 74 : 92, start, .075, .018, "sine", 260);
+    }
+  }
+
+  private scheduleMusicVoice(frequency: number, start: number, duration: number, volume: number, wave: OscillatorType, cutoff: number): void {
+    if (!this.audioContext || !this.musicGain) return;
+    const oscillator = this.audioContext.createOscillator();
+    const filter = this.audioContext.createBiquadFilter();
+    const gain = this.audioContext.createGain();
+    oscillator.type = wave;
+    oscillator.frequency.setValueAtTime(frequency, start);
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(cutoff, start);
+    filter.Q.value = .45;
+    gain.gain.setValueAtTime(.0001, start);
+    gain.gain.exponentialRampToValueAtTime(volume, start + .018);
+    gain.gain.exponentialRampToValueAtTime(.0001, start + duration);
+    oscillator.connect(filter).connect(gain).connect(this.musicGain);
+    oscillator.start(start);
+    oscillator.stop(start + duration + .025);
+    oscillator.addEventListener("ended", () => { oscillator.disconnect(); filter.disconnect(); gain.disconnect(); }, { once: true });
+  }
+
+  private midiToFrequency(note: number): number { return 440 * Math.pow(2, (note - 69) / 12); }
+
   private playTransitionWhoosh(rising: boolean): void {
     if (!this.state.sound) return;
     this.ensureAudio();
@@ -4273,8 +4525,9 @@ export class CloudHarvestGame {
     toneGain.gain.setValueAtTime(.0001, now);
     toneGain.gain.exponentialRampToValueAtTime(.072, now + .055);
     toneGain.gain.exponentialRampToValueAtTime(.0001, now + duration);
-    source.connect(filter).connect(noiseGain).connect(context.destination);
-    tone.connect(toneGain).connect(context.destination);
+    const output = this.sfxGain ?? context.destination;
+    source.connect(filter).connect(noiseGain).connect(output);
+    tone.connect(toneGain).connect(output);
     source.start(now);
     tone.start(now);
     source.stop(now + duration);
@@ -4283,22 +4536,51 @@ export class CloudHarvestGame {
       source.disconnect(); filter.disconnect(); noiseGain.disconnect(); tone.disconnect(); toneGain.disconnect();
     }, { once: true });
   }
-  private playHarvestTone(kind: CloudKind, cascadeDepth: number): void {
+  private playHarvestTone(kind: CloudKind, cascadeDepth: number, dense: boolean): void {
+    if (this.combo === 10 || (this.combo >= 25 && this.combo % 25 === 0)) this.playComboStinger();
     const now = performance.now();
-    const minimumGap = cascadeDepth > 0 ? 58 : 38;
+    const minimumGap = this.run.feverActive ? 30 : cascadeDepth > 0 ? 52 : 38;
     if (now - this.lastHarvestToneAt < minimumGap) return;
     this.lastHarvestToneAt = now;
-    const baseFrequency: Record<CloudKind, number> = { cumulus: 390, rain: 270, electric: 610, ice: 740, solar: 880, aurora: 1040 };
-    this.playTone(baseFrequency[kind] + Math.min(360, this.combo * 18 + cascadeDepth * 34), cascadeDepth > 0 ? .035 : .055);
+    const tier = CLOUD_ORDER.indexOf(kind);
+    const comboScale = [0, 2, 4, 7, 9, 12, 14, 16];
+    const comboNote = comboScale[Math.min(comboScale.length - 1, Math.floor(Math.max(0, this.combo - 1) / 2))];
+    const baseMidi: Record<CloudKind, number> = { cumulus: 66, rain: 62, electric: 71, ice: 74, solar: 78, aurora: 81 };
+    const wave: Record<CloudKind, OscillatorType> = { cumulus: "sine", rain: "triangle", electric: "square", ice: "triangle", solar: "sawtooth", aurora: "sine" };
+    const frequency = this.midiToFrequency(baseMidi[kind] + comboNote + Math.min(5, cascadeDepth));
+    this.playSynthTone(frequency, cascadeDepth > 0 ? .045 : .075, .032 + tier * .003, wave[kind], 0, frequency * 1.035);
+    if (dense || tier >= 3) this.playSynthTone(frequency * (dense ? 1.5 : 2), .09, dense ? .026 : .018, "triangle", .018, frequency * (dense ? 1.62 : 2.06));
   }
+
+  private playComboStinger(): void {
+    const root = this.combo >= 50 ? 523 : 440;
+    [1, 1.25, 1.5, 2].forEach((ratio, index) => this.playSynthTone(root * ratio, .13, .03, "triangle", index * .035));
+  }
+
   private playTone(frequency: number, duration: number): void {
+    this.playSynthTone(frequency, duration);
+  }
+
+  private playSynthTone(frequency: number, duration: number, volume = .045, wave: OscillatorType = "sine", delay = 0, endFrequency?: number): void {
     if (!this.state.sound) return;
-    this.ensureAudio(); if (!this.audioContext) return;
-    const oscillator = this.audioContext.createOscillator(); const gain = this.audioContext.createGain();
-    oscillator.type = "sine"; oscillator.frequency.value = frequency;
-    gain.gain.setValueAtTime(.045, this.audioContext.currentTime); gain.gain.exponentialRampToValueAtTime(.001, this.audioContext.currentTime + duration);
-    oscillator.connect(gain).connect(this.audioContext.destination); oscillator.start(); oscillator.stop(this.audioContext.currentTime + duration);
+    this.ensureAudio();
+    if (!this.audioContext || !this.sfxGain) return;
+    const start = this.audioContext.currentTime + Math.max(0, delay);
+    const oscillator = this.audioContext.createOscillator();
+    const gain = this.audioContext.createGain();
+    oscillator.type = wave;
+    oscillator.frequency.setValueAtTime(Math.max(20, frequency), start);
+    if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), start + duration);
+    gain.gain.setValueAtTime(.0001, start);
+    gain.gain.exponentialRampToValueAtTime(volume, start + Math.min(.012, duration * .2));
+    gain.gain.exponentialRampToValueAtTime(.0001, start + duration);
+    oscillator.connect(gain).connect(this.sfxGain);
+    oscillator.start(start);
+    oscillator.stop(start + duration + .015);
     oscillator.addEventListener("ended", () => { oscillator.disconnect(); gain.disconnect(); }, { once: true });
   }
-  private playChord(): void { [392,523,659,784].forEach((frequency,index) => window.setTimeout(() => this.playTone(frequency,.18), index * 70)); }
+  private playChord(): void {
+    const root = this.midiToFrequency(60 + Math.min(5, this.run.mapRank));
+    [1, 1.25, 1.5, 2].forEach((ratio, index) => this.playSynthTone(root * ratio, .2, .038, "triangle", index * .065));
+  }
 }

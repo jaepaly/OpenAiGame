@@ -752,6 +752,14 @@ document.body.classList.add("title-open");
 titleBlockedElements.forEach((element) => { element.inert = true; });
 const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast, enqueueRadioCall);
 game.setTitlePaused(true);
+document.addEventListener("pointerdown", () => game.unlockAudio(), { once: true, capture: true });
+document.addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button");
+  if (!button || button.disabled || button === soundButton || button === titleStartButton || button === titleNewButton) return;
+  if (button.matches("[data-upgrade], [data-skill], [data-infinite-research], [data-contract], [data-map], [data-promote-map], [data-research], #claimProcessingButton, #returnButton, #promoteButton")) return;
+  const isBack = /close|back|skip/i.test(button.id) || button.getAttribute("aria-label")?.includes("닫기");
+  game.playUiSound(isBack ? "back" : "tap");
+});
 window.requestAnimationFrame(() => titleStartButton.focus({ preventScroll: true }));
 if (import.meta.env.DEV) {
   const developmentWindow = window as typeof window & {
@@ -766,6 +774,8 @@ window.setTimeout(() => { if (!titleScreenOpen) syncStoryTriggers(game.getState(
 
 function closeTitleScreen(): void {
   if (!titleScreenOpen) return;
+  game.unlockAudio();
+  game.playUiSound("confirm");
   titleScreenOpen = false;
   titleScreen.classList.add("leaving");
   document.body.classList.remove("title-open");
