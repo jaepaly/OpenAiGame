@@ -846,6 +846,7 @@ body.base-open .promotion-card { top: 28px; }
 .skill-requirement { min-height: 30px; margin: -4px 0 10px; padding: 6px 8px; display: grid; place-items: center; color: #17394a; background: var(--skill-color); border-radius: 8px; font-size: 9px; font-weight: 900; text-align: center; }
 
 .skill-tree-panel { width: min(1770px,calc(100vw - 16px)); max-width: none; max-height: 98vh; overflow: auto; padding: 24px 26px 20px; background: linear-gradient(180deg,#f7fbf8,#dfeeed); }
+.skill-tree-toolbar { position: sticky; z-index: 30; top: -1px; min-height: 62px; margin: -7px -9px 10px; padding: 8px 10px 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 18px; background: linear-gradient(180deg,rgba(247,251,248,.99),rgba(232,243,241,.97)); border-bottom: 2px solid #b7d5d5; border-radius: 18px 18px 12px 12px; box-shadow: 0 8px 18px rgba(10,48,61,.13); backdrop-filter: blur(10px); }
 .skill-tree-panel > h2 { color: #14394b; font-size: clamp(28px,3vw,42px); }
 .skill-tree-panel > p { color: #58727e; font-size: 15px; font-weight: 800; }
 .skill-tree-tabs { width: min(780px,100%); margin: 17px auto 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -862,7 +863,7 @@ body.base-open .promotion-card { top: 28px; }
 .skill-tree-tabs button:disabled { opacity: .52; cursor: not-allowed; box-shadow: 0 4px 0 #aec2c3; }
 .skill-tree-tabs.infinite-unlocked #infiniteResearchTab:not(.active) { animation: infinite-tab-pulse 1.2s ease-in-out infinite; }
 @keyframes infinite-tab-pulse { 50% { transform: translateY(-3px); filter: brightness(1.18); } }
-.skill-point-bank { position: sticky; top: -1px; z-index: 12; margin: 14px auto 16px; padding: 10px 16px; display: grid; grid-template-columns: auto minmax(260px,1fr) 1.2fr; align-items: center; gap: 14px; color: #d9edf0; background: rgba(12,42,57,.96); border: 2px solid #75c8d2; border-radius: 17px; text-align: left; box-shadow: 0 7px 18px rgba(9,35,47,.24); backdrop-filter: blur(8px); }
+.skill-point-bank { position: sticky; top: 65px; z-index: 12; margin: 14px auto 16px; padding: 10px 16px; display: grid; grid-template-columns: auto minmax(260px,1fr) 1.2fr; align-items: center; gap: 14px; color: #d9edf0; background: rgba(12,42,57,.96); border: 2px solid #75c8d2; border-radius: 17px; text-align: left; box-shadow: 0 7px 18px rgba(9,35,47,.24); backdrop-filter: blur(8px); }
 .skill-point-bank > span { font: 900 13px "Outfit",sans-serif; letter-spacing: .12em; }
 .skill-point-bank > strong { min-height: 48px; padding: 6px 14px; display: grid; place-items: center; color: #183c4d; background: #fff36f; border: 3px solid white; border-radius: 14px; box-shadow: 0 4px 0 #d1aa43; font: 900 17px/1.25 "Outfit",sans-serif; text-align: center; white-space: normal; }
 .skill-point-bank > small { color: #afcbd0; font-size: 14px; font-weight: 800; }
@@ -963,7 +964,7 @@ body.base-open .promotion-card { top: 28px; }
 .network-node.locked { opacity: .42; filter: grayscale(.72); }
 .network-node.locked::before { content: "LOCK"; position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; color: #dbe9ea; background: rgba(4,20,29,.42); border-radius: 16px; font: 900 13px "Outfit",sans-serif; letter-spacing: .16em; }
 .network-node:disabled { cursor: default; }
-.skill-tree-close { position: static; display: block; width: min(520px,100%); min-height: 58px; margin: 26px auto 5px; padding: 12px 18px; color: white; background: #285e73; border: 3px solid #75c8d2; border-radius: 15px; box-shadow: 0 5px 0 #17394a; font-size: 17px; font-weight: 900; cursor: pointer; }
+.skill-tree-close { flex: 0 0 auto; width: auto; min-height: 48px; margin: 0; padding: 10px 17px; color: white; background: #285e73; border: 3px solid #75c8d2; border-radius: 15px; box-shadow: 0 5px 0 #17394a; font-size: 16px; font-weight: 900; cursor: pointer; }
 .skill-tree-close:hover { transform: translateY(-3px); background: #33758c; }
 .skill-hover-card { position: fixed; z-index: 80; left: 0; top: 0; width: min(330px,calc(100vw - 24px)); padding: 16px 18px; display: flex; flex-direction: column; color: #eaffff; background: rgba(5,24,34,.98); border: 3px solid var(--skill-color,#7ff5df); border-radius: 18px; box-shadow: 0 9px 0 #03131c,0 20px 40px rgba(0,0,0,.42); opacity: 0; pointer-events: none; transform: translateY(7px) scale(.97); transition: opacity .12s ease,transform .12s ease; }
 .skill-hover-card.show { opacity: 1; transform: translateY(0) scale(1); }
@@ -1420,13 +1421,16 @@ body.base-open .promotion-card { top: 28px; }
 
 @media (max-width: 680px) {
   .skill-tree-panel { padding: 15px 8px 14px; }
+  .skill-tree-toolbar { margin: -5px -2px 9px; padding: 7px 7px 9px 10px; gap: 8px; }
+  .skill-tree-toolbar .levelup-kicker { max-width: 42%; font-size: 9px; line-height: 1.25; }
+  .skill-tree-close { min-height: 44px; padding: 8px 10px; font-size: 12px; }
+  .skill-point-bank { top: 61px; }
   .skill-tree-panel > h2 { font-size: 27px; }
   .skill-tree-panel > p { padding-inline: 8px; font-size: 13px; }
   .skill-tree-network-shell { border-width: 3px; border-radius: 17px; }
   .skill-tree-legend { padding: 10px 12px; }
   .skill-tree-legend > strong { display: none; }
   .skill-tree-scroll-hint { text-align: left; padding-left: 20px; }
-  .skill-tree-close { margin-top: 15px; }
 }
 
 /* Workshop panels own their scroll area so cards never cover the heading or footer. */

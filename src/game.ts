@@ -687,7 +687,8 @@ export class CloudHarvestGame {
       this.state.musicVolume = normalized;
       if (this.audioContext && this.musicGain) {
         const now = this.audioContext.currentTime;
-        const target = MUSIC_PROFILES[this.musicScene].volume * normalized;
+        const scene = this.getMusicScene();
+        const target = this.isMusicSceneAudible(scene) ? MUSIC_PROFILES[scene].volume * normalized : 0;
         this.musicGain.gain.cancelScheduledValues(now);
         this.musicGain.gain.setValueAtTime(this.musicGain.gain.value, now);
         this.musicGain.gain.linearRampToValueAtTime(target, now + .06);
@@ -4841,12 +4842,18 @@ export class CloudHarvestGame {
     return "flight";
   }
 
+  private isMusicSceneAudible(scene: MusicScene): boolean {
+    return scene !== "flight" && scene !== "event";
+  }
+
   private updateAdaptiveAudio(): void {
     const intendedScene = this.getMusicScene();
+    const musicAudible = this.isMusicSceneAudible(intendedScene);
     if (import.meta.env.DEV) {
       this.canvas.dataset.audioScene = intendedScene;
       this.canvas.dataset.audioState = this.audioContext?.state ?? "idle";
       this.canvas.dataset.audioUnlocked = String(this.audioUnlocked);
+      this.canvas.dataset.musicMode = musicAudible ? "music" : "sfx-only";
     }
     if (!this.state.sound || !this.audioUnlocked || !this.audioContext || !this.musicGain || this.audioContext.state !== "running") return;
     const context = this.audioContext;
@@ -4856,10 +4863,14 @@ export class CloudHarvestGame {
       this.musicScene = nextScene;
       this.musicStep = 0;
       this.musicNextNoteAt = context.currentTime + .075;
-      const target = MUSIC_PROFILES[nextScene].volume * this.state.musicVolume;
+      const target = musicAudible ? MUSIC_PROFILES[nextScene].volume * this.state.musicVolume : 0;
       this.musicGain.gain.cancelScheduledValues(context.currentTime);
       this.musicGain.gain.setValueAtTime(this.musicGain.gain.value, context.currentTime);
       this.musicGain.gain.linearRampToValueAtTime(target, context.currentTime + .28);
+    }
+    if (!musicAudible) {
+      this.musicNextNoteAt = context.currentTime + .075;
+      return;
     }
     const profile = MUSIC_PROFILES[this.musicScene];
     const stepDuration = 60 / profile.tempo / 2;

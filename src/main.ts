@@ -243,7 +243,7 @@ app.innerHTML = `
         <button class="base-facility launch" id="launchButton"><b>GO · FACILITY 04</b><span>출격 관제문</span><small>해금한 고도를 선택하고 다음 비행을 시작합니다.</small><em>출격지 선택 →</em></button>
       </nav>
 
-      <section class="route-overlay" id="routeOverlay" aria-label="출격 고도 선택">
+      <section class="route-overlay" id="routeOverlay" aria-label="출격 고도 선택" aria-hidden="true">
         <div class="route-panel">
           <header><span>NEXT SORTIE // ALTITUDE SELECT</span><h2>어느 하늘로 출격할까요?</h2><p>높은 고도일수록 연료가 빠르게 줄지만 희귀 구름과 수익 배율이 커집니다.</p></header>
           <div class="route-list" id="routeList"></div>
@@ -291,7 +291,10 @@ app.innerHTML = `
 
       <section class="levelup-overlay" id="levelUpOverlay" aria-label="장기 성장 특성 트리">
         <div class="levelup-panel skill-tree-panel">
-          <span class="levelup-kicker">CAREER SYSTEM BLUEPRINT // 42 NODE GRID</span>
+          <header class="skill-tree-toolbar">
+            <span class="levelup-kicker">CAREER SYSTEM BLUEPRINT // 42 NODE GRID</span>
+            <button class="skill-tree-close" id="skillTreeCloseButton">← 기지로 돌아가기 · ESC</button>
+          </header>
           <h2 id="levelUpTitle">회사의 장기 성장 설계도</h2>
           <p id="levelUpDescription">연결된 노드를 따라 영구 유지되는 수확 장치를 조립하세요.</p>
           <nav class="skill-tree-tabs" id="skillTreeTabs" aria-label="장기 성장 연구 탭">
@@ -300,7 +303,6 @@ app.innerHTML = `
           </nav>
           <div class="skill-point-bank"><span id="skillPointLabel">CLOUD STOCKPILE</span><strong id="skillPointCount">☁ 0 · 🌧 0 · ⚡ 0 · ❄ 0 · ☀ 0 · ✦ 0</strong><small id="skillPointHint">상위 구름 1개는 바로 아래 단계 구름 4개 가치로 자동 대체됩니다.</small></div>
           <div class="skill-choices skill-tree-network-shell" id="skillChoices"></div>
-          <button class="skill-tree-close" id="skillTreeCloseButton">기지로 돌아가기</button>
         </div>
       </section>
       <aside class="skill-hover-card" id="skillHoverCard" aria-hidden="true"></aside>
@@ -374,7 +376,7 @@ app.innerHTML = `
             <header><span>AUDIO MIXER</span><strong>각 소리를 따로 조절하세요</strong></header>
             <label class="volume-control" for="musicVolume">
               <span class="volume-icon">♫</span>
-              <span class="volume-copy"><strong>배경 음악</strong><small>항로·피버·스토리 음악</small></span>
+              <span class="volume-copy"><strong>배경 음악</strong><small>타이틀·기지·스토리·피버 음악</small></span>
               <input id="musicVolume" type="range" min="0" max="100" step="1" value="70">
               <output id="musicVolumeValue" for="musicVolume">70%</output>
             </label>
@@ -651,6 +653,7 @@ const finalDirectiveLabel = required<HTMLElement>("#finalDirectiveLabel");
 const routeOverlay = required<HTMLElement>("#routeOverlay");
 const routeList = required<HTMLElement>("#routeList");
 const routeBackButton = required<HTMLButtonElement>("#routeBackButton");
+routeOverlay.inert = true;
 const flightReportOverlay = required<HTMLElement>("#flightReportOverlay");
 const flightReportCode = required<HTMLElement>("#flightReportCode");
 const flightReportTitle = required<HTMLElement>("#flightReportTitle");
@@ -1254,7 +1257,7 @@ window.addEventListener("keydown", (event) => {
   } else if (processingOverlay.classList.contains("show")) {
     processingOverlay.classList.remove("show");
   } else if (routeOverlay.classList.contains("show")) {
-    routeOverlay.classList.remove("show");
+    closeRouteSelector();
   } else if (levelUpOverlay.classList.contains("show")) {
     game.closeSkillTree();
     levelUpOverlay.classList.remove("show");
@@ -1376,17 +1379,7 @@ const FRONTIER_STORY_RANKS: Partial<Record<StorySceneId, number>> = {
 function revealUnlockedRoute(sceneId: StorySceneId): void {
   const unlockedRank = FRONTIER_STORY_RANKS[sceneId];
   if (unlockedRank === undefined || !game.isAtFactory() || game.getState().rank < unlockedRank) return;
-  document.body.classList.remove("garage-open");
-  document.body.classList.add("base-open");
-  garageOverlay.classList.remove("show");
-  processingOverlay.classList.remove("show");
-  factoryOverlay.classList.remove("show");
-  baseHub.classList.add("show");
-  renderRouteList();
-  routeOverlay.classList.add("show");
-  window.requestAnimationFrame(() => {
-    routeList.querySelector<HTMLButtonElement>(`[data-map="${unlockedRank}"]`)?.focus({ preventScroll: true });
-  });
+  openRouteSelector(unlockedRank);
 }
 
 function advanceStory(): void {
@@ -1889,7 +1882,7 @@ function closeBaseOverlaysForLaunch(): void {
   closeFlightReport();
   pendingFlightReport = null;
   pendingProcessingResult = null;
-  routeOverlay.classList.remove("show");
+  closeRouteSelector();
   processingOverlay.classList.remove("show");
   baseHub.classList.remove("show");
   factoryOverlay.classList.remove("show");
@@ -2117,7 +2110,7 @@ function showLevelUp(_pendingPicks: number): void {
   const infiniteTabHint = infiniteResearchTab.querySelector<HTMLElement>("small");
   if (infiniteTabHint) infiniteTabHint.textContent = finiteTreeComplete ? "반복 가능한 극후반 성장" : `특성 ${investedNodes} / ${Object.keys(RUN_SKILLS).length}`;
   skillTreeTabs.classList.toggle("infinite-unlocked", finiteTreeComplete);
-  skillTreeCloseButton.textContent = "기지로 돌아가기";
+  skillTreeCloseButton.textContent = "← 기지로 돌아가기 · ESC";
 
   if (activeSkillTreeTab === "infinite" && finiteTreeComplete) {
     const mass = cloudMass(stock);
@@ -2529,9 +2522,7 @@ flightReportContinue.addEventListener("click", () => {
     factoryOverlay.scrollTop = 0;
     return;
   }
-  baseHub.classList.add("show");
-  renderRouteList();
-  routeOverlay.classList.add("show");
+  openRouteSelector();
 });
 flightReportOverlay.addEventListener("keydown", (event) => {
   if (event.key !== "Tab") return;
@@ -2634,15 +2625,38 @@ function renderRouteList(): void {
   }).join("");
 }
 
-launchButton.addEventListener("click", () => {
+function closeRouteSelector(): void {
+  routeOverlay.classList.remove("show");
+  routeOverlay.setAttribute("aria-hidden", "true");
+  routeOverlay.inert = true;
+}
+
+function openRouteSelector(focusRank = game.getState().selectedMap): void {
+  if (!game.isAtFactory() || game.isDayComplete()) return;
+  closeFlightReport();
+  document.body.classList.remove("garage-open");
+  document.body.classList.add("base-open");
+  garageOverlay.classList.remove("show");
+  processingOverlay.classList.remove("show");
+  factoryOverlay.classList.remove("show");
+  if (levelUpOverlay.classList.contains("show")) game.closeSkillTree();
+  levelUpOverlay.classList.remove("show");
+  skillHoverCard.classList.remove("show");
+  baseHub.classList.add("show");
   renderRouteList();
+  routeOverlay.inert = false;
+  routeOverlay.setAttribute("aria-hidden", "false");
   routeOverlay.classList.add("show");
-});
+  window.requestAnimationFrame(() => {
+    routeList.querySelector<HTMLButtonElement>(`[data-map="${focusRank}"]`)?.focus({ preventScroll: true });
+  });
+}
+
+launchButton.addEventListener("click", () => openRouteSelector());
 finalDirectiveButton.addEventListener("click", () => {
   const state = game.getState();
   if (!state.story.skyRestored) {
-    renderRouteList();
-    routeOverlay.classList.add("show");
+    openRouteSelector();
     return;
   }
   if (!state.story.seen.includes("epilogue")) {
@@ -2652,7 +2666,10 @@ finalDirectiveButton.addEventListener("click", () => {
   }
   showEnding(state, false);
 });
-routeBackButton.addEventListener("click", () => routeOverlay.classList.remove("show"));
+routeBackButton.addEventListener("click", () => {
+  closeRouteSelector();
+  launchButton.focus({ preventScroll: true });
+});
 routeList.addEventListener("click", (event) => {
   const target = event.target as HTMLElement;
   const unlockButton = target.closest<HTMLButtonElement>("[data-promote-map]");
