@@ -48,6 +48,7 @@ const MAX_PARTICLES = 850;
 const MAX_FLOATING_TEXTS = 30;
 const MAX_SHOCKWAVES = 24;
 const MAX_HARVEST_LINKS = 24;
+const MAX_CASCADE_HARVESTS_PER_FRAME = 12;
 
 const MUSIC_PROFILES: Record<MusicScene, MusicProfile> = {
   title: { tempo: 86, root: 60, notes: [0, null, 7, 11, 4, null, 12, 7], bass: [0, 5, 0, 7], wave: "triangle", volume: .72 },
@@ -126,8 +127,9 @@ type BalancePresetDefinition = {
   levels: Partial<Record<UpgradeId, number>>;
   research: Partial<Record<ResearchId, number>>;
 };
-const BALANCE_HARVEST_TARGETS = [42, 38, 34, 32, 30, 28] as const;
+const BALANCE_HARVEST_TARGETS = [42, 38, 360, 660, 500, 650] as const;
 const BALANCE_SEGMENT_TARGETS = [7, 8, 10, 11, 12, 7] as const;
+const BALANCE_STORY_OVERHEAD = [2.2, 1, 1.2, 1.3, 1.4, 2.5] as const;
 const BALANCE_SKILL_SEQUENCE: RunSkillId[] = [
   "overclock", "profitRain", "twinDrone", "auxTank",
   "intakeServo", "comboCapacitor", "droneAI", "aeroDrive",
@@ -240,6 +242,7 @@ export class CloudHarvestGame {
   private dpr = 1;
   private lastTime = 0;
   private spawnTimer = 0;
+  private cloudFloorBudget = 2;
   private cloudId = 0;
   private formationId = 0;
   private formationCooldown = 4;
@@ -379,7 +382,7 @@ export class CloudHarvestGame {
     const processingBacklogSeconds = processingWork / Math.max(.01, this.getProcessingSpeed() * this.getProcessingLineCount());
     const moneyProgress = nextRank ? Math.min(1, this.state.money / Math.max(1, nextRank.promotionCost)) : 1;
     const harvestProgress = nextRank ? Math.min(1, this.state.rankHarvested / Math.max(1, nextRank.requiredHarvest)) : 1;
-    const targetHarvestPerMinute = [42, 38, 34, 32, 30, 28][latest?.mapRank ?? this.run.mapRank] ?? 28;
+    const targetHarvestPerMinute = BALANCE_HARVEST_TARGETS[latest?.mapRank ?? this.run.mapRank] ?? 130;
     const diagnostics: { tone: "good" | "watch" | "risk"; title: string; detail: string }[] = [];
     if (latest) {
       diagnostics.push(latest.harvestPerMinute >= targetHarvestPerMinute
@@ -427,12 +430,12 @@ export class CloudHarvestGame {
       const sampleAverage = (select: (sample: BalanceFlightSample) => number): number =>
         samples.reduce((total, sample) => total + select(sample), 0) / Math.max(1, samples.length);
       const fuelCapacity = 9 + (mapRank > 0 ? route.fuelBonus : 0)
-        + hasSkill("auxTank") * 3 + hasSkill("recoveryReservoir") * 3;
+        + hasSkill("auxTank") * 3 + hasSkill("recoveryReservoir") * 6;
       const recoveryLimit = hasSkill("fuelCondenser")
-        ? 3 + hasSkill("recoveryReservoir") * 4 + hasSkill("stormFuel") * 8
+        ? 8 + hasSkill("recoveryReservoir") * 14 + hasSkill("stormFuel") * 40
         : 0;
-      const movementEfficiency = 1 - hasSkill("ecoThrusters") * .22;
-      const suctionEfficiency = 1 - hasSkill("vacuumRecycler") * .22;
+      const movementEfficiency = 1 - hasSkill("ecoThrusters") * .35;
+      const suctionEfficiency = 1 - hasSkill("vacuumRecycler") * .35;
       const droneCount = (preset.levels.drone ?? 0) + hasSkill("twinDrone")
         + hasSkill("droneFleet") * 2 + hasSkill("nanoSwarm") * 2;
       const drainPerSecond = rank.fuelDrain * (
@@ -440,8 +443,9 @@ export class CloudHarvestGame {
         + .78 * .72 * suctionEfficiency
         + Math.min(5, droneCount) * .018
       );
+      const recoveryRealization = hasSkill("stormFuel") ? .78 : hasSkill("comboGenerator") ? .58 : .38;
       const designFlightSeconds = Math.max(8, Math.min(120,
-        (fuelCapacity * .86 + recoveryLimit * .65) / Math.max(.05, drainPerSecond),
+        (fuelCapacity * .86 + recoveryLimit * recoveryRealization) / Math.max(.05, drainPerSecond),
       ));
       const denseChance = Math.min(.72, .085 + mapRank * .018 + .035 + route.denseBonus
         + hasSkill("denseRadar") * .03 + (preset.research.forecasting ?? 0) * .015);
@@ -482,8 +486,8 @@ export class CloudHarvestGame {
       const coinFlights = nextRank ? Math.ceil(nextRank.promotionCost / Math.max(1, valuePerFlight * 1.24)) : 1;
       const projectedFlights = Math.max(harvestFlights, coinFlights);
       const projectedMinutes = nextRank
-        ? projectedFlights * (flightSeconds + 38 + mapRank * 4) / 60
-        : (flightSeconds + 120) / 60;
+        ? projectedFlights * (flightSeconds + 38 + mapRank * 4) / 60 + BALANCE_STORY_OVERHEAD[mapRank]
+        : (Math.max(flightSeconds, OPEN_SKY_SECONDS) + 120) / 60 + BALANCE_STORY_OVERHEAD[mapRank];
       const targetMinutes = BALANCE_SEGMENT_TARGETS[mapRank];
       const paceRatio = projectedMinutes / targetMinutes;
       const tone = paceRatio < .68 ? "fast" as const : paceRatio > 1.38 ? "slow" as const : "good" as const;
@@ -857,7 +861,7 @@ export class CloudHarvestGame {
 
   private consumeFuel(amount: number): boolean {
     if (amount <= 0 || this.atFactory || this.returning || this.launching) return false;
-    const feverEfficiency = this.run.feverActive && this.run.skills.cargoCyclone ? .72 : 1;
+    const feverEfficiency = this.run.feverActive && this.run.skills.cargoCyclone ? .62 : 1;
     const altitudeDrain = RANKS[this.run.mapRank].fuelDrain;
     this.run.fuel = Math.max(0, this.run.fuel - amount * feverEfficiency * altitudeDrain);
     const ratio = this.run.fuel / Math.max(1, this.getFuelCapacity());
@@ -1198,6 +1202,7 @@ export class CloudHarvestGame {
     this.keys.clear();
     this.playerVelocity = { x: 0, y: 0 };
     this.clouds = [];
+    this.cloudFloorBudget = 2;
     this.formationId = 0;
     this.particles = [];
     this.texts = [];
@@ -1440,6 +1445,7 @@ export class CloudHarvestGame {
     this.goldenFront = false;
     this.goldenFrontClaimed = false;
     this.clouds = [];
+    this.cloudFloorBudget = 2;
     this.formationId = 0;
     this.combo = 0;
     this.droneBeams = [];
@@ -1689,8 +1695,8 @@ export class CloudHarvestGame {
     const movementLoad = this.updatePlayerMovement(dt);
     this.updateAimDirection(dt);
     const suctionLoad = this.isSuctionActive() ? .72 : 0;
-    const movementEfficiency = 1 - this.run.skills.ecoThrusters * .22;
-    const suctionEfficiency = 1 - this.run.skills.vacuumRecycler * .22;
+    const movementEfficiency = 1 - this.run.skills.ecoThrusters * .35;
+    const suctionEfficiency = 1 - this.run.skills.vacuumRecycler * .35;
     if (this.consumeFuel((movementLoad * .32 * movementEfficiency + suctionLoad * suctionEfficiency) * dt)) return;
     this.overload = Math.max(0, this.overload - dt);
     this.shockToastCooldown = Math.max(0, this.shockToastCooldown - dt);
@@ -1793,7 +1799,7 @@ export class CloudHarvestGame {
       this.commit();
       this.bankLevelUps();
     }
-    this.replenishCloudFloor();
+    this.replenishCloudFloor(dt);
 
     this.particles = this.particles.filter((particle) => {
       particle.life -= dt;
@@ -2906,7 +2912,8 @@ export class CloudHarvestGame {
     if (cloud.kind === "rain") this.state.growthMission.rainHarvested += 1;
     if (source === "manual") this.tryRecoverFuel(cloud);
     const baseXp = { cumulus: 2, rain: 5, electric: 9, ice: 14, solar: 22, aurora: 34 }[cloud.kind];
-    const xp = cloud.dense ? baseXp * 2 : baseXp;
+    const sourceXp = source === "manual" ? 1 : source === "drone" ? .35 : .18;
+    const xp = Math.max(1, Math.round((cloud.dense ? baseXp * 2 : baseXp) * sourceXp));
     this.run.xp += xp;
     const feverGain = (12 + Math.min(10, this.combo))
       * (1 + this.run.skills.feverDrive * .35 + this.run.skills.comboCapacitor * .12 + this.run.skills.feverInjector * .2);
@@ -3000,20 +3007,20 @@ export class CloudHarvestGame {
 
   private getFuelRecoveryLimit(): number {
     if (!this.run.skills.fuelCondenser) return 0;
-    return 3 + this.run.skills.recoveryReservoir * 4 + this.run.skills.stormFuel * 8;
+    return 8 + this.run.skills.recoveryReservoir * 14 + this.run.skills.stormFuel * 40;
   }
 
   private tryRecoverFuel(cloud: Cloud): void {
     const limit = this.getFuelRecoveryLimit();
     if (limit <= 0 || this.run.fuelRecovered >= limit || this.run.fuel >= this.getFuelCapacity()) return;
     const tier = CLOUD_ORDER.indexOf(cloud.kind);
-    this.fuelPity += 1 + tier * .16;
-    const comboChance = this.run.skills.comboGenerator ? Math.min(.12, this.combo * .006) : 0;
-    const highTierChance = this.run.skills.stormFuel && tier >= 2 ? .08 : 0;
-    const guaranteedCombo = this.run.skills.comboGenerator && this.combo > 0 && this.combo % 8 === 0;
-    if (!guaranteedCombo && this.fuelPity < 7 && Math.random() >= .06 + comboChance + highTierChance) return;
+    this.fuelPity += 1 + tier * .22;
+    const comboChance = this.run.skills.comboGenerator ? Math.min(.18, this.combo * .009) : 0;
+    const highTierChance = this.run.skills.stormFuel && tier >= 2 ? .24 : 0;
+    const guaranteedCombo = this.run.skills.comboGenerator && this.combo > 0 && this.combo % 6 === 0;
+    if (!guaranteedCombo && this.fuelPity < 5 && Math.random() >= .1 + comboChance + highTierChance) return;
     const recovery = Math.min(
-      this.run.skills.stormFuel && tier >= 2 ? 1.5 : 1,
+      this.run.skills.stormFuel && tier >= 2 ? 5 : 1.5,
       limit - this.run.fuelRecovered,
       this.getFuelCapacity() - this.run.fuel,
     );
@@ -3155,7 +3162,8 @@ export class CloudHarvestGame {
     const pending: CascadeHarvest[] = [];
     for (const item of this.cascadeQueue) {
       item.delay -= dt;
-      (item.delay <= 0 ? due : pending).push(item);
+      if (item.delay <= 0 && due.length < MAX_CASCADE_HARVESTS_PER_FRAME) due.push(item);
+      else pending.push(item);
     }
     this.cascadeQueue = pending;
     const cloudById = new Map(this.clouds.map((cloud) => [cloud.id, cloud]));
@@ -4599,7 +4607,7 @@ export class CloudHarvestGame {
     // 첫 튜토리얼 비행은 의도한 5~6개 수확 리듬을 유지하고,
     // 해금 이후 저고도 순풍 회랑을 다시 찾을 때만 항로 연료 보너스를 적용한다.
     const routeFuelBonus = this.state.rank > 0 ? FLIGHT_ROUTES[this.run.routeId].fuelBonus : 0;
-    return 9 + routeFuelBonus + this.run.skills.auxTank * 3 + this.run.skills.recoveryReservoir * 3 + this.state.infiniteResearch.fuel * .75;
+    return 9 + routeFuelBonus + this.run.skills.auxTank * 3 + this.run.skills.recoveryReservoir * 6 + this.state.infiniteResearch.fuel * .75;
   }
 
   private isFirstDayCalibrationFlight(): boolean {
@@ -4620,9 +4628,22 @@ export class CloudHarvestGame {
     return Math.min(maxClouds, Math.max(12, Math.ceil(maxClouds * ratio) + feverReserve));
   }
 
-  private replenishCloudFloor(): void {
+  private replenishCloudFloor(dt: number): void {
     const minimumClouds = this.getMinimumClouds();
-    while (this.clouds.length < minimumClouds) this.spawnCloud(false);
+    const deficit = minimumClouds - this.clouds.length;
+    if (deficit <= 0) {
+      this.cloudFloorBudget = Math.min(2, this.cloudFloorBudget + dt);
+      return;
+    }
+    const baseRate = 1.25 + this.run.mapRank * .3 + this.run.skills.massInduction * .6 + this.run.skills.eventHorizon * .7;
+    const feverRate = this.run.feverActive
+      ? 1.5 + this.run.skills.cycloneCore * 1.2 + this.run.skills.cargoCyclone * 1.8
+      : 0;
+    const cascadeThrottle = this.cascadeQueue.length > 0 ? .25 : 1;
+    this.cloudFloorBudget = Math.min(4, this.cloudFloorBudget + dt * Math.min(8, baseRate + feverRate) * cascadeThrottle);
+    const spawnCount = Math.min(deficit, 2, Math.floor(this.cloudFloorBudget));
+    for (let index = 0; index < spawnCount; index += 1) this.spawnCloud(false);
+    this.cloudFloorBudget -= spawnCount;
   }
 
   private getCloudSpawnInterval(): number {
@@ -4632,7 +4653,7 @@ export class CloudHarvestGame {
     const runInduction = Math.max(.28, 1 - this.run.skills.wideIntake * .08 - this.run.skills.massInduction * .06
       - this.run.skills.blackHole * .15 - this.run.skills.eventHorizon * .12 - cycloneInduction);
     const calibrationFlow = this.isFirstDayCalibrationFlight() ? .78 : 1;
-    return Math.max(.11, (0.78 - this.run.mapRank * .08) * FLIGHT_ROUTES[this.run.routeId].spawnInterval * (1 - flightPressure * .14) * permanentInduction * runInduction * calibrationFlow);
+    return Math.max(.55, (0.78 - this.run.mapRank * .08) * FLIGHT_ROUTES[this.run.routeId].spawnInterval * (1 - flightPressure * .14) * permanentInduction * runInduction * calibrationFlow);
   }
 
   private emitAll(): void { this.onStateChange(this.getState()); this.onRunChange(this.getRunState()); }
