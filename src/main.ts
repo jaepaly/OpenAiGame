@@ -293,7 +293,7 @@ app.innerHTML = `
         <div class="levelup-panel skill-tree-panel">
           <header class="skill-tree-toolbar">
             <span class="levelup-kicker">CAREER SYSTEM BLUEPRINT // 42 NODE GRID</span>
-            <button class="skill-tree-close" id="skillTreeCloseButton">← 기지로 돌아가기 · ESC</button>
+            <button class="skill-tree-close" id="skillTreeCloseButton" aria-label="특성 설계실 닫기">×</button>
           </header>
           <h2 id="levelUpTitle">회사의 장기 성장 설계도</h2>
           <p id="levelUpDescription">연결된 노드를 따라 영구 유지되는 수확 장치를 조립하세요.</p>
@@ -1250,18 +1250,21 @@ window.addEventListener("keydown", (event) => {
     closeEnding();
   } else if (flightReportOverlay.classList.contains("show")) {
     closeFlightReport();
-    baseHub.classList.add("show");
+    showBaseHub();
   } else if (garageOverlay.classList.contains("show")) {
     document.body.classList.remove("garage-open");
     garageOverlay.classList.remove("show");
+    showBaseHub();
   } else if (processingOverlay.classList.contains("show")) {
     processingOverlay.classList.remove("show");
+    showBaseHub();
   } else if (routeOverlay.classList.contains("show")) {
     closeRouteSelector();
   } else if (levelUpOverlay.classList.contains("show")) {
     game.closeSkillTree();
     levelUpOverlay.classList.remove("show");
     skillHoverCard.classList.remove("show");
+    showBaseHub();
   } else {
     openPauseMenu();
   }
@@ -1446,13 +1449,13 @@ function closeEnding(restoreDestination = true): void {
   game.setEndingPaused(false);
   if (!restoreDestination) return;
   if (endingReturnToResearch && game.isDayComplete()) {
-    baseHub.classList.remove("show");
+    hideBaseHub();
     factoryOverlay.classList.add("show");
     factoryPanel.classList.add("settled");
     factoryReceipt.classList.add("show");
     factoryOverlay.scrollTop = 0;
   } else {
-    baseHub.classList.add("show");
+    showBaseHub();
   }
   endingReturnToResearch = false;
 }
@@ -1878,13 +1881,27 @@ function closeFlightReport(): void {
   document.body.classList.remove("report-open");
 }
 
+function showBaseHub(): void {
+  document.body.classList.remove("garage-open");
+  garageOverlay.classList.remove("show");
+  baseHub.inert = false;
+  baseHub.setAttribute("aria-hidden", "false");
+  baseHub.classList.add("show");
+}
+
+function hideBaseHub(): void {
+  baseHub.classList.remove("show");
+  baseHub.inert = true;
+  baseHub.setAttribute("aria-hidden", "true");
+}
+
 function closeBaseOverlaysForLaunch(): void {
   closeFlightReport();
   pendingFlightReport = null;
   pendingProcessingResult = null;
   closeRouteSelector();
   processingOverlay.classList.remove("show");
-  baseHub.classList.remove("show");
+  hideBaseHub();
   factoryOverlay.classList.remove("show");
   factoryPanel.classList.remove("settled");
   factoryReceipt.classList.remove("show");
@@ -1924,7 +1941,7 @@ function showFlightReport(report: FlightReport, processingResult: ProcessingEnqu
   const recordNames = report.newRecords.map((kind) => ({ harvest: "수확량", value: "화물 가치", combo: "콤보", rare: "희귀 구름" })[kind]);
 
   factoryOverlay.classList.remove("show");
-  baseHub.classList.add("show");
+  showBaseHub();
   document.body.classList.add("report-open");
   flightReportOverlay.classList.toggle("emergency", report.emergencyReturn);
   flightReportCode.textContent = `${report.emergencyReturn ? "EMERGENCY LOG" : "SORTIE REPORT"} // DAY ${String(report.day).padStart(2, "0")}`;
@@ -2027,13 +2044,13 @@ function showFactory(state: RunState, report: FlightReport | null = pendingFligh
   document.body.classList.remove("returning");
   document.body.classList.add("base-open");
   factoryOverlay.scrollTop = 0;
-  baseHub.classList.remove("show");
+  hideBaseHub();
   factoryPanel.classList.remove("settled");
   factoryReceipt.classList.remove("show");
   if (state.emergencyReturn) {
     factoryOverlay.classList.remove("show");
     baseHubStatus.textContent = "비상 견인 완료 · 이번 비행의 화물 전량 폐기 · 연료 재충전 완료";
-    baseHub.classList.add("show");
+    showBaseHub();
     if (report) showFlightReport(report, null);
     return;
   }
@@ -2041,7 +2058,7 @@ function showFactory(state: RunState, report: FlightReport | null = pendingFligh
   if (cargoCount <= 0) {
     factoryOverlay.classList.remove("show");
     baseHubStatus.textContent = "귀환 완료 · 수확 화물 없음 · 연료 재충전 완료";
-    baseHub.classList.add("show");
+    showBaseHub();
     if (report) showFlightReport(report, null);
     return;
   }
@@ -2110,8 +2127,6 @@ function showLevelUp(_pendingPicks: number): void {
   const infiniteTabHint = infiniteResearchTab.querySelector<HTMLElement>("small");
   if (infiniteTabHint) infiniteTabHint.textContent = finiteTreeComplete ? "반복 가능한 극후반 성장" : `특성 ${investedNodes} / ${Object.keys(RUN_SKILLS).length}`;
   skillTreeTabs.classList.toggle("infinite-unlocked", finiteTreeComplete);
-  skillTreeCloseButton.textContent = "← 기지로 돌아가기 · ESC";
-
   if (activeSkillTreeTab === "infinite" && finiteTreeComplete) {
     const mass = cloudMass(stock);
     const totalInfiniteLevel = (Object.values(companyState.infiniteResearch) as number[]).reduce((total, level) => total + level, 0);
@@ -2438,6 +2453,8 @@ upgradeList.addEventListener("click", (event) => {
 promoteButton.addEventListener("click", () => game.promote());
 soundButton.addEventListener("click", () => game.toggleSound());
 const openGarage = () => {
+  baseHub.inert = true;
+  baseHub.setAttribute("aria-hidden", "true");
   document.body.classList.add("garage-open");
   garageOverlay.classList.add("show");
 };
@@ -2445,6 +2462,7 @@ garageButton.addEventListener("click", openGarage);
 const closeGarage = () => {
   document.body.classList.remove("garage-open");
   garageOverlay.classList.remove("show");
+  showBaseHub();
 };
 garageCloseButton.addEventListener("click", closeGarage);
 garageOverlay.addEventListener("click", (event) => {
@@ -2492,18 +2510,18 @@ contractList.addEventListener("click", (event) => {
       `).join("");
     }
     factoryOverlay.classList.remove("show");
-    baseHub.classList.add("show");
+    showBaseHub();
     if (pendingFlightReport) showFlightReport(pendingFlightReport, flightResult, dayComplete);
   }
 });
 flightReportProcessing.addEventListener("click", () => {
   closeFlightReport();
-  baseHub.classList.add("show");
+  showBaseHub();
   processingOverlay.classList.add("show");
 });
 flightReportSkill.addEventListener("click", () => {
   closeFlightReport();
-  baseHub.classList.add("show");
+  showBaseHub();
   game.openSkillTree();
 });
 flightReportContinue.addEventListener("click", () => {
@@ -2515,7 +2533,7 @@ flightReportContinue.addEventListener("click", () => {
     return;
   }
   if (flightReportDayComplete) {
-    baseHub.classList.remove("show");
+    hideBaseHub();
     factoryOverlay.classList.add("show");
     factoryPanel.classList.add("settled");
     factoryReceipt.classList.add("show");
@@ -2543,9 +2561,15 @@ claimProcessingButton.addEventListener("click", () => {
   if (output.coins > 0 || output.materialUnits > 0) emitShippingBurst(output.coins + output.materialUnits);
 });
 processingFacilityButton.addEventListener("click", () => processingOverlay.classList.add("show"));
-processingCloseButton.addEventListener("click", () => processingOverlay.classList.remove("show"));
+processingCloseButton.addEventListener("click", () => {
+  processingOverlay.classList.remove("show");
+  showBaseHub();
+});
 processingOverlay.addEventListener("click", (event) => {
-  if (event.target === processingOverlay) processingOverlay.classList.remove("show");
+  if (event.target === processingOverlay) {
+    processingOverlay.classList.remove("show");
+    showBaseHub();
+  }
 });
 researchList.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-research]");
@@ -2556,7 +2580,7 @@ researchList.addEventListener("click", (event) => {
   receiptDescription.textContent = "연구와 기존 스킬망이 모두 유지됩니다. 더 깊은 시스템을 연결할 시간입니다.";
   factoryOverlay.classList.remove("show");
   baseHubStatus.textContent = `DAY ${run.day} 연구 완료 · 모든 장기 성장 유지`;
-  baseHub.classList.add("show");
+  showBaseHub();
 });
 baseGarageButton.addEventListener("click", () => {
   factoryOverlay.classList.remove("show");
@@ -2642,7 +2666,7 @@ function openRouteSelector(focusRank = game.getState().selectedMap): void {
   if (levelUpOverlay.classList.contains("show")) game.closeSkillTree();
   levelUpOverlay.classList.remove("show");
   skillHoverCard.classList.remove("show");
-  baseHub.classList.add("show");
+  showBaseHub();
   renderRouteList();
   routeOverlay.inert = false;
   routeOverlay.setAttribute("aria-hidden", "false");
@@ -2734,6 +2758,7 @@ skillTreeCloseButton.addEventListener("click", () => {
   game.closeSkillTree();
   levelUpOverlay.classList.remove("show");
   skillHoverCard.classList.remove("show");
+  showBaseHub();
 });
 skillTreeButton.addEventListener("click", () => game.openSkillTree());
 endingContinueButton.addEventListener("click", () => closeEnding());

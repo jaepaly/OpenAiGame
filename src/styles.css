@@ -964,8 +964,8 @@ body.base-open .promotion-card { top: 28px; }
 .network-node.locked { opacity: .42; filter: grayscale(.72); }
 .network-node.locked::before { content: "LOCK"; position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; color: #dbe9ea; background: rgba(4,20,29,.42); border-radius: 16px; font: 900 13px "Outfit",sans-serif; letter-spacing: .16em; }
 .network-node:disabled { cursor: default; }
-.skill-tree-close { flex: 0 0 auto; width: auto; min-height: 48px; margin: 0; padding: 10px 17px; color: white; background: #285e73; border: 3px solid #75c8d2; border-radius: 15px; box-shadow: 0 5px 0 #17394a; font-size: 16px; font-weight: 900; cursor: pointer; }
-.skill-tree-close:hover { transform: translateY(-3px); background: #33758c; }
+.skill-tree-close { flex: 0 0 auto; width: 45px; height: 45px; margin: 0; padding: 0; color: #31566a; background: white; border: 0; border-radius: 50%; box-shadow: 0 4px 0 #c5dfe2; font-size: 28px; font-weight: 900; line-height: 1; cursor: pointer; }
+.skill-tree-close:hover { transform: translateY(-3px); color: #17394a; background: #fff36f; box-shadow: 0 7px 0 #c5a83b; }
 .skill-hover-card { position: fixed; z-index: 80; left: 0; top: 0; width: min(330px,calc(100vw - 24px)); padding: 16px 18px; display: flex; flex-direction: column; color: #eaffff; background: rgba(5,24,34,.98); border: 3px solid var(--skill-color,#7ff5df); border-radius: 18px; box-shadow: 0 9px 0 #03131c,0 20px 40px rgba(0,0,0,.42); opacity: 0; pointer-events: none; transform: translateY(7px) scale(.97); transition: opacity .12s ease,transform .12s ease; }
 .skill-hover-card.show { opacity: 1; transform: translateY(0) scale(1); }
 .skill-hover-card small { color: var(--skill-color); font: 900 11px "Outfit",sans-serif; letter-spacing: .13em; }
@@ -1173,7 +1173,7 @@ body.base-open .promotion-card { top: 28px; }
   .garage-heading span { font-size: 13px; }
   .garage-heading h2 { margin-top: 5px; font-size: 36px; }
   .garage-heading p { margin-top: 4px; font-size: 15px; }
-  .garage-heading button { width: 58px; height: 58px; font-size: 34px; }
+  .garage-heading button, .skill-tree-close { width: 58px; height: 58px; font-size: 34px; }
   .garage-panel .upgrade-list { gap: 16px; }
   .equipment-slot { height: 368px; padding: 15px; border-radius: 27px; }
   .equipment-status { height: 27px; }
@@ -1423,7 +1423,7 @@ body.base-open .promotion-card { top: 28px; }
   .skill-tree-panel { padding: 15px 8px 14px; }
   .skill-tree-toolbar { margin: -5px -2px 9px; padding: 7px 7px 9px 10px; gap: 8px; }
   .skill-tree-toolbar .levelup-kicker { max-width: 42%; font-size: 9px; line-height: 1.25; }
-  .skill-tree-close { min-height: 44px; padding: 8px 10px; font-size: 12px; }
+  .skill-tree-close { width: 44px; height: 44px; font-size: 28px; }
   .skill-point-bank { top: 61px; }
   .skill-tree-panel > h2 { font-size: 27px; }
   .skill-tree-panel > p { padding-inline: 8px; font-size: 13px; }
