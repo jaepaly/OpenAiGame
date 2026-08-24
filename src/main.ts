@@ -8,7 +8,7 @@ import sonaSeriousPortrait from "./assets/characters/sona-serious.png";
 import sonaWorriedPortrait from "./assets/characters/sona-worried.png";
 import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
 import { CloudHarvestGame, getPromotionEventGate, type RadioCall } from "./game";
-import type { ContractId, GameState, GrowthMissionId, InfiniteResearchId, ResearchId, RunSkillId, RunState, StorySceneId, UpgradeId } from "./types";
+import type { ContractId, FlightReport, GameState, GrowthMissionId, InfiniteResearchId, ProcessingEnqueueResult, ResearchId, RunSkillId, RunState, StorySceneId, UpgradeId } from "./types";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app 요소를 찾을 수 없습니다.");
@@ -240,6 +240,44 @@ app.innerHTML = `
           <header><span>NEXT SORTIE // ALTITUDE SELECT</span><h2>어느 하늘로 출격할까요?</h2><p>높은 고도일수록 연료가 빠르게 줄지만 희귀 구름과 수익 배율이 커집니다.</p></header>
           <div class="route-list" id="routeList"></div>
           <button class="route-back" id="routeBackButton">← 기지 격납고로 돌아가기</button>
+        </div>
+      </section>
+
+      <section class="flight-report-overlay" id="flightReportOverlay" role="dialog" aria-modal="true" aria-label="비행 결과 리포트" aria-hidden="true">
+        <div class="flight-report-panel">
+          <div class="report-sky-burst" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+          <header class="flight-report-heading">
+            <div><span id="flightReportCode">SORTIE REPORT // DAY 01</span><h2 id="flightReportTitle">수확 비행 완료!</h2><p id="flightReportRoute">순풍 회랑 · FLIGHT 1/3</p></div>
+            <strong class="report-record-badge" id="flightReportRecord">NEW RECORD</strong>
+          </header>
+          <div class="flight-report-body">
+            <section class="report-score-card">
+              <span>HARVEST SECURED</span>
+              <strong><b id="flightReportTotal">0</b><small> CLOUDS</small></strong>
+              <p id="flightReportValue">화물 가치 ◈ 0</p>
+              <div class="report-cloud-manifest" id="flightReportManifest"></div>
+            </section>
+            <section class="report-stat-grid" aria-label="비행 성과">
+              <article class="combo"><span>MAX COMBO</span><strong id="flightReportCombo">×0</strong><small id="flightReportComboBest">BEST 0</small></article>
+              <article class="rare"><span>RARE CLOUDS</span><strong id="flightReportRare">0</strong><small id="flightReportRareBest">BEST 0</small></article>
+              <article class="fuel"><span>FUEL RETURN</span><strong id="flightReportFuel">0%</strong><small id="flightReportFuelDetail">0 / 0</small></article>
+              <article class="drone"><span>AUTO HARVEST</span><strong id="flightReportDrone">0</strong><small id="flightReportExtra">DENSE 0 · FEVER 0</small></article>
+            </section>
+            <section class="report-processing-transfer" id="flightReportTransfer">
+              <div class="report-transfer-track"><i></i><i></i><i></i><i></i><i></i></div>
+              <div><span>PROCESSING TRANSFER</span><strong id="flightReportProcessTitle">가공 대기열 등록 완료</strong><small id="flightReportProcessDetail">자동 가공 라인으로 화물을 전송했습니다.</small></div>
+              <b>→</b>
+            </section>
+            <aside class="report-review" id="flightReportReview">
+              <img id="flightReportPortrait" src="${sonaNeutralPortrait}" alt="관측 연구원 소나">
+              <div><span id="flightReportSpeaker">관측 연구원 소나 · FLIGHT ANALYSIS</span><p id="flightReportDialogue">무사 귀환 확인. 이번 비행 기록을 분석했어요.</p></div>
+            </aside>
+          </div>
+          <footer class="flight-report-actions">
+            <button class="report-action processing" id="flightReportProcessing"><span>가공동 확인</span><small>진행 중인 생산라인</small></button>
+            <button class="report-action skill" id="flightReportSkill"><span>특성 설계</span><small>수확 재료로 성장</small></button>
+            <button class="report-action continue" id="flightReportContinue"><span>다음 비행 준비</span><small>출격 고도 선택</small><b>→</b></button>
+          </footer>
         </div>
       </section>
 
@@ -531,6 +569,32 @@ const baseHubStatus = required<HTMLElement>("#baseHubStatus");
 const routeOverlay = required<HTMLElement>("#routeOverlay");
 const routeList = required<HTMLElement>("#routeList");
 const routeBackButton = required<HTMLButtonElement>("#routeBackButton");
+const flightReportOverlay = required<HTMLElement>("#flightReportOverlay");
+const flightReportCode = required<HTMLElement>("#flightReportCode");
+const flightReportTitle = required<HTMLElement>("#flightReportTitle");
+const flightReportRoute = required<HTMLElement>("#flightReportRoute");
+const flightReportRecord = required<HTMLElement>("#flightReportRecord");
+const flightReportTotal = required<HTMLElement>("#flightReportTotal");
+const flightReportValue = required<HTMLElement>("#flightReportValue");
+const flightReportManifest = required<HTMLElement>("#flightReportManifest");
+const flightReportCombo = required<HTMLElement>("#flightReportCombo");
+const flightReportComboBest = required<HTMLElement>("#flightReportComboBest");
+const flightReportRare = required<HTMLElement>("#flightReportRare");
+const flightReportRareBest = required<HTMLElement>("#flightReportRareBest");
+const flightReportFuel = required<HTMLElement>("#flightReportFuel");
+const flightReportFuelDetail = required<HTMLElement>("#flightReportFuelDetail");
+const flightReportDrone = required<HTMLElement>("#flightReportDrone");
+const flightReportExtra = required<HTMLElement>("#flightReportExtra");
+const flightReportTransfer = required<HTMLElement>("#flightReportTransfer");
+const flightReportProcessTitle = required<HTMLElement>("#flightReportProcessTitle");
+const flightReportProcessDetail = required<HTMLElement>("#flightReportProcessDetail");
+const flightReportReview = required<HTMLElement>("#flightReportReview");
+const flightReportPortrait = required<HTMLImageElement>("#flightReportPortrait");
+const flightReportSpeaker = required<HTMLElement>("#flightReportSpeaker");
+const flightReportDialogue = required<HTMLElement>("#flightReportDialogue");
+const flightReportProcessing = required<HTMLButtonElement>("#flightReportProcessing");
+const flightReportSkill = required<HTMLButtonElement>("#flightReportSkill");
+const flightReportContinue = required<HTMLButtonElement>("#flightReportContinue");
 const storyOverlay = required<HTMLElement>("#storyOverlay");
 const storyFrame = required<HTMLElement>("#storyFrame");
 const storyChapter = required<HTMLElement>("#storyChapter");
@@ -565,6 +629,10 @@ let previousCompletedCoins: number | null = null;
 let renderedGrowthMissionStep: number | null = null;
 let activeSkillTreeTab: "blueprint" | "infinite" = "blueprint";
 let infiniteResearchUnlockedPreviously = false;
+let pendingFlightReport: FlightReport | null = null;
+let pendingProcessingResult: ProcessingEnqueueResult | null = null;
+let flightReportDayComplete = false;
+let flightReportAnimation = 0;
 
 type StoryTone = "narrator" | "moka" | "sona" | "rival";
 type StoryPortrait =
@@ -815,6 +883,27 @@ if (import.meta.env.DEV) {
 }
 storySystemReady = true;
 window.setTimeout(() => { if (!titleScreenOpen) syncStoryTriggers(game.getState()); }, 360);
+if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("report-preview")) {
+  window.setTimeout(() => {
+    titleScreenOpen = false;
+    titleScreen.classList.remove("show");
+    titleScreen.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("title-open");
+    titleBlockedElements.forEach((element) => { element.inert = false; });
+    game.setTitlePaused(false);
+    showFlightReport({
+      day: 4, flight: 2, mapRank: 2, routeId: "frontline",
+      cargo: { cumulus: 18, rain: 13, electric: 7, ice: 0, solar: 0, aurora: 0 },
+      totalCollected: 38, grossValue: 1840, maxCombo: 27, rareClouds: 7, denseClouds: 6,
+      droneHarvested: 9, feverActivations: 3, fuelCapacity: 31, fuelRemaining: 8.7, fuelEfficiency: .28,
+      emergencyReturn: false, newRecords: ["harvest", "value", "combo", "rare"],
+      records: { harvest: 38, value: 1840, combo: 27, rare: 7 },
+    }, {
+      payout: 2280, batches: 3, seconds: 46, materialsStored: 38, cargoRemaining: 0, flightCompleted: true,
+      units: 38, materialRewards: { cumulus: 0, rain: 0, electric: 3, ice: 0, solar: 0, aurora: 0 }, quotaRemaining: null,
+    });
+  }, 120);
+}
 
 function openPauseMenu(): void {
   if (pauseMenuOpen || titleScreenOpen || storyOverlay.classList.contains("show")) return;
@@ -882,7 +971,10 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (storyOverlay.classList.contains("show")) return;
-  if (garageOverlay.classList.contains("show")) {
+  if (flightReportOverlay.classList.contains("show")) {
+    closeFlightReport();
+    baseHub.classList.add("show");
+  } else if (garageOverlay.classList.contains("show")) {
     document.body.classList.remove("garage-open");
     garageOverlay.classList.remove("show");
   } else if (processingOverlay.classList.contains("show")) {
@@ -1435,7 +1527,141 @@ function renderProcessing(state: RunState): void {
   previousCompletedCoins = completed;
 }
 
-function showFactory(state: RunState): void {
+function closeFlightReport(): void {
+  window.cancelAnimationFrame(flightReportAnimation);
+  flightReportOverlay.classList.remove("show");
+  flightReportOverlay.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("report-open");
+}
+
+function accumulateProcessingResult(result: ProcessingEnqueueResult): ProcessingEnqueueResult {
+  const previous = pendingProcessingResult;
+  pendingProcessingResult = previous ? {
+    payout: previous.payout + result.payout,
+    batches: previous.batches + result.batches,
+    seconds: Math.max(previous.seconds, result.seconds),
+    materialsStored: previous.materialsStored + result.materialsStored,
+    cargoRemaining: result.cargoRemaining,
+    flightCompleted: result.flightCompleted,
+    units: previous.units + result.units,
+    materialRewards: CLOUD_ORDER.reduce((stock, kind) => {
+      stock[kind] = previous.materialRewards[kind] + result.materialRewards[kind];
+      return stock;
+    }, { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 }),
+    quotaRemaining: result.quotaRemaining,
+  } : { ...result, materialRewards: { ...result.materialRewards } };
+  return pendingProcessingResult;
+}
+
+function showFlightReport(report: FlightReport, processingResult: ProcessingEnqueueResult | null, dayComplete = false): void {
+  pendingFlightReport = report;
+  flightReportDayComplete = dayComplete;
+  const rank = RANKS[report.mapRank];
+  const route = FLIGHT_ROUTES[report.routeId];
+  const fuelPercent = Math.round(report.fuelEfficiency * 100);
+  const recordNames = report.newRecords.map((kind) => ({ harvest: "수확량", value: "화물 가치", combo: "콤보", rare: "희귀 구름" })[kind]);
+
+  factoryOverlay.classList.remove("show");
+  baseHub.classList.add("show");
+  document.body.classList.add("report-open");
+  flightReportOverlay.classList.toggle("emergency", report.emergencyReturn);
+  flightReportCode.textContent = `${report.emergencyReturn ? "EMERGENCY LOG" : "SORTIE REPORT"} // DAY ${String(report.day).padStart(2, "0")}`;
+  flightReportTitle.textContent = report.emergencyReturn ? "비상 견인 귀환" : report.newRecords.length > 0 ? "기록을 갈아치웠습니다!" : "수확 비행 완료!";
+  flightReportRoute.textContent = `${rank.altitude} · ${rank.name} · ${route.name} · FLIGHT ${report.flight}/3`;
+  flightReportRecord.classList.toggle("show", report.newRecords.length > 0);
+  flightReportRecord.textContent = report.newRecords.length > 1 ? `${report.newRecords.length} NEW RECORDS` : "NEW RECORD";
+  flightReportManifest.innerHTML = CLOUD_ORDER.filter((kind) => report.cargo[kind] > 0).map((kind, index) => {
+    const cloud = CLOUDS[kind];
+    return `<span class="report-cloud-chip ${kind}" style="--manifest-index:${index}"><b>${cloud.icon}</b><small>${cloud.name}</small><strong>×${report.cargo[kind]}</strong></span>`;
+  }).join("") || `<span class="report-cloud-empty">수확 화물 없음</span>`;
+  flightReportComboBest.textContent = `BEST ${report.records.combo.toLocaleString()}`;
+  flightReportRareBest.textContent = `BEST ${report.records.rare.toLocaleString()}`;
+  flightReportFuel.textContent = `${fuelPercent}%`;
+  flightReportFuelDetail.textContent = `${report.fuelRemaining.toFixed(1)} / ${report.fuelCapacity.toFixed(1)} FUEL`;
+  flightReportDrone.textContent = report.droneHarvested.toLocaleString();
+  flightReportExtra.textContent = `DENSE ${report.denseClouds} · FEVER ${report.feverActivations}`;
+  flightReportTransfer.classList.toggle("lost", report.emergencyReturn);
+  if (report.emergencyReturn) {
+    flightReportProcessTitle.textContent = "연료 고갈 · 화물 전량 폐기";
+    flightReportProcessDetail.textContent = `${report.totalCollected}개의 구름과 ◈ ${report.grossValue.toLocaleString()} 상당 화물을 잃었습니다.`;
+  } else if (processingResult) {
+    flightReportProcessTitle.textContent = `${processingResult.batches}개 가공 묶음 전송 완료`;
+    flightReportProcessDetail.textContent = `예상 ${processingTime(processingResult.seconds)} · 비행 중에도 자동 가공됩니다.`;
+  } else {
+    flightReportProcessTitle.textContent = "반입할 화물이 없습니다";
+    flightReportProcessDetail.textContent = "기체 점검을 마친 뒤 다음 항로를 선택하세요.";
+  }
+
+  const comboCard = flightReportOverlay.querySelector<HTMLElement>(".report-stat-grid .combo");
+  const rareCard = flightReportOverlay.querySelector<HTMLElement>(".report-stat-grid .rare");
+  const scoreCard = flightReportOverlay.querySelector<HTMLElement>(".report-score-card");
+  scoreCard?.classList.toggle("record", report.newRecords.includes("harvest") || report.newRecords.includes("value"));
+  comboCard?.classList.toggle("record", report.newRecords.includes("combo"));
+  rareCard?.classList.toggle("record", report.newRecords.includes("rare"));
+
+  let portrait = sonaNeutralPortrait;
+  let portraitAlt = "관측 연구원 소나";
+  let speaker = "관측 연구원 소나 · FLIGHT ANALYSIS";
+  let dialogue = `무사 귀환 확인. ${report.totalCollected}개 확보, 연료 ${fuelPercent}% 보존. 다음 비행 데이터를 갱신했어요.`;
+  let reviewTone = "sona";
+  if (report.emergencyReturn) {
+    portrait = mokaWorriedPortrait;
+    portraitAlt = "정비사 모카";
+    speaker = "수석 정비사 모카 · EMERGENCY REVIEW";
+    dialogue = "기체는 살렸지만 화물은 전부 버렸어. 다음엔 마지막 한 방보다 돌아올 연료를 먼저 남겨 둬.";
+    reviewTone = "warning";
+  } else if (recordNames.length > 0) {
+    portrait = sonaSeriousPortrait;
+    dialogue = `${recordNames.join("·")} 최고 기록 갱신! 이 상승 곡선이면 다음 고도에서도 충분히 통합니다.`;
+    reviewTone = "record";
+  } else if (fuelPercent <= 18) {
+    portrait = mokaWorriedPortrait;
+    portraitAlt = "정비사 모카";
+    speaker = "수석 정비사 모카 · FUEL REVIEW";
+    dialogue = `연료 ${fuelPercent}%라니, 보는 내가 숨이 막혔어. 그래도 화물을 지켜 왔으니 이번엔 합격.`;
+    reviewTone = "warning";
+  } else if (report.maxCombo >= 15) {
+    portrait = mokaNeutralPortrait;
+    portraitAlt = "정비사 모카";
+    speaker = "수석 정비사 모카 · HARVEST REVIEW";
+    dialogue = `${report.maxCombo}콤보라. 흡입기가 구름을 씹어 삼키는 소리가 격납고까지 들리더라. 아주 좋아.`;
+    reviewTone = "moka";
+  } else if (report.droneHarvested >= 4) {
+    dialogue = `드론이 ${report.droneHarvested}개를 독립 회수했어요. 자동화 편대가 이제 확실히 제 몫을 하네요.`;
+  }
+  flightReportReview.className = `report-review ${reviewTone}`;
+  flightReportPortrait.src = portrait;
+  flightReportPortrait.alt = portraitAlt;
+  flightReportSpeaker.textContent = speaker;
+  flightReportDialogue.textContent = dialogue;
+  flightReportProcessing.disabled = false;
+  flightReportSkill.disabled = report.emergencyReturn || report.totalCollected <= 0;
+  flightReportContinue.querySelector<HTMLElement>("span")!.textContent = dayComplete ? "오늘의 연구 선택" : "다음 비행 준비";
+  flightReportContinue.querySelector<HTMLElement>("small")!.textContent = dayComplete ? "DAY 성과 확정" : "출격 고도 선택";
+
+  const start = performance.now();
+  window.cancelAnimationFrame(flightReportAnimation);
+  const animateScore = (now: number) => {
+    const progress = Math.min(1, (now - start) / 760);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    flightReportTotal.textContent = Math.round(report.totalCollected * eased).toLocaleString();
+    flightReportValue.textContent = `${report.emergencyReturn ? "폐기 화물 가치" : "화물 가치"} ◈ ${Math.round(report.grossValue * eased).toLocaleString()}`;
+    flightReportCombo.textContent = `×${Math.round(report.maxCombo * eased).toLocaleString()}`;
+    flightReportRare.textContent = Math.round(report.rareClouds * eased).toLocaleString();
+    if (progress < 1) flightReportAnimation = window.requestAnimationFrame(animateScore);
+  };
+  flightReportAnimation = window.requestAnimationFrame(animateScore);
+  flightReportOverlay.classList.add("show");
+  flightReportOverlay.setAttribute("aria-hidden", "false");
+  game.playUiSound(report.emergencyReturn ? "warning" : report.newRecords.length > 0 ? "payout" : "confirm");
+  window.setTimeout(() => flightReportContinue.focus({ preventScroll: true }), 420);
+}
+
+function showFactory(state: RunState, report: FlightReport | null = pendingFlightReport): void {
+  if (report && report !== pendingFlightReport) {
+    pendingFlightReport = report;
+    pendingProcessingResult = null;
+  }
   document.body.classList.remove("returning");
   document.body.classList.add("base-open");
   factoryOverlay.scrollTop = 0;
@@ -1446,6 +1672,7 @@ function showFactory(state: RunState): void {
     factoryOverlay.classList.remove("show");
     baseHubStatus.textContent = "비상 견인 완료 · 이번 비행의 화물 전량 폐기 · 연료 재충전 완료";
     baseHub.classList.add("show");
+    if (report) showFlightReport(report, null);
     return;
   }
   const cargoCount = (Object.values(state.cargo) as number[]).reduce((total, amount) => total + amount, 0);
@@ -1453,6 +1680,7 @@ function showFactory(state: RunState): void {
     factoryOverlay.classList.remove("show");
     baseHubStatus.textContent = "귀환 완료 · 수확 화물 없음 · 연료 재충전 완료";
     baseHub.classList.add("show");
+    if (report) showFlightReport(report, null);
     return;
   }
   factoryManifest.innerHTML = (Object.values(CLOUDS)).map((cloud) => `
@@ -1831,6 +2059,7 @@ contractList.addEventListener("click", (event) => {
   if (!button) return;
   const result = game.queueCargoForProcessing(button.dataset.contract as ContractId);
   if (result) {
+    const flightResult = accumulateProcessingResult(result);
     const contractName = button.querySelector(".contract-copy b")?.textContent ?? "가공 계약";
     const materialUnits = CLOUD_ORDER.reduce((total, kind) => total + result.materialRewards[kind], 0);
     if (!result.flightCompleted) {
@@ -1860,10 +2089,48 @@ contractList.addEventListener("click", (event) => {
           <b>${research.effect}</b><em>회사 연구에 영구 적용</em>
         </button>
       `).join("");
-    } else {
-      factoryOverlay.classList.remove("show");
-      baseHub.classList.add("show");
     }
+    factoryOverlay.classList.remove("show");
+    baseHub.classList.add("show");
+    if (pendingFlightReport) showFlightReport(pendingFlightReport, flightResult, dayComplete);
+  }
+});
+flightReportProcessing.addEventListener("click", () => {
+  closeFlightReport();
+  baseHub.classList.add("show");
+  processingOverlay.classList.add("show");
+});
+flightReportSkill.addEventListener("click", () => {
+  closeFlightReport();
+  baseHub.classList.add("show");
+  game.openSkillTree();
+});
+flightReportContinue.addEventListener("click", () => {
+  closeFlightReport();
+  if (flightReportDayComplete) {
+    baseHub.classList.remove("show");
+    factoryOverlay.classList.add("show");
+    factoryPanel.classList.add("settled");
+    factoryReceipt.classList.add("show");
+    factoryOverlay.scrollTop = 0;
+    return;
+  }
+  baseHub.classList.add("show");
+  renderRouteList();
+  routeOverlay.classList.add("show");
+});
+flightReportOverlay.addEventListener("keydown", (event) => {
+  if (event.key !== "Tab") return;
+  const focusable = [flightReportProcessing, flightReportSkill, flightReportContinue].filter((button) => !button.disabled);
+  if (focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
   }
 });
 claimProcessingButton.addEventListener("click", () => {
@@ -1970,6 +2237,9 @@ routeList.addEventListener("click", (event) => {
 
   const button = target.closest<HTMLButtonElement>("[data-map]");
   if (!button || !game.launchFlight(Number(button.dataset.map))) return;
+  closeFlightReport();
+  pendingFlightReport = null;
+  pendingProcessingResult = null;
   routeOverlay.classList.remove("show");
   processingOverlay.classList.remove("show");
   baseHub.classList.remove("show");
@@ -2037,6 +2307,9 @@ resetButton.addEventListener("click", () => {
   if (window.confirm("현재 회사의 진행 상황을 지우고 처음부터 시작할까요?")) {
     document.body.classList.remove("base-open");
     processingOverlay.classList.remove("show");
+    closeFlightReport();
+    pendingFlightReport = null;
+    pendingProcessingResult = null;
     game.reset();
   }
 });

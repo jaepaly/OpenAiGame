@@ -1,10 +1,10 @@
 import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
-import type { ArchiveRelayState, Cloud, CloudFormationKind, CloudKind, ContractId, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, OpenSkyState, Particle, ProcessingClaimResult, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RivalRaceState, RunSkillId, RunState, SignalTraceState, SolarEngineState, StorySceneId, UpgradeId } from "./types";
+import type { ArchiveRelayState, Cloud, CloudFormationKind, CloudKind, ContractId, FlightRecordKind, FlightReport, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, OpenSkyState, Particle, ProcessingClaimResult, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RivalRaceState, RunSkillId, RunState, SignalTraceState, SolarEngineState, StorySceneId, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
 type RunListener = (state: RunState) => void;
 type LevelListener = (pendingPicks: number) => void;
-type FactoryListener = (state: RunState) => void;
+type FactoryListener = (state: RunState, report: FlightReport) => void;
 type ToastListener = (message: string, tone?: "normal" | "success" | "warning") => void;
 export type RadioCall = {
   speaker: string;
@@ -99,6 +99,8 @@ type PacingMilestone = keyof typeof PACING_TARGETS;
 const clampVolume = (value: number): number => Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
 const emptyCloudStock = (): Record<CloudKind, number> => ({ cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 });
 const freshProcessingState = (): ProcessingState => ({ jobs: [], completedCoins: 0, completedMaterials: emptyCloudStock(), totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now() });
+type FlightStats = Pick<FlightReport, "maxCombo" | "rareClouds" | "denseClouds" | "droneHarvested" | "feverActivations">;
+const freshFlightStats = (): FlightStats => ({ maxCombo: 0, rareClouds: 0, denseClouds: 0, droneHarvested: 0, feverActivations: 0 });
 const freshRivalRace = (): RivalRaceState => ({ status: "inactive", playerScore: 0, rivalScore: 0, target: RIVAL_RACE_TARGET, reward: RIVAL_RACE_REWARD });
 const freshSignalTrace = (): SignalTraceState => ({ status: "inactive", progress: 0, target: SIGNAL_TRACE_TARGET, timeLeft: SIGNAL_TRACE_SECONDS, timeLimit: SIGNAL_TRACE_SECONDS, reward: SIGNAL_TRACE_REWARD });
 const freshArchiveRelay = (): ArchiveRelayState => ({
@@ -229,6 +231,8 @@ export class CloudHarvestGame {
   private launchTimer = 0;
   private transitionWhooshPlayed = false;
   private dayComplete = false;
+  private flightStats = freshFlightStats();
+  private pendingFlightReport?: FlightReport;
   private harvestDrones: HarvestDrone[] = [];
   private rivalHarvester: RivalHarvester = { x: 0, y: 0, vx: 0, vy: 0, angle: Math.PI, pulse: 0, delay: 0 };
   private signalTargetId?: number;
@@ -502,6 +506,45 @@ export class CloudHarvestGame {
     return true;
   }
 
+  private captureFlightReport(emergencyReturn: boolean): FlightReport {
+    const cargo = { ...this.run.cargo };
+    const totalCollected = CLOUD_ORDER.reduce((total, kind) => total + cargo[kind], 0);
+    const grossValue = Math.floor(CLOUD_ORDER.reduce((total, kind) => total + this.run.cargoValue[kind], this.run.cargoBonus));
+    const fuelCapacity = Math.max(1, this.run.fuelCapacity);
+    const fuelRemaining = Math.max(0, this.run.fuel);
+    const fuelEfficiency = Math.max(0, Math.min(1, fuelRemaining / fuelCapacity));
+    const previous = this.state.flightRecords;
+    const next = {
+      harvest: Math.max(previous.harvest, totalCollected),
+      value: Math.max(previous.value, grossValue),
+      combo: Math.max(previous.combo, this.flightStats.maxCombo),
+      rare: Math.max(previous.rare, this.flightStats.rareClouds),
+    };
+    const newRecords: FlightRecordKind[] = emergencyReturn ? [] : (Object.keys(next) as FlightRecordKind[])
+      .filter((kind) => next[kind] > previous[kind]);
+    if (!emergencyReturn) this.state.flightRecords = next;
+    return {
+      day: this.run.day,
+      flight: this.run.flight,
+      mapRank: this.run.mapRank,
+      routeId: this.run.routeId,
+      cargo,
+      totalCollected,
+      grossValue,
+      maxCombo: this.flightStats.maxCombo,
+      rareClouds: this.flightStats.rareClouds,
+      denseClouds: this.flightStats.denseClouds,
+      droneHarvested: this.flightStats.droneHarvested,
+      feverActivations: this.flightStats.feverActivations,
+      fuelCapacity,
+      fuelRemaining,
+      fuelEfficiency,
+      emergencyReturn,
+      newRecords,
+      records: next,
+    };
+  }
+
   requestReturn(): boolean {
     if (this.atFactory || this.returning || this.launching) return false;
     if (this.run.signalTrace.status === "active") this.finishSignalTrace(false, "return");
@@ -509,6 +552,7 @@ export class CloudHarvestGame {
     if (this.run.solarEngine.status === "active") this.finishSolarEngine(false, "return");
     if (this.run.openSky.status === "active") this.finishOpenSky(false, "return");
     this.run.emergencyReturn = false;
+    this.pendingFlightReport = this.captureFlightReport(false);
     this.returning = true;
     this.returnTimer = 0;
     this.transitionWhooshPlayed = false;
@@ -552,6 +596,7 @@ export class CloudHarvestGame {
     if (this.run.solarEngine.status === "active") this.finishSolarEngine(false, "fuel");
     if (this.run.openSky.status === "active") this.finishOpenSky(false, "fuel");
     const discarded = this.getCargoCount();
+    this.pendingFlightReport = this.captureFlightReport(true);
     this.run.cargo = emptyCloudStock();
     this.run.cargoValue = emptyCloudStock();
     this.run.cargoBonus = 0;
@@ -844,6 +889,8 @@ export class CloudHarvestGame {
     this.run.fuelRecovered = 0;
     this.run.fuelRecoveryLimit = this.getFuelRecoveryLimit();
     this.run.emergencyReturn = false;
+    this.flightStats = freshFlightStats();
+    this.pendingFlightReport = undefined;
     this.run.processingUsage = {};
     this.prepareRivalRace(mapRank);
     this.prepareSignalTrace(mapRank);
@@ -1080,6 +1127,8 @@ export class CloudHarvestGame {
     this.launching = false;
     this.launchTimer = 0;
     this.dayComplete = false;
+    this.flightStats = freshFlightStats();
+    this.pendingFlightReport = undefined;
     this.goldenFront = false;
     this.goldenFrontClaimed = false;
     this.clouds = [];
@@ -1589,7 +1638,7 @@ export class CloudHarvestGame {
       });
       if (this.returnTimer >= 2.25) {
         this.returning = false;
-        this.onFactoryOpen(this.getRunState());
+        this.onFactoryOpen(this.getRunState(), structuredClone(this.pendingFlightReport ?? this.captureFlightReport(this.run.emergencyReturn)));
       }
       return;
     }
@@ -2533,6 +2582,10 @@ export class CloudHarvestGame {
     const earned = Math.round(definition.value * comboMultiplier * permanentValue * runValue * insulationValue * densityValue * altitudeValue);
     this.run.cargo[cloud.kind] += 1;
     this.run.cargoValue[cloud.kind] += earned;
+    this.flightStats.maxCombo = Math.max(this.flightStats.maxCombo, this.combo);
+    if (cloud.kind !== "cumulus" && cloud.kind !== "rain") this.flightStats.rareClouds += 1;
+    if (cloud.dense) this.flightStats.denseClouds += 1;
+    if (source === "drone") this.flightStats.droneHarvested += 1;
     this.state.harvested += 1;
     this.markPacingMilestone("firstHarvest");
     if (countsForRivalRace) this.run.rivalRace.playerScore += 1;
@@ -2885,6 +2938,7 @@ export class CloudHarvestGame {
 
   private startFever(): void {
     this.run.feverActive = true;
+    this.flightStats.feverActivations += 1;
     this.run.feverSeconds = 7 + this.run.skills.feverDrive * 2.5 + this.run.skills.stormCatalyst * 1.5
       + this.run.skills.goldenStorm * 3 + this.run.skills.sunStorm * 4 + this.run.skills.feverReserve * .8;
     this.shake = 1.2;
@@ -4348,6 +4402,7 @@ export class CloudHarvestGame {
         selectedMap: parsed.selectedMap ?? parsed.rank ?? 0,
         levels: { ...INITIAL_STATE.levels, ...parsed.levels },
         research: { ...INITIAL_STATE.research, ...parsed.research },
+        flightRecords: { ...INITIAL_STATE.flightRecords, ...parsed.flightRecords },
         materials: { ...INITIAL_STATE.materials, ...parsed.materials },
         processing: {
           ...structuredClone(INITIAL_STATE.processing),

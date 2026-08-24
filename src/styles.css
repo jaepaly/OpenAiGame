@@ -1901,3 +1901,122 @@ body.pause-open .toast,body.pause-open .radio-call { opacity: 0 !important; }
   .pause-controls-guide { display: none; }
   .pause-actions button { min-height: 58px; }
 }
+
+/* Sortie result report */
+.flight-report-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 109;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  overflow: auto;
+  color: #f4ffff;
+  background: radial-gradient(circle at 18% 12%,rgba(110,255,221,.2),transparent 34%),radial-gradient(circle at 82% 82%,rgba(255,232,91,.16),transparent 30%),linear-gradient(145deg,rgba(5,31,42,.96),rgba(6,20,32,.985));
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .25s ease,visibility .25s ease;
+}
+.flight-report-overlay.show { opacity: 1; visibility: visible; pointer-events: auto; }
+.flight-report-panel {
+  position: relative;
+  width: min(1060px,calc(100vw - 32px));
+  max-height: calc(100vh - 28px);
+  overflow: auto;
+  padding: 25px;
+  border: 2px solid rgba(117,255,225,.74);
+  border-radius: 30px;
+  background: linear-gradient(150deg,rgba(15,61,72,.98),rgba(7,30,45,.99) 56%,rgba(17,39,55,.99));
+  box-shadow: 0 24px 80px rgba(0,0,0,.54),inset 0 0 0 5px rgba(8,19,30,.7),inset 0 0 48px rgba(96,255,221,.08);
+  transform: translateY(28px) scale(.96);
+  transition: transform .42s cubic-bezier(.16,1,.3,1);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(117,255,225,.4) transparent;
+}
+.flight-report-overlay.show .flight-report-panel { transform: translateY(0) scale(1); }
+.flight-report-panel::before { content:""; position:absolute; inset:9px; z-index:-1; border:1px solid rgba(117,255,225,.13); border-radius:22px; pointer-events:none; }
+.report-sky-burst { position:absolute; inset:0; z-index:-1; overflow:hidden; border-radius:inherit; pointer-events:none; }
+.report-sky-burst i { position:absolute; width:7px; height:90px; border-radius:99px; background:linear-gradient(transparent,rgba(137,255,229,.58),transparent); transform:rotate(58deg); animation:reportStreak 1.7s ease-out infinite; }
+.report-sky-burst i:nth-child(1) { left:5%; top:18%; animation-delay:-.2s; }.report-sky-burst i:nth-child(2) { left:28%; top:-8%; animation-delay:-.9s; }.report-sky-burst i:nth-child(3) { right:18%; top:4%; animation-delay:-.5s; }.report-sky-burst i:nth-child(4) { right:4%; top:38%; animation-delay:-1.2s; }.report-sky-burst i:nth-child(5) { left:44%; bottom:-5%; animation-delay:-.7s; }
+@keyframes reportStreak { 0% { opacity:0; translate:-35px 35px; } 28% { opacity:.85; } 100% { opacity:0; translate:70px -70px; } }
+.flight-report-heading { position:relative; display:flex; align-items:center; justify-content:space-between; gap:18px; padding:2px 6px 19px; border-bottom:1px solid rgba(135,255,230,.22); }
+.flight-report-heading > div > span { color:#79f4dc; font:900 12px/1.2 Outfit,sans-serif; letter-spacing:.17em; }
+.flight-report-heading h2 { margin:5px 0 2px; color:#fff; font:950 clamp(30px,3.3vw,48px)/1 Outfit,sans-serif; letter-spacing:-.04em; text-shadow:0 5px 22px rgba(99,255,218,.18); }
+.flight-report-heading p { margin:7px 0 0; color:#a8cbd1; font-size:15px; font-weight:700; }
+.report-record-badge { display:none; flex:0 0 auto; padding:13px 18px; border:2px solid #fff27a; border-radius:15px; color:#173b3c; background:linear-gradient(135deg,#fff36f,#8fffe0); box-shadow:0 7px 0 #a68b23,0 0 30px rgba(255,244,112,.34); font:950 15px/1 Outfit,sans-serif; letter-spacing:.08em; rotate:-3deg; animation:reportBadgePulse .9s ease-in-out infinite alternate; }
+.report-record-badge.show { display:block; }
+@keyframes reportBadgePulse { to { transform:scale(1.045); filter:brightness(1.08); } }
+.flight-report-body { display:grid; grid-template-columns:minmax(330px,.92fr) minmax(420px,1.28fr); grid-template-rows:auto auto auto; gap:13px; padding:16px 0; }
+.report-score-card { grid-row:1 / 3; position:relative; min-height:305px; padding:23px; overflow:hidden; border:1px solid rgba(137,255,230,.3); border-radius:23px; background:radial-gradient(circle at 90% 12%,rgba(255,239,102,.2),transparent 35%),linear-gradient(145deg,rgba(29,100,104,.72),rgba(8,45,62,.84)); box-shadow:inset 0 0 32px rgba(102,255,224,.08); }
+.report-score-card.record { border-color:rgba(255,243,111,.72); box-shadow:inset 0 0 34px rgba(255,243,111,.08),0 0 25px rgba(255,243,111,.06); }
+.report-score-card::after { content:"☁"; position:absolute; right:-16px; bottom:-66px; color:rgba(156,255,235,.07); font-size:230px; line-height:1; pointer-events:none; }
+.report-score-card > span { color:#7ff5df; font:900 12px/1 Outfit,sans-serif; letter-spacing:.16em; }
+.report-score-card > strong { position:relative; z-index:1; display:block; margin-top:8px; color:#fff; font:950 clamp(62px,7vw,94px)/.9 Outfit,sans-serif; letter-spacing:-.06em; text-shadow:0 8px 30px rgba(115,255,225,.22); }
+.report-score-card > strong small { color:#8eb6bc; font-size:14px; letter-spacing:.08em; }
+.report-score-card > p { position:relative; z-index:1; display:inline-flex; margin:13px 0 19px; padding:8px 12px; border-radius:10px; color:#183f3e; background:#fff36f; font-size:17px; font-weight:950; box-shadow:0 5px 0 rgba(143,117,29,.72); }
+.report-cloud-manifest { position:relative; z-index:1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.report-cloud-chip { display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:7px; min-height:48px; padding:7px 10px; border:1px solid color-mix(in srgb,var(--cloud-color,#8fffe0) 50%,transparent); border-radius:12px; background:rgba(4,25,38,.62); opacity:0; transform:translateY(10px); animation:reportChipIn .38s calc(.28s + var(--manifest-index) * .07s) forwards ease-out; }
+.report-cloud-chip.cumulus { --cloud-color:#dffbff; }.report-cloud-chip.rain { --cloud-color:#78c8ff; }.report-cloud-chip.electric { --cloud-color:#c2a1ff; }.report-cloud-chip.ice { --cloud-color:#80fff2; }.report-cloud-chip.solar { --cloud-color:#ffd866; }.report-cloud-chip.aurora { --cloud-color:#ff8fe9; }
+.report-cloud-chip b { font-size:23px; }.report-cloud-chip small { color:#b9d9dc; font-size:11px; font-weight:800; }.report-cloud-chip strong { color:#fff; font:950 17px/1 Outfit,sans-serif; }
+.report-cloud-empty { grid-column:1 / -1; padding:22px; border:1px dashed rgba(255,255,255,.2); border-radius:14px; color:#9db9bf; text-align:center; font-weight:800; }
+@keyframes reportChipIn { to { opacity:1; transform:translateY(0); } }
+.report-stat-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+.report-stat-grid article { position:relative; min-width:0; padding:14px 12px 12px; overflow:hidden; border:1px solid rgba(148,231,229,.2); border-radius:16px; background:rgba(4,25,39,.72); }
+.report-stat-grid article::after { content:""; position:absolute; inset:auto 0 0; height:3px; background:var(--stat-color,#7ff5df); opacity:.7; }
+.report-stat-grid .combo { --stat-color:#fff36f; }.report-stat-grid .rare { --stat-color:#c9a6ff; }.report-stat-grid .fuel { --stat-color:#74f4d9; }.report-stat-grid .drone { --stat-color:#76d7ff; }
+.report-stat-grid article.record { border-color:#fff36f; box-shadow:inset 0 0 18px rgba(255,243,111,.1); }
+.report-stat-grid article.record::before { content:"NEW"; position:absolute; top:7px; right:7px; color:#fff36f; font:950 9px/1 Outfit,sans-serif; }
+.report-stat-grid span { display:block; overflow:hidden; color:#8eb8be; font:900 9px/1.2 Outfit,sans-serif; letter-spacing:.08em; white-space:nowrap; text-overflow:ellipsis; }
+.report-stat-grid strong { display:block; margin:8px 0 6px; color:#fff; font:950 27px/1 Outfit,sans-serif; letter-spacing:-.03em; }
+.report-stat-grid small { display:block; overflow:hidden; color:#81a4aa; font-size:9px; font-weight:800; white-space:nowrap; text-overflow:ellipsis; }
+.report-processing-transfer { position:relative; display:grid; grid-template-columns:142px 1fr 24px; align-items:center; gap:14px; min-height:98px; padding:13px 17px; overflow:hidden; border:1px solid rgba(117,255,225,.28); border-radius:18px; background:linear-gradient(100deg,rgba(19,71,78,.78),rgba(7,31,46,.82)); }
+.report-processing-transfer.lost { border-color:rgba(255,120,104,.52); background:linear-gradient(100deg,rgba(92,42,41,.72),rgba(40,24,34,.88)); }
+.report-transfer-track { position:relative; height:50px; overflow:hidden; border:1px solid rgba(137,255,229,.24); border-radius:13px; background:repeating-linear-gradient(90deg,rgba(255,255,255,.03) 0 14px,transparent 14px 28px),#061f2c; }
+.report-transfer-track::after { content:""; position:absolute; left:0; right:0; bottom:8px; height:5px; border-radius:9px; background:repeating-linear-gradient(90deg,#426a70 0 10px,#1b424b 10px 20px); }
+.report-transfer-track i { position:absolute; z-index:1; top:10px; left:-25px; width:25px; height:25px; border:2px solid #8fffe4; border-radius:50% 48% 45% 52%; background:#e8ffff; filter:drop-shadow(0 0 7px rgba(107,255,222,.56)); animation:reportCargoMove 2.2s linear infinite; }
+.report-transfer-track i:nth-child(2) { animation-delay:-.44s; }.report-transfer-track i:nth-child(3) { animation-delay:-.88s; }.report-transfer-track i:nth-child(4) { animation-delay:-1.32s; }.report-transfer-track i:nth-child(5) { animation-delay:-1.76s; }
+.report-processing-transfer.lost .report-transfer-track i { border-color:#ff8e7e; background:#69474a; filter:none; animation-play-state:paused; opacity:.22; }
+@keyframes reportCargoMove { to { left:150px; transform:rotate(360deg); } }
+.report-processing-transfer > div:nth-child(2) span { display:block; color:#6ee8d2; font:900 9px/1 Outfit,sans-serif; letter-spacing:.14em; }
+.report-processing-transfer > div:nth-child(2) strong { display:block; margin:5px 0 3px; color:#fff; font-size:16px; }
+.report-processing-transfer > div:nth-child(2) small { color:#9ebbc0; font-size:11px; font-weight:700; }
+.report-processing-transfer > b { color:#8fffe1; font-size:25px; }
+.report-review { grid-column:1 / -1; display:grid; grid-template-columns:82px 1fr; align-items:center; min-height:92px; overflow:hidden; border:1px solid rgba(139,255,229,.25); border-radius:20px; background:linear-gradient(100deg,rgba(28,87,92,.7),rgba(8,35,50,.82)); }
+.report-review.record { border-color:rgba(255,242,110,.55); background:linear-gradient(100deg,rgba(100,91,38,.54),rgba(8,41,49,.88)); }.report-review.warning { border-color:rgba(255,143,117,.48); background:linear-gradient(100deg,rgba(92,43,42,.55),rgba(35,28,42,.9)); }
+.report-review img { width:82px; height:92px; align-self:end; object-fit:cover; object-position:50% 17%; filter:drop-shadow(4px 0 10px rgba(0,0,0,.24)); }
+.report-review > div { padding:13px 18px 13px 5px; }.report-review span { color:#7ff5df; font:900 10px/1.2 Outfit,sans-serif; letter-spacing:.1em; }.report-review p { margin:7px 0 0; color:#eaffff; font-size:14px; font-weight:750; line-height:1.5; }
+.flight-report-actions { display:grid; grid-template-columns:.78fr .78fr 1.15fr; gap:10px; }
+.report-action { min-height:70px; padding:12px 16px; border:1px solid rgba(127,237,226,.26); border-radius:17px; color:#dffffa; background:rgba(8,35,49,.86); text-align:left; transition:transform .16s ease,border-color .16s ease,filter .16s ease; }
+.report-action:hover:not(:disabled),.report-action:focus-visible { transform:translateY(-2px); border-color:#8fffe3; filter:brightness(1.13); outline:none; }
+.report-action > span { display:block; font-size:15px; font-weight:900; }.report-action > small { display:block; margin-top:4px; color:#8eaeb4; font-size:10px; font-weight:750; }
+.report-action.continue { position:relative; padding-right:55px; color:#143d3e; border:3px solid #fff36f; background:linear-gradient(120deg,#fff36f,#8fffe1); box-shadow:inset 0 0 0 4px rgba(10,48,53,.2),0 5px 0 #9b8731; }
+.report-action.continue > span { font-size:19px; }.report-action.continue > small { color:#356064; }.report-action.continue > b { position:absolute; right:18px; top:50%; translate:0 -50%; font-size:24px; }
+.report-action:disabled { opacity:.35; cursor:not-allowed; }.flight-report-overlay.emergency .report-record-badge { display:none; }
+
+@media (max-width:760px) {
+  .flight-report-overlay { padding:7px; place-items:start center; }
+  .flight-report-panel { width:calc(100vw - 14px); max-height:calc(100vh - 14px); padding:16px; border-radius:23px; }
+  .flight-report-heading { padding:0 2px 12px; }.flight-report-heading h2 { margin-top:4px; font-size:28px; }.flight-report-heading p { margin-top:5px; font-size:11px; }.flight-report-heading > div > span { font-size:9px; }
+  .report-record-badge { padding:9px 10px; border-radius:11px; font-size:10px; box-shadow:0 4px 0 #a68b23; }
+  .flight-report-body { display:flex; flex-direction:column; gap:8px; padding:10px 0; }
+  .report-score-card { min-height:0; padding:14px; border-radius:17px; }.report-score-card > strong { display:inline-block; margin:6px 8px 0 0; font-size:52px; }.report-score-card > p { margin:7px 0 9px; padding:6px 9px; font-size:13px; box-shadow:0 3px 0 rgba(143,117,29,.72); }
+  .report-cloud-manifest { grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }.report-cloud-chip { grid-template-columns:25px 1fr; min-height:39px; padding:5px 7px; gap:4px; }.report-cloud-chip b { grid-row:1 / 3; font-size:19px; }.report-cloud-chip small { font-size:8px; }.report-cloud-chip strong { font-size:13px; }
+  .report-stat-grid { gap:5px; }.report-stat-grid article { padding:9px 7px 8px; border-radius:12px; }.report-stat-grid span { font-size:7px; }.report-stat-grid strong { margin:5px 0 3px; font-size:20px; }.report-stat-grid small { font-size:7px; }
+  .report-processing-transfer { grid-template-columns:90px 1fr 14px; min-height:68px; padding:8px 10px; gap:8px; border-radius:14px; }.report-transfer-track { height:39px; }.report-transfer-track i { top:7px; width:20px; height:20px; }
+  @keyframes reportCargoMove { to { left:96px; transform:rotate(360deg); } }
+  .report-processing-transfer > div:nth-child(2) strong { margin:3px 0 2px; font-size:12px; }.report-processing-transfer > div:nth-child(2) small { font-size:8px; }.report-processing-transfer > b { font-size:16px; }
+  .report-review { grid-template-columns:62px 1fr; min-height:70px; border-radius:15px; }.report-review img { width:62px; height:70px; }.report-review > div { padding:8px 10px 8px 3px; }.report-review span { font-size:8px; }.report-review p { margin-top:4px; font-size:10px; line-height:1.4; }
+  .flight-report-actions { grid-template-columns:1fr 1fr; gap:7px; }.report-action { min-height:55px; padding:8px 10px; border-radius:13px; }.report-action > span { font-size:12px; }.report-action > small { margin-top:2px; font-size:8px; }.report-action.continue { grid-column:1 / -1; min-height:62px; padding-left:16px; }.report-action.continue > span { font-size:16px; }
+}
+
+@media (max-height:760px) and (min-width:761px) {
+  .flight-report-panel { padding:16px 21px; }
+  .flight-report-heading { padding-bottom:10px; }.flight-report-heading h2 { font-size:34px; }.flight-report-heading p { margin-top:4px; font-size:12px; }
+  .flight-report-body { gap:9px; padding:10px 0; }
+  .report-score-card { min-height:232px; padding:15px 18px; }.report-score-card > strong { font-size:68px; }.report-score-card > p { margin:9px 0 12px; }.report-cloud-chip { min-height:41px; }
+  .report-stat-grid article { padding-block:11px 9px; }.report-stat-grid strong { margin:5px 0 4px; font-size:24px; }
+  .report-processing-transfer { min-height:72px; padding-block:9px; }.report-transfer-track { height:42px; }.report-transfer-track i { top:7px; }
+  .report-review { min-height:68px; }.report-review img { height:68px; }.report-review > div { padding-block:8px; }.report-review p { margin-top:4px; font-size:12px; }
+  .report-action { min-height:54px; padding-block:8px; }
+}

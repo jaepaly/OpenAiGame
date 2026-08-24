@@ -393,6 +393,7 @@ export const INITIAL_STATE = {
   levels: { power: 0, radius: 0, value: 0, drone: 0, insulation: 0, conveyor: 0, processingLine: 0, hopper: 0, fuelTank: 0, fuelSaver: 0 },
   research: { logistics: 0, refining: 0, forecasting: 0 },
   bestCombo: 0,
+  flightRecords: { harvest: 0, value: 0, combo: 0, rare: 0 },
   sound: true,
   musicVolume: .7,
   sfxVolume: .85,

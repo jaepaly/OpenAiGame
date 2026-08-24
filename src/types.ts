@@ -150,6 +150,7 @@ export interface GameState {
   levels: Record<UpgradeId, number>;
   research: Record<ResearchId, number>;
   bestCombo: number;
+  flightRecords: FlightRecords;
   sound: boolean;
   musicVolume: number;
   sfxVolume: number;
@@ -159,6 +160,36 @@ export interface GameState {
   infiniteResearch: Record<InfiniteResearchId, number>;
   story: StoryProgress;
   growthMission: GrowthMissionProgress;
+}
+
+export interface FlightRecords {
+  harvest: number;
+  value: number;
+  combo: number;
+  rare: number;
+}
+
+export type FlightRecordKind = keyof FlightRecords;
+
+export interface FlightReport {
+  day: number;
+  flight: number;
+  mapRank: number;
+  routeId: FlightRouteId;
+  cargo: Record<CloudKind, number>;
+  totalCollected: number;
+  grossValue: number;
+  maxCombo: number;
+  rareClouds: number;
+  denseClouds: number;
+  droneHarvested: number;
+  feverActivations: number;
+  fuelCapacity: number;
+  fuelRemaining: number;
+  fuelEfficiency: number;
+  emergencyReturn: boolean;
+  newRecords: FlightRecordKind[];
+  records: FlightRecords;
 }
 
 export interface StoryProgress {
