@@ -23,7 +23,7 @@ type CascadeHarvest = { cloudId: number; delay: number; depth: number };
 type DroneBeam = { x: number; y: number; targetX: number; targetY: number };
 type HarvestLink = { x: number; y: number; targetX: number; targetY: number; life: number; maxLife: number; color: string };
 type HarvestSource = "manual" | "drone" | "cascade";
-type MusicScene = "title" | "factory" | "flight" | "fever" | "event" | "story" | "transition";
+type MusicScene = "title" | "factory" | "flight" | "fever" | "event" | "story" | "transition" | "pause";
 export type UiSoundCue = "tap" | "confirm" | "back" | "warning" | "processing" | "payout" | "return";
 type MusicProfile = {
   tempo: number;
@@ -57,6 +57,7 @@ const MUSIC_PROFILES: Record<MusicScene, MusicProfile> = {
   event: { tempo: 132, root: 58, notes: [0, 3, 7, 10, 12, 10, 7, 3, 5, 8, 12, 15, 12, 8, 7, 3], bass: [0, 3, 5, 7], wave: "sawtooth", volume: .72 },
   story: { tempo: 74, root: 57, notes: [0, null, null, 7, null, 4, null, 11], bass: [0, 5, 0, 7], wave: "sine", volume: .42 },
   transition: { tempo: 140, root: 52, notes: [0, 7, 12, 16, 19, 24, 19, 16], bass: [0, 7, 9, 7], wave: "sawtooth", volume: .76 },
+  pause: { tempo: 70, root: 55, notes: [0, null, 7, null, 4, null, 11, null], bass: [0, 5, 0, 7], wave: "sine", volume: .34 },
 };
 
 const SAVE_KEY = "cloud-harvest-inc-save-v2";
@@ -95,6 +96,7 @@ const PACING_TARGETS = {
   rivalWon: 600,
 } as const;
 type PacingMilestone = keyof typeof PACING_TARGETS;
+const clampVolume = (value: number): number => Math.max(0, Math.min(1, Number.isFinite(value) ? value : 1));
 const emptyCloudStock = (): Record<CloudKind, number> => ({ cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 });
 const freshProcessingState = (): ProcessingState => ({ jobs: [], completedCoins: 0, completedMaterials: emptyCloudStock(), totalProcessed: 0, nextJobId: 1, lastUpdatedAt: Date.now() });
 const freshRivalRace = (): RivalRaceState => ({ status: "inactive", playerScore: 0, rivalScore: 0, target: RIVAL_RACE_TARGET, reward: RIVAL_RACE_REWARD });
@@ -191,6 +193,7 @@ export class CloudHarvestGame {
   private pausedForLevel = false;
   private storyPaused = false;
   private titlePaused = false;
+  private menuPaused = false;
   private player = { x: 480, y: 380, targetX: 480, targetY: 380 };
   private pointer = { x: 480, y: 380, active: false, visible: false };
   private aimAngle = 0;
@@ -374,13 +377,46 @@ export class CloudHarvestGame {
     if (this.musicNextNoteAt <= 0) this.musicNextNoteAt = this.audioContext.currentTime + .04;
   }
 
-  getAudioStatus(): { enabled: boolean; unlocked: boolean; context: AudioContextState | "idle"; scene: MusicScene } {
+  getAudioStatus(): { enabled: boolean; unlocked: boolean; context: AudioContextState | "idle"; scene: MusicScene; musicVolume: number; sfxVolume: number } {
     return {
       enabled: this.state.sound,
       unlocked: this.audioUnlocked,
       context: this.audioContext?.state ?? "idle",
       scene: this.musicScene,
+      musicVolume: this.state.musicVolume,
+      sfxVolume: this.state.sfxVolume,
     };
+  }
+
+  setMenuPaused(paused: boolean): void {
+    this.menuPaused = paused;
+    this.pointer.active = false;
+    this.touchDirect = false;
+    this.keys.clear();
+    this.playerVelocity = { x: 0, y: 0 };
+  }
+
+  setAudioVolume(channel: "music" | "sfx", value: number, persist = true): void {
+    const normalized = clampVolume(value);
+    if (channel === "music") {
+      this.state.musicVolume = normalized;
+      if (this.audioContext && this.musicGain) {
+        const now = this.audioContext.currentTime;
+        const target = MUSIC_PROFILES[this.musicScene].volume * normalized;
+        this.musicGain.gain.cancelScheduledValues(now);
+        this.musicGain.gain.setValueAtTime(this.musicGain.gain.value, now);
+        this.musicGain.gain.linearRampToValueAtTime(target, now + .06);
+      }
+    } else {
+      this.state.sfxVolume = normalized;
+      if (this.audioContext && this.sfxGain) {
+        const now = this.audioContext.currentTime;
+        this.sfxGain.gain.cancelScheduledValues(now);
+        this.sfxGain.gain.setValueAtTime(this.sfxGain.gain.value, now);
+        this.sfxGain.gain.linearRampToValueAtTime(normalized, now + .04);
+      }
+    }
+    if (persist) this.commit();
   }
 
   playUiSound(cue: UiSoundCue): void {
@@ -1037,6 +1073,7 @@ export class CloudHarvestGame {
     this.playerVelocity = { x: 0, y: 0 };
     this.pausedForLevel = false;
     this.storyPaused = false;
+    this.menuPaused = false;
     this.atFactory = false;
     this.returning = false;
     this.returnTimer = 0;
@@ -1059,6 +1096,8 @@ export class CloudHarvestGame {
     this.musicStep = 0;
     this.musicNextNoteAt = this.audioContext ? this.audioContext.currentTime + .04 : 0;
     this.setMasterVolume(.82, .05);
+    this.setAudioVolume("music", this.state.musicVolume, false);
+    this.setAudioVolume("sfx", this.state.sfxVolume, false);
     this.emitAll();
     this.onToast("새로운 수확 비행선이 출격했습니다.");
   }
@@ -1113,7 +1152,7 @@ export class CloudHarvestGame {
 
     const controlCodes = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight", "Space"]);
     window.addEventListener("keydown", (event) => {
-      if (!controlCodes.has(event.code) || this.atFactory || this.pausedForLevel || this.storyPaused) return;
+      if (!controlCodes.has(event.code) || this.atFactory || this.pausedForLevel || this.storyPaused || this.menuPaused) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("button, input, textarea, select")) return;
       event.preventDefault();
@@ -1132,7 +1171,7 @@ export class CloudHarvestGame {
 
   private isSuctionActive(): boolean {
     return this.run.fuel > 0 && !this.atFactory && !this.returning && !this.launching
-      && this.pointer.active;
+      && !this.menuPaused && this.pointer.active;
   }
 
   private getAimAngle(): number {
@@ -1252,10 +1291,10 @@ export class CloudHarvestGame {
     const dt = Math.min((time - this.lastTime) / 1000 || 0, 0.033);
     this.lastTime = time;
     this.updateAdaptiveAudio();
-    if (!this.storyPaused && !this.titlePaused) this.pacingSeconds += dt;
+    if (!this.storyPaused && !this.titlePaused && !this.menuPaused) this.pacingSeconds += dt;
     if (!this.titlePaused) this.updateProcessing(dt);
-    if (this.impactFreeze > 0) this.impactFreeze -= dt;
-    else if (!this.pausedForLevel && !this.storyPaused && !this.titlePaused && (!this.atFactory || this.launching || this.returning)) this.update(dt);
+    if (!this.menuPaused && this.impactFreeze > 0) this.impactFreeze -= dt;
+    else if (!this.menuPaused && !this.pausedForLevel && !this.storyPaused && !this.titlePaused && (!this.atFactory || this.launching || this.returning)) this.update(dt);
     this.render(time / 1000);
     requestAnimationFrame((next) => this.frame(next));
   }
@@ -4304,6 +4343,8 @@ export class CloudHarvestGame {
       const loaded: GameState = {
         ...structuredClone(INITIAL_STATE),
         ...parsed,
+        musicVolume: clampVolume(parsed.musicVolume ?? INITIAL_STATE.musicVolume),
+        sfxVolume: clampVolume(parsed.sfxVolume ?? INITIAL_STATE.sfxVolume),
         selectedMap: parsed.selectedMap ?? parsed.rank ?? 0,
         levels: { ...INITIAL_STATE.levels, ...parsed.levels },
         research: { ...INITIAL_STATE.research, ...parsed.research },
@@ -4351,8 +4392,8 @@ export class CloudHarvestGame {
     const engineFilter = context.createBiquadFilter();
     const engineGain = context.createGain();
     master.gain.value = .82;
-    music.gain.value = MUSIC_PROFILES[this.musicScene].volume;
-    sfx.gain.value = .9;
+    music.gain.value = MUSIC_PROFILES[this.musicScene].volume * this.state.musicVolume;
+    sfx.gain.value = this.state.sfxVolume;
     compressor.threshold.value = -16;
     compressor.knee.value = 16;
     compressor.ratio.value = 5;
@@ -4389,6 +4430,7 @@ export class CloudHarvestGame {
 
   private getMusicScene(): MusicScene {
     if (this.titlePaused) return "title";
+    if (this.menuPaused) return "pause";
     if (this.storyPaused) return "story";
     if (this.launching || this.returning) return "transition";
     if (this.atFactory) return "factory";
@@ -4417,7 +4459,7 @@ export class CloudHarvestGame {
       this.musicScene = nextScene;
       this.musicStep = 0;
       this.musicNextNoteAt = context.currentTime + .075;
-      const target = MUSIC_PROFILES[nextScene].volume;
+      const target = MUSIC_PROFILES[nextScene].volume * this.state.musicVolume;
       this.musicGain.gain.cancelScheduledValues(context.currentTime);
       this.musicGain.gain.setValueAtTime(this.musicGain.gain.value, context.currentTime);
       this.musicGain.gain.linearRampToValueAtTime(target, context.currentTime + .28);
@@ -4440,7 +4482,7 @@ export class CloudHarvestGame {
     const suction = scene !== "title" && scene !== "factory" && scene !== "story" && this.isSuctionActive();
     const moving = Math.hypot(this.playerVelocity.x, this.playerVelocity.y) > 28;
     const targetGain = scene === "transition" ? .028
-      : scene === "title" || scene === "factory" || scene === "story" ? .0001
+      : scene === "title" || scene === "factory" || scene === "story" || scene === "pause" ? .0001
       : suction ? (scene === "fever" ? .024 : .016)
       : moving ? .007
       : .0024;

@@ -33,8 +33,9 @@ app.innerHTML = `
           <div class="mini-stat coin-stat"><span>◈</span><strong id="money">0</strong></div>
           <div class="mini-stat cargo-stat"><span>▣</span><strong id="harvested">0</strong></div>
           <div class="mini-stat combo-stat"><span>COMBO</span><strong id="combo">0</strong></div>
-          <button class="icon-button" id="soundButton" aria-label="소리 켜기 또는 끄기">🔊</button>
-          <button class="icon-button reset-button" id="resetButton" aria-label="새 회사 시작">↻</button>
+           <button class="icon-button" id="soundButton" aria-label="소리 켜기 또는 끄기">🔊</button>
+           <button class="icon-button pause-button" id="pauseButton" aria-label="일시정지 및 설정 열기">Ⅱ</button>
+           <button class="icon-button reset-button" id="resetButton" aria-label="새 회사 시작">↻</button>
         </div>
       </header>
 
@@ -286,6 +287,37 @@ app.innerHTML = `
         </div>
       </section>
 
+      <section class="pause-overlay" id="pauseOverlay" role="dialog" aria-modal="true" aria-label="일시정지 및 오디오 설정" aria-hidden="true">
+        <div class="pause-atmosphere" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="pause-panel">
+          <header class="pause-heading">
+            <div><span>FLIGHT CONTROL // HOLD</span><h2>운항 일시정지</h2><p>비행과 항로 사건은 멈췄습니다. 구름 가공 라인은 계속 작동합니다.</p></div>
+            <kbd>ESC</kbd>
+          </header>
+          <div class="pause-status"><i></i><span>SHIP SYSTEMS</span><strong>SAFE HOLD</strong><em>연료 소모 정지</em></div>
+          <section class="audio-console" aria-label="오디오 믹서">
+            <header><span>AUDIO MIXER</span><strong>각 소리를 따로 조절하세요</strong></header>
+            <label class="volume-control" for="musicVolume">
+              <span class="volume-icon">♫</span>
+              <span class="volume-copy"><strong>배경 음악</strong><small>항로·피버·스토리 음악</small></span>
+              <input id="musicVolume" type="range" min="0" max="100" step="1" value="70">
+              <output id="musicVolumeValue" for="musicVolume">70%</output>
+            </label>
+            <label class="volume-control" for="sfxVolume">
+              <span class="volume-icon">✦</span>
+              <span class="volume-copy"><strong>효과음</strong><small>수확·엔진·경고·UI 소리</small></span>
+              <input id="sfxVolume" type="range" min="0" max="100" step="1" value="85">
+              <output id="sfxVolumeValue" for="sfxVolume">85%</output>
+            </label>
+          </section>
+          <div class="pause-controls-guide"><span><kbd>WASD</kbd> 이동</span><span><kbd>LMB</kbd> 흡입</span><span><kbd>SPACE</kbd> 귀환</span><span><kbd>ESC</kbd> 메뉴</span></div>
+          <footer class="pause-actions">
+            <button class="pause-sound-toggle" id="pauseSoundToggle"><span>MASTER AUDIO</span><strong>전체 소리 켜짐</strong></button>
+            <button class="pause-resume" id="pauseResumeButton"><span>운항 계속</span><strong>RESUME FLIGHT</strong><b>→</b></button>
+          </footer>
+        </div>
+      </section>
+
       <section class="title-screen show" id="titleScreen" role="dialog" aria-modal="true" aria-label="구름 수확 회사 타이틀" aria-hidden="false">
         <div class="title-sky" aria-hidden="true">
           <i class="title-aurora aurora-one"></i><i class="title-aurora aurora-two"></i>
@@ -310,7 +342,7 @@ app.innerHTML = `
               </button>
               <button class="title-new" id="titleNewButton" type="button" hidden>새 회사로 시작</button>
             </div>
-            <div class="title-controls"><span>WASD <b>이동</b></span><span>MOUSE <b>조준</b></span><span>LMB <b>흡입</b></span><span>SPACE <b>귀환</b></span></div>
+            <div class="title-controls"><span>WASD <b>이동</b></span><span>MOUSE <b>조준</b></span><span>LMB <b>흡입</b></span><span>SPACE <b>귀환</b></span><span>ESC <b>설정</b></span></div>
           </section>
 
           <section class="title-pilot" aria-label="정비사 모카와 현재 회사 현황">
@@ -396,6 +428,14 @@ const claimProcessingButton = required<HTMLButtonElement>("#claimProcessingButto
 const claimProcessingValue = required<HTMLElement>("#claimProcessingValue");
 const processingCloseButton = required<HTMLButtonElement>("#processingCloseButton");
 const soundButton = required<HTMLButtonElement>("#soundButton");
+const pauseButton = required<HTMLButtonElement>("#pauseButton");
+const pauseOverlay = required<HTMLElement>("#pauseOverlay");
+const pauseResumeButton = required<HTMLButtonElement>("#pauseResumeButton");
+const pauseSoundToggle = required<HTMLButtonElement>("#pauseSoundToggle");
+const musicVolume = required<HTMLInputElement>("#musicVolume");
+const musicVolumeValue = required<HTMLOutputElement>("#musicVolumeValue");
+const sfxVolume = required<HTMLInputElement>("#sfxVolume");
+const sfxVolumeValue = required<HTMLOutputElement>("#sfxVolumeValue");
 const resetButton = required<HTMLButtonElement>("#resetButton");
 const tutorial = required<HTMLElement>("#tutorial");
 const growthMission = required<HTMLElement>("#growthMission");
@@ -745,8 +785,12 @@ let activeStoryBeat = 0;
 let storySystemReady = false;
 let storyTransitioning = false;
 let titleScreenOpen = true;
+let pauseMenuOpen = false;
+let pausePreviousFocus: HTMLElement | null = null;
 const titleBlockedElements = Array.from(titleScreen.parentElement?.children ?? [])
   .filter((element): element is HTMLElement => element instanceof HTMLElement && element !== titleScreen);
+const pauseBlockedElements = Array.from(pauseOverlay.parentElement?.children ?? [])
+  .filter((element): element is HTMLElement => element instanceof HTMLElement && element !== pauseOverlay);
 
 document.body.classList.add("title-open");
 titleBlockedElements.forEach((element) => { element.inert = true; });
@@ -755,7 +799,7 @@ game.setTitlePaused(true);
 document.addEventListener("pointerdown", () => game.unlockAudio(), { once: true, capture: true });
 document.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button");
-  if (!button || button.disabled || button === soundButton || button === titleStartButton || button === titleNewButton) return;
+  if (!button || button.disabled || button === soundButton || button === pauseButton || button === pauseResumeButton || button === pauseSoundToggle || button === titleStartButton || button === titleNewButton) return;
   if (button.matches("[data-upgrade], [data-skill], [data-infinite-research], [data-contract], [data-map], [data-promote-map], [data-research], #claimProcessingButton, #returnButton, #promoteButton")) return;
   const isBack = /close|back|skip/i.test(button.id) || button.getAttribute("aria-label")?.includes("닫기");
   game.playUiSound(isBack ? "back" : "tap");
@@ -771,6 +815,90 @@ if (import.meta.env.DEV) {
 }
 storySystemReady = true;
 window.setTimeout(() => { if (!titleScreenOpen) syncStoryTriggers(game.getState()); }, 360);
+
+function openPauseMenu(): void {
+  if (pauseMenuOpen || titleScreenOpen || storyOverlay.classList.contains("show")) return;
+  pauseMenuOpen = true;
+  pausePreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  game.unlockAudio();
+  game.setMenuPaused(true);
+  game.playUiSound("confirm");
+  document.body.classList.add("pause-open");
+  pauseBlockedElements.forEach((element) => { element.inert = true; });
+  pauseOverlay.classList.add("show");
+  pauseOverlay.setAttribute("aria-hidden", "false");
+  window.requestAnimationFrame(() => pauseResumeButton.focus({ preventScroll: true }));
+}
+
+function closePauseMenu(): void {
+  if (!pauseMenuOpen) return;
+  pauseMenuOpen = false;
+  game.setMenuPaused(false);
+  game.playUiSound("back");
+  document.body.classList.remove("pause-open");
+  pauseBlockedElements.forEach((element) => { element.inert = false; });
+  pauseOverlay.classList.remove("show");
+  pauseOverlay.setAttribute("aria-hidden", "true");
+  const focusTarget = pausePreviousFocus?.isConnected ? pausePreviousFocus : canvas;
+  window.setTimeout(() => focusTarget.focus({ preventScroll: true }), 80);
+}
+
+function updateVolumePreview(channel: "music" | "sfx", input: HTMLInputElement, output: HTMLOutputElement, persist: boolean): void {
+  const percent = Math.max(0, Math.min(100, Number(input.value)));
+  output.value = `${percent}%`;
+  input.style.setProperty("--volume", `${percent}%`);
+  game.setAudioVolume(channel, percent / 100, persist);
+  if (persist && channel === "sfx" && game.getState().sound) game.playUiSound("confirm");
+}
+
+pauseButton.addEventListener("click", openPauseMenu);
+pauseResumeButton.addEventListener("click", closePauseMenu);
+pauseSoundToggle.addEventListener("click", () => game.toggleSound());
+pauseOverlay.addEventListener("click", (event) => { if (event.target === pauseOverlay) closePauseMenu(); });
+musicVolume.addEventListener("input", () => updateVolumePreview("music", musicVolume, musicVolumeValue, false));
+musicVolume.addEventListener("change", () => updateVolumePreview("music", musicVolume, musicVolumeValue, true));
+sfxVolume.addEventListener("input", () => updateVolumePreview("sfx", sfxVolume, sfxVolumeValue, false));
+sfxVolume.addEventListener("change", () => updateVolumePreview("sfx", sfxVolume, sfxVolumeValue, true));
+pauseOverlay.addEventListener("keydown", (event) => {
+  if (event.key !== "Tab") return;
+  const focusable = Array.from(pauseOverlay.querySelectorAll<HTMLElement>("button, input:not(:disabled)"));
+  if (focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+});
+window.addEventListener("keydown", (event) => {
+  if (event.code !== "Escape" || titleScreenOpen) return;
+  if (pauseMenuOpen) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    closePauseMenu();
+    return;
+  }
+  if (storyOverlay.classList.contains("show")) return;
+  if (garageOverlay.classList.contains("show")) {
+    document.body.classList.remove("garage-open");
+    garageOverlay.classList.remove("show");
+  } else if (processingOverlay.classList.contains("show")) {
+    processingOverlay.classList.remove("show");
+  } else if (routeOverlay.classList.contains("show")) {
+    routeOverlay.classList.remove("show");
+  } else if (levelUpOverlay.classList.contains("show")) {
+    game.closeSkillTree();
+    levelUpOverlay.classList.remove("show");
+    skillHoverCard.classList.remove("show");
+  } else {
+    openPauseMenu();
+  }
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}, { capture: true });
 
 function closeTitleScreen(): void {
   if (!titleScreenOpen) return;
@@ -1570,6 +1698,19 @@ function renderState(state: GameState): void {
   altitude.textContent = RANKS[state.selectedMap].altitude;
   rankName.textContent = RANKS[state.rank].name;
   soundButton.textContent = state.sound ? "🔊" : "🔇";
+  soundButton.setAttribute("aria-pressed", String(state.sound));
+  const musicPercent = Math.round(state.musicVolume * 100);
+  const sfxPercent = Math.round(state.sfxVolume * 100);
+  musicVolume.value = String(musicPercent);
+  musicVolumeValue.value = `${musicPercent}%`;
+  musicVolume.style.setProperty("--volume", `${musicPercent}%`);
+  sfxVolume.value = String(sfxPercent);
+  sfxVolumeValue.value = `${sfxPercent}%`;
+  sfxVolume.style.setProperty("--volume", `${sfxPercent}%`);
+  pauseOverlay.classList.toggle("muted", !state.sound);
+  pauseSoundToggle.setAttribute("aria-pressed", String(state.sound));
+  const pauseSoundLabel = pauseSoundToggle.querySelector<HTMLElement>("strong");
+  if (pauseSoundLabel) pauseSoundLabel.textContent = state.sound ? "전체 소리 켜짐" : "전체 소리 꺼짐";
   if (state.harvested > 2) tutorial.classList.add("hidden");
   const rivalEventReady = state.rank >= 1 && state.story.seen.includes("rainFrontier") && !state.story.rivalBeaten;
   const signalEventReady = state.rank >= 2 && state.story.seen.includes("electricFrontier") && !state.story.electricSignalCleared;

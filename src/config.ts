@@ -394,6 +394,8 @@ export const INITIAL_STATE = {
   research: { logistics: 0, refining: 0, forecasting: 0 },
   bestCombo: 0,
   sound: true,
+  musicVolume: .7,
+  sfxVolume: .85,
   materials: { cumulus: 0, rain: 0, electric: 0, ice: 0, solar: 0, aurora: 0 },
   processing: {
     jobs: [] as ProcessingJob[], completedCoins: 0,

@@ -151,6 +151,8 @@ export interface GameState {
   research: Record<ResearchId, number>;
   bestCombo: number;
   sound: boolean;
+  musicVolume: number;
+  sfxVolume: number;
   materials: Record<CloudKind, number>;
   processing: ProcessingState;
   career: CareerProgress;
