@@ -4796,11 +4796,11 @@ export class CloudHarvestGame {
     compressor.ratio.value = 5;
     compressor.attack.value = .003;
     compressor.release.value = .18;
-    engine.type = "sawtooth";
-    engine.frequency.value = 72;
+    engine.type = "triangle";
+    engine.frequency.value = 108;
     engineFilter.type = "lowpass";
     engineFilter.frequency.value = 620;
-    engineFilter.Q.value = 1.4;
+    engineFilter.Q.value = .65;
     engineGain.gain.value = .0001;
     music.connect(master);
     sfx.connect(master);
@@ -4889,16 +4889,19 @@ export class CloudHarvestGame {
     const now = this.audioContext.currentTime;
     const suction = scene !== "title" && scene !== "factory" && scene !== "story" && scene !== "ending" && this.isSuctionActive();
     const moving = Math.hypot(this.playerVelocity.x, this.playerVelocity.y) > 28;
-    const targetGain = scene === "transition" ? .028
+    const targetGain = scene === "transition" ? .003
       : scene === "title" || scene === "factory" || scene === "story" || scene === "ending" || scene === "pause" ? .0001
-      : suction ? (scene === "fever" ? .024 : .016)
-      : moving ? .007
-      : .0024;
-    const targetFrequency = scene === "transition" ? 148 : scene === "fever" ? 116 : suction ? 94 : moving ? 82 : 68;
-    const targetCutoff = scene === "transition" ? 1800 : scene === "fever" ? 1450 : suction ? 1050 : moving ? 760 : 520;
-    this.engineGain.gain.setTargetAtTime(targetGain, now, .045);
-    this.engineOscillator.frequency.setTargetAtTime(targetFrequency, now, .06);
-    this.engineFilter.frequency.setTargetAtTime(targetCutoff, now, .06);
+      : suction ? (scene === "fever" ? .0055 : .0038)
+      : .0001;
+    const targetFrequency = scene === "transition" ? 172 : scene === "fever" ? 156 : suction ? 136 : moving ? 118 : 104;
+    const targetCutoff = scene === "transition" ? 1400 : scene === "fever" ? 1100 : suction ? 860 : moving ? 600 : 420;
+    if (import.meta.env.DEV) {
+      this.canvas.dataset.engineMode = suction ? "suction" : "silent";
+      this.canvas.dataset.engineGain = targetGain.toFixed(4);
+    }
+    this.engineGain.gain.setTargetAtTime(targetGain, now, .035);
+    this.engineOscillator.frequency.setTargetAtTime(targetFrequency, now, .05);
+    this.engineFilter.frequency.setTargetAtTime(targetCutoff, now, .05);
   }
 
   private scheduleMusicStep(profile: MusicProfile, step: number, start: number, stepDuration: number): void {
