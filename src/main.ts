@@ -1250,21 +1250,20 @@ window.addEventListener("keydown", (event) => {
     closeEnding();
   } else if (flightReportOverlay.classList.contains("show")) {
     closeFlightReport();
-    showBaseHub();
+    returnToBaseDestination();
   } else if (garageOverlay.classList.contains("show")) {
     document.body.classList.remove("garage-open");
     garageOverlay.classList.remove("show");
-    showBaseHub();
+    returnToBaseDestination();
   } else if (processingOverlay.classList.contains("show")) {
-    processingOverlay.classList.remove("show");
-    showBaseHub();
+    closeProcessingFacility();
   } else if (routeOverlay.classList.contains("show")) {
     closeRouteSelector();
   } else if (levelUpOverlay.classList.contains("show")) {
     game.closeSkillTree();
     levelUpOverlay.classList.remove("show");
     skillHoverCard.classList.remove("show");
-    showBaseHub();
+    returnToBaseDestination();
   } else {
     openPauseMenu();
   }
@@ -1895,6 +1894,51 @@ function hideBaseHub(): void {
   baseHub.setAttribute("aria-hidden", "true");
 }
 
+function renderDayResearchChoices(): void {
+  const state = game.getState();
+  researchList.innerHTML = Object.values(RESEARCH_PROJECTS).map((research) => `
+    <button class="research-card" data-research="${research.id}" style="--research-color:${research.color}">
+      <span>${research.code}</span><small>RESEARCH LV.${state.research[research.id]}</small>
+      <strong>${research.name}</strong><p>${research.description}</p>
+      <b>${research.effect}</b><em>회사 연구에 영구 적용</em>
+    </button>
+  `).join("");
+}
+
+function showDayResearch(): void {
+  closeFlightReport();
+  closeRouteSelector();
+  document.body.classList.remove("garage-open");
+  document.body.classList.add("base-open");
+  garageOverlay.classList.remove("show");
+  processingOverlay.classList.remove("show");
+  hideBaseHub();
+  renderDayResearchChoices();
+  dayResearch.classList.add("show");
+  factoryPanel.classList.add("settled");
+  factoryReceipt.classList.add("show");
+  factoryOverlay.classList.add("show");
+  factoryOverlay.scrollTop = 0;
+}
+
+function returnToBaseDestination(): void {
+  if (game.isAtFactory() && game.isDayComplete()) {
+    showDayResearch();
+    return;
+  }
+  showBaseHub();
+}
+
+function openProcessingFacility(): void {
+  hideBaseHub();
+  processingOverlay.classList.add("show");
+}
+
+function closeProcessingFacility(): void {
+  processingOverlay.classList.remove("show");
+  returnToBaseDestination();
+}
+
 function closeBaseOverlaysForLaunch(): void {
   closeFlightReport();
   pendingFlightReport = null;
@@ -2462,7 +2506,7 @@ garageButton.addEventListener("click", openGarage);
 const closeGarage = () => {
   document.body.classList.remove("garage-open");
   garageOverlay.classList.remove("show");
-  showBaseHub();
+  returnToBaseDestination();
 };
 garageCloseButton.addEventListener("click", closeGarage);
 garageOverlay.addEventListener("click", (event) => {
@@ -2500,14 +2544,7 @@ contractList.addEventListener("click", (event) => {
     if (dayComplete) {
       factoryPanel.classList.add("settled");
       factoryReceipt.classList.add("show");
-      const state = game.getState();
-      researchList.innerHTML = Object.values(RESEARCH_PROJECTS).map((research) => `
-        <button class="research-card" data-research="${research.id}" style="--research-color:${research.color}">
-          <span>${research.code}</span><small>RESEARCH LV.${state.research[research.id]}</small>
-          <strong>${research.name}</strong><p>${research.description}</p>
-          <b>${research.effect}</b><em>회사 연구에 영구 적용</em>
-        </button>
-      `).join("");
+      renderDayResearchChoices();
     }
     factoryOverlay.classList.remove("show");
     showBaseHub();
@@ -2516,8 +2553,7 @@ contractList.addEventListener("click", (event) => {
 });
 flightReportProcessing.addEventListener("click", () => {
   closeFlightReport();
-  showBaseHub();
-  processingOverlay.classList.add("show");
+  openProcessingFacility();
 });
 flightReportSkill.addEventListener("click", () => {
   closeFlightReport();
@@ -2560,16 +2596,10 @@ claimProcessingButton.addEventListener("click", () => {
   const output = game.claimProcessedOutput();
   if (output.coins > 0 || output.materialUnits > 0) emitShippingBurst(output.coins + output.materialUnits);
 });
-processingFacilityButton.addEventListener("click", () => processingOverlay.classList.add("show"));
-processingCloseButton.addEventListener("click", () => {
-  processingOverlay.classList.remove("show");
-  showBaseHub();
-});
+processingFacilityButton.addEventListener("click", openProcessingFacility);
+processingCloseButton.addEventListener("click", closeProcessingFacility);
 processingOverlay.addEventListener("click", (event) => {
-  if (event.target === processingOverlay) {
-    processingOverlay.classList.remove("show");
-    showBaseHub();
-  }
+  if (event.target === processingOverlay) closeProcessingFacility();
 });
 researchList.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-research]");
@@ -2656,7 +2686,11 @@ function closeRouteSelector(): void {
 }
 
 function openRouteSelector(focusRank = game.getState().selectedMap): void {
-  if (!game.isAtFactory() || game.isDayComplete()) return;
+  if (!game.isAtFactory()) return;
+  if (game.isDayComplete()) {
+    showDayResearch();
+    return;
+  }
   closeFlightReport();
   document.body.classList.remove("garage-open");
   document.body.classList.add("base-open");
@@ -2758,7 +2792,7 @@ skillTreeCloseButton.addEventListener("click", () => {
   game.closeSkillTree();
   levelUpOverlay.classList.remove("show");
   skillHoverCard.classList.remove("show");
-  showBaseHub();
+  returnToBaseDestination();
 });
 skillTreeButton.addEventListener("click", () => game.openSkillTree());
 endingContinueButton.addEventListener("click", () => closeEnding());
