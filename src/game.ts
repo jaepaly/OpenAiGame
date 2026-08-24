@@ -170,6 +170,7 @@ export class CloudHarvestGame {
   private running = true;
   private pausedForLevel = false;
   private storyPaused = false;
+  private titlePaused = false;
   private player = { x: 480, y: 380, targetX: 480, targetY: 380 };
   private pointer = { x: 480, y: 380, active: false, visible: false };
   private aimAngle = 0;
@@ -336,6 +337,14 @@ export class CloudHarvestGame {
 
   setStoryPaused(paused: boolean): void {
     this.storyPaused = paused;
+    this.pointer.active = false;
+    this.touchDirect = false;
+    this.keys.clear();
+    this.playerVelocity = { x: 0, y: 0 };
+  }
+
+  setTitlePaused(paused: boolean): void {
+    this.titlePaused = paused;
     this.pointer.active = false;
     this.touchDirect = false;
     this.keys.clear();
@@ -1141,10 +1150,10 @@ export class CloudHarvestGame {
     if (!this.running) return;
     const dt = Math.min((time - this.lastTime) / 1000 || 0, 0.033);
     this.lastTime = time;
-    if (!this.storyPaused) this.pacingSeconds += dt;
-    this.updateProcessing(dt);
+    if (!this.storyPaused && !this.titlePaused) this.pacingSeconds += dt;
+    if (!this.titlePaused) this.updateProcessing(dt);
     if (this.impactFreeze > 0) this.impactFreeze -= dt;
-    else if (!this.pausedForLevel && !this.storyPaused && (!this.atFactory || this.launching || this.returning)) this.update(dt);
+    else if (!this.pausedForLevel && !this.storyPaused && !this.titlePaused && (!this.atFactory || this.launching || this.returning)) this.update(dt);
     this.render(time / 1000);
     requestAnimationFrame((next) => this.frame(next));
   }

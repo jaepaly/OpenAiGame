@@ -285,6 +285,51 @@ app.innerHTML = `
           </div>
         </div>
       </section>
+
+      <section class="title-screen show" id="titleScreen" role="dialog" aria-modal="true" aria-label="구름 수확 회사 타이틀" aria-hidden="false">
+        <div class="title-sky" aria-hidden="true">
+          <i class="title-aurora aurora-one"></i><i class="title-aurora aurora-two"></i>
+          <span class="title-cloud cloud-one"></span><span class="title-cloud cloud-two"></span><span class="title-cloud cloud-three"></span>
+          <div class="title-flight-trail"></div>
+          <div class="title-airship">
+            <i class="title-airship-wing"></i><i class="title-airship-body"></i><i class="title-airship-cabin"></i><i class="title-airship-tail"></i><i class="title-airship-propeller"></i>
+          </div>
+        </div>
+        <div class="title-grid"></div>
+        <div class="title-layout">
+          <section class="title-copy">
+            <div class="title-kicker"><span>TRACK 1 PROTOTYPE</span><b>SKY HARVEST COMPANY</b></div>
+            <div class="title-logo-lockup">
+              <span class="title-logo-mark">☁</span>
+              <h1><em>구름</em><br>수확 회사</h1>
+            </div>
+            <p>구름이 사라진 하늘에서 시작하는<br><strong>수확 · 가공 · 성장</strong> 항로 개척기</p>
+            <div class="title-actions">
+              <button class="title-start" id="titleStartButton" type="button">
+                <span id="titleStartKicker">NEW COMPANY</span><strong id="titleStartLabel">첫 수확 시작</strong><small id="titleStartMeta">해발 120m · 준비 완료</small>
+              </button>
+              <button class="title-new" id="titleNewButton" type="button" hidden>새 회사로 시작</button>
+            </div>
+            <div class="title-controls"><span>WASD <b>이동</b></span><span>MOUSE <b>조준</b></span><span>LMB <b>흡입</b></span><span>SPACE <b>귀환</b></span></div>
+          </section>
+
+          <section class="title-pilot" aria-label="정비사 모카와 현재 회사 현황">
+            <div class="title-character-halo"></div>
+            <img src="${mokaNeutralPortrait}" alt="정비사 모카">
+            <div class="title-pilot-tag"><span>CHIEF MECHANIC</span><strong>모카</strong><small>“준비됐어요. 오늘도 하늘을 수확하러 가죠.”</small></div>
+            <aside class="title-save-card">
+              <header><span id="titleSaveStatus">LOCAL SAVE // NEW</span><b id="titleMissionCode">JOB 01</b></header>
+              <div class="title-save-stats">
+                <span><small>DAY</small><strong id="titleDay">01</strong></span>
+                <span><small>COMPANY</small><strong id="titleRank">골목 기상소</strong></span>
+                <span><small>HARVEST</small><strong id="titleHarvested">0</strong></span>
+              </div>
+              <footer><small>NEXT OBJECTIVE</small><strong id="titleMission">첫 수확을 시작하세요</strong><span id="titleAltitude">해발 120m</span></footer>
+            </aside>
+          </section>
+        </div>
+        <footer class="title-footer"><span>WEB BUILD // TYPESCRIPT</span><b>하늘은 기다려주지 않는다. 연료가 남아 있을 때 돌아오세요.</b><span>LOCAL AUTO SAVE</span></footer>
+      </section>
     </section>
   </main>
 `;
@@ -296,6 +341,19 @@ function required<T extends Element>(selector: string): T {
 }
 
 const canvas = required<HTMLCanvasElement>("#gameCanvas");
+const titleScreen = required<HTMLElement>("#titleScreen");
+const titleStartButton = required<HTMLButtonElement>("#titleStartButton");
+const titleNewButton = required<HTMLButtonElement>("#titleNewButton");
+const titleStartKicker = required<HTMLElement>("#titleStartKicker");
+const titleStartLabel = required<HTMLElement>("#titleStartLabel");
+const titleStartMeta = required<HTMLElement>("#titleStartMeta");
+const titleSaveStatus = required<HTMLElement>("#titleSaveStatus");
+const titleMissionCode = required<HTMLElement>("#titleMissionCode");
+const titleDay = required<HTMLElement>("#titleDay");
+const titleRank = required<HTMLElement>("#titleRank");
+const titleHarvested = required<HTMLElement>("#titleHarvested");
+const titleMission = required<HTMLElement>("#titleMission");
+const titleAltitude = required<HTMLElement>("#titleAltitude");
 const money = required<HTMLElement>("#money");
 const harvested = required<HTMLElement>("#harvested");
 const combo = required<HTMLElement>("#combo");
@@ -686,8 +744,15 @@ let activeStoryScene: StorySceneId | null = null;
 let activeStoryBeat = 0;
 let storySystemReady = false;
 let storyTransitioning = false;
+let titleScreenOpen = true;
+const titleBlockedElements = Array.from(titleScreen.parentElement?.children ?? [])
+  .filter((element): element is HTMLElement => element instanceof HTMLElement && element !== titleScreen);
 
+document.body.classList.add("title-open");
+titleBlockedElements.forEach((element) => { element.inert = true; });
 const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast, enqueueRadioCall);
+game.setTitlePaused(true);
+window.requestAnimationFrame(() => titleStartButton.focus({ preventScroll: true }));
 if (import.meta.env.DEV) {
   const developmentWindow = window as typeof window & {
     __cloudHarvestGame?: CloudHarvestGame;
@@ -697,7 +762,35 @@ if (import.meta.env.DEV) {
   developmentWindow.__cloudHarvestPacing = () => game.getPacingReport();
 }
 storySystemReady = true;
-window.setTimeout(() => syncStoryTriggers(game.getState()), 360);
+window.setTimeout(() => { if (!titleScreenOpen) syncStoryTriggers(game.getState()); }, 360);
+
+function closeTitleScreen(): void {
+  if (!titleScreenOpen) return;
+  titleScreenOpen = false;
+  titleScreen.classList.add("leaving");
+  document.body.classList.remove("title-open");
+  titleBlockedElements.forEach((element) => { element.inert = false; });
+  game.setTitlePaused(false);
+  window.setTimeout(() => {
+    titleScreen.classList.remove("show", "leaving");
+    titleScreen.setAttribute("aria-hidden", "true");
+    canvas.focus({ preventScroll: true });
+  }, 520);
+  window.setTimeout(() => syncStoryTriggers(game.getState()), 590);
+}
+
+titleStartButton.addEventListener("click", closeTitleScreen);
+titleNewButton.addEventListener("click", () => {
+  if (!window.confirm("현재 회사의 진행 상황을 지우고 새 회사로 시작할까요?")) return;
+  game.reset();
+  closeTitleScreen();
+});
+window.addEventListener("keydown", (event) => {
+  if (!titleScreenOpen || (event.code !== "Enter" && event.code !== "Space")) return;
+  if ((event.target as HTMLElement).closest("button")) return;
+  event.preventDefault();
+  closeTitleScreen();
+});
 
 function queueStoryScene(id: StorySceneId): void {
   if (!storySystemReady || game.getState().story.seen.includes(id) || activeStoryScene === id || storyQueue.includes(id)) return;
@@ -706,7 +799,7 @@ function queueStoryScene(id: StorySceneId): void {
 }
 
 function syncStoryTriggers(state: GameState): void {
-  if (!storySystemReady || storyTransitioning) return;
+  if (!storySystemReady || storyTransitioning || titleScreenOpen) return;
   if (!state.story.seen.includes("prologue")) {
     queueStoryScene("prologue");
     return;
@@ -1441,7 +1534,28 @@ function renderGrowthMission(state: GameState): void {
   renderedGrowthMissionStep = step;
 }
 
+function renderTitleSummary(state: GameState): void {
+  const mission = GROWTH_MISSIONS[state.growthMission.step];
+  const hasProgress = state.harvested > 0 || state.totalEarned > 0 || state.rank > 0
+    || state.career.day > 1 || state.story.seen.length > 0
+    || Object.values(state.levels).some((level) => level > 0)
+    || Object.values(state.career.skills).some((level) => level > 0);
+  titleStartKicker.textContent = hasProgress ? "CONTINUE COMPANY" : "NEW COMPANY";
+  titleStartLabel.textContent = hasProgress ? "이어서 출격" : "첫 수확 시작";
+  titleStartMeta.textContent = `${RANKS[state.selectedMap].altitude} · DAY ${String(state.career.day).padStart(2, "0")}`;
+  titleSaveStatus.textContent = hasProgress ? "LOCAL SAVE // FOUND" : "LOCAL SAVE // NEW";
+  titleDay.textContent = String(state.career.day).padStart(2, "0");
+  titleRank.textContent = RANKS[state.rank].name;
+  titleHarvested.textContent = state.harvested.toLocaleString();
+  titleMissionCode.textContent = mission?.code ?? (state.story.skyRestored ? "ENDLESS SKY" : "ALL JOBS CLEAR");
+  titleMission.textContent = mission?.title ?? (state.story.skyRestored ? "무한 연구로 하늘 산업을 확장하세요" : "남은 항로 사건을 완료하세요");
+  titleAltitude.textContent = RANKS[state.selectedMap].altitude;
+  titleNewButton.hidden = !hasProgress;
+  titleScreen.classList.toggle("has-save", hasProgress);
+}
+
 function renderState(state: GameState): void {
+  renderTitleSummary(state);
   money.textContent = Math.floor(state.money).toLocaleString();
   altitude.textContent = RANKS[state.selectedMap].altitude;
   rankName.textContent = RANKS[state.rank].name;
@@ -1515,7 +1629,7 @@ function renderState(state: GameState): void {
     promoteButton.disabled = !(moneyDone && harvestDone && flightDone && (eventGate?.done ?? true));
     promoteButton.textContent = eventGate && !eventGate.done ? "항로 사건 필요" : `${next.altitude} 항로 해금`;
   }
-  if (storySystemReady) syncStoryTriggers(state);
+  if (storySystemReady && !titleScreenOpen) syncStoryTriggers(state);
 }
 
 storyNextButton.addEventListener("click", advanceStory);
