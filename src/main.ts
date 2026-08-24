@@ -95,11 +95,19 @@ app.innerHTML = `
 
       <div class="tutorial" id="tutorial"><b>WASD 이동 · 마우스 조준</b><span>좌클릭 흡입 · SPACE 기지 귀환 · 연료 0% 전 복귀</span></div>
       <aside class="growth-mission" id="growthMission" aria-live="polite">
+        <button class="growth-guide-toggle" id="growthGuideToggle" type="button" aria-pressed="false">GUIDE ON</button>
         <span class="growth-mission-code" id="growthMissionCode">JOB 01</span>
         <div class="growth-mission-copy"><strong id="growthMissionTitle">첫 수확을 시작하세요</strong><small id="growthMissionDescription">뭉게구름 6개를 수확</small></div>
         <div class="growth-mission-progress"><i id="growthMissionFill"></i></div>
         <b class="growth-mission-count" id="growthMissionCount">0 / 6</b>
         <span class="growth-mission-reward">자동 보상 <b id="growthMissionReward">◈ 4</b></span>
+        <section class="growth-mission-guide">
+          <img id="growthMissionPortrait" src="${sonaNeutralPortrait}" alt="관측 연구원 소나" />
+          <div><span id="growthMissionSpeaker">소나 · FLIGHT DIRECTOR</span><p id="growthMissionGuide">구름 중심을 조준하고 흡입을 유지하세요.</p><kbd id="growthMissionControl">좌클릭 길게 · WASD 이동</kbd></div>
+        </section>
+        <div class="growth-mission-loop" id="growthMissionLoop" aria-label="초반 성장 순환">
+          <i>01 수확</i><i>02 귀환</i><i>03 가공</i><i>04 강화</i><i>05 재출격</i>
+        </div>
       </aside>
       <div class="cloud-legend" id="cloudLegend"></div>
       <div class="toast" id="toast" aria-live="polite"></div>
@@ -228,7 +236,7 @@ app.innerHTML = `
       </section>
 
       <nav class="base-hub" id="baseHub" aria-label="구름 수확 기지 시설">
-        <div class="base-hub-status"><small>DOCKING COMPLETE</small><strong id="baseHubStatus">화물 정산 완료 · 다음 작전을 준비하세요</strong><button class="final-directive-button" id="finalDirectiveButton" hidden><b id="finalDirectiveCode">FINAL DIRECTIVE</b><span id="finalDirectiveLabel">기상 순환망 복구</span><em>→</em></button></div>
+        <div class="base-hub-status"><small>DOCKING COMPLETE</small><strong id="baseHubStatus">화물 정산 완료 · 다음 작전을 준비하세요</strong><span class="base-hub-guide" id="baseHubGuide">NEXT · 첫 가공 계약을 선택하세요</span><button class="final-directive-button" id="finalDirectiveButton" hidden><b id="finalDirectiveCode">FINAL DIRECTIVE</b><span id="finalDirectiveLabel">기상 순환망 복구</span><em>→</em></button></div>
         <button class="base-facility workshop" id="baseGarageButton"><b>MK · FACILITY 01</b><span>장비 정비소</span><small>영구 장비를 장착하고 강화합니다.</small><em>정비소 입장 →</em></button>
         <button class="base-facility blueprint" id="skillTreeButton"><b>TREE · FACILITY 02</b><span>특성 설계실</span><small>수확한 구름으로 시스템을 해금합니다.</small><em>특성 트리 열기 →</em></button>
         <button class="base-facility processing" id="processingFacilityButton"><b>PROC · FACILITY 03</b><span>구름 가공동</span><small>진행 중인 가공과 완성품을 관리합니다.</small><em>가공동 입장 →</em></button>
@@ -512,6 +520,12 @@ const growthMissionDescription = required<HTMLElement>("#growthMissionDescriptio
 const growthMissionFill = required<HTMLElement>("#growthMissionFill");
 const growthMissionCount = required<HTMLElement>("#growthMissionCount");
 const growthMissionReward = required<HTMLElement>("#growthMissionReward");
+const growthGuideToggle = required<HTMLButtonElement>("#growthGuideToggle");
+const growthMissionPortrait = required<HTMLImageElement>("#growthMissionPortrait");
+const growthMissionSpeaker = required<HTMLElement>("#growthMissionSpeaker");
+const growthMissionGuide = required<HTMLElement>("#growthMissionGuide");
+const growthMissionControl = required<HTMLElement>("#growthMissionControl");
+const growthMissionLoop = required<HTMLElement>("#growthMissionLoop");
 const runLevel = required<HTMLElement>("#runLevel");
 const xpFill = required<HTMLElement>("#xpFill");
 const xpText = required<HTMLElement>("#xpText");
@@ -593,6 +607,7 @@ const baseGarageButton = required<HTMLButtonElement>("#baseGarageButton");
 const launchButton = required<HTMLButtonElement>("#launchButton");
 const skillTreeButton = required<HTMLButtonElement>("#skillTreeButton");
 const processingFacilityButton = required<HTMLButtonElement>("#processingFacilityButton");
+const baseHubGuide = required<HTMLElement>("#baseHubGuide");
 const baseHub = required<HTMLElement>("#baseHub");
 const baseHubStatus = required<HTMLElement>("#baseHubStatus");
 const finalDirectiveButton = required<HTMLButtonElement>("#finalDirectiveButton");
@@ -666,6 +681,7 @@ let processingOutputKey = "";
 let previousProcessingJobs: { id: number; line: number; kind: keyof GameState["materials"] }[] | null = null;
 let previousCompletedCoins: number | null = null;
 let renderedGrowthMissionStep: number | null = null;
+let growthGuideCompact = false;
 let activeSkillTreeTab: "blueprint" | "infinite" = "blueprint";
 let infiniteResearchUnlockedPreviously = false;
 let pendingFlightReport: FlightReport | null = null;
@@ -688,6 +704,51 @@ type StoryPortrait =
   | "sona-worried";
 type StoryBeat = { speaker: string; name: string; role: string; mark: string; tone: StoryTone; portrait?: StoryPortrait; text: string };
 type StoryScene = { chapter: string; title: string; beats: StoryBeat[] };
+
+type GrowthGuide = {
+  speaker: string;
+  portrait: string;
+  portraitAlt: string;
+  guide: string;
+  control: string;
+  baseControl: string;
+  loopStep: number;
+};
+
+const GROWTH_GUIDES: Record<GrowthMissionId, GrowthGuide> = {
+  collect: {
+    speaker: "소나 · FLIGHT DIRECTOR", portrait: sonaNeutralPortrait, portraitAlt: "관측 연구원 소나", loopStep: 0,
+    guide: "구름 중심을 향해 흡입을 유지하세요. 여섯 개면 첫 화물은 충분합니다.", control: "좌클릭 길게 · WASD 이동", baseControl: "GO 출격 관제문 · 뭉게구름 수확",
+  },
+  return: {
+    speaker: "모카 · DOCK CONTROL", portrait: mokaSeriousPortrait, portraitAlt: "정비사 모카", loopStep: 1,
+    guide: "첫 화물 확보 완료! 연료를 전부 쓰기 전에 직접 귀환해야 화물을 지킬 수 있어요.", control: "SPACE · 안전 귀환", baseControl: "안전 귀환 완료 · 가공 계약 확인",
+  },
+  contract: {
+    speaker: "소나 · PROCESSING LAB", portrait: sonaNeutralPortrait, portraitAlt: "관측 연구원 소나", loopStep: 2,
+    guide: "가져온 구름은 아직 원재료예요. 첫 화물은 빠른 압축 라인에 넣어 흐름을 익혀 보세요.", control: "QCK 즉시 압축 판매 선택", baseControl: "입고 화물 · QCK 즉시 압축 선택",
+  },
+  ship: {
+    speaker: "소나 · SHIPPING CONTROL", portrait: sonaSeriousPortrait, portraitAlt: "관측 연구원 소나", loopStep: 2,
+    guide: "가공이 끝난 완제품이 쌓였습니다. 출하해야 코인이 회사 자금으로 들어옵니다.", control: "PROC 가공동 · 완성품 일괄 출하", baseControl: "PROC 가공동 · 완성품 출하",
+  },
+  skill: {
+    speaker: "소나 · SYSTEM DESIGN", portrait: sonaNeutralPortrait, portraitAlt: "관측 연구원 소나", loopStep: 3,
+    guide: "방금 보관한 뭉게구름으로 첫 특성을 연결할 수 있어요. 모든 특성은 영구 유지됩니다.", control: "TREE 특성 설계실 · 시작 노드", baseControl: "TREE 특성 설계실 · 시작 노드",
+  },
+  upgrade: {
+    speaker: "모카 · SHIP WORKSHOP", portrait: mokaNeutralPortrait, portraitAlt: "정비사 모카", loopStep: 3,
+    guide: "첫 부품을 달면 다음 비행부터 차이가 바로 납니다. 진공 터빈은 가장 직관적인 선택이에요.", control: "MK 장비 정비소 · 부품 강화", baseControl: "MK 장비 정비소 · 진공 터빈 강화",
+  },
+  promote: {
+    speaker: "소나 · SORTIE CONTROL", portrait: sonaSeriousPortrait, portraitAlt: "관측 연구원 소나", loopStep: 4,
+    guide: "같은 항로라도 두 번째 비행은 교정 출력이 붙습니다. 피버를 터뜨려 승급 물량을 채우세요.", control: "GO 출격 관제문 · 두 번째 비행", baseControl: "GO 두 번째 출격 · 교정 부스트 준비",
+  },
+  rain: {
+    speaker: "소나 · ALTITUDE CONTROL", portrait: sonaSeriousPortrait, portraitAlt: "관측 연구원 소나", loopStep: 4,
+    guide: "비구름 항로가 열렸습니다. 더 무겁지만 첫 고도보다 훨씬 높은 가치를 가집니다.", control: "GO · 상공 2,000m 출격", baseControl: "GO · 상공 2,000m 비구름 항로",
+  },
+};
 
 const STORY_PORTRAITS: Record<StoryPortrait, string> = {
   "moka-neutral": mokaNeutralPortrait,
@@ -914,6 +975,8 @@ const titleBlockedElements = Array.from(titleScreen.parentElement?.children ?? [
 const pauseBlockedElements = Array.from(pauseOverlay.parentElement?.children ?? [])
   .filter((element): element is HTMLElement => element instanceof HTMLElement && element !== pauseOverlay);
 
+try { setGrowthGuideCompact(localStorage.getItem("sky-harvest-growth-guide-compact") === "1", false); }
+catch { setGrowthGuideCompact(false, false); }
 document.body.classList.add("title-open");
 titleBlockedElements.forEach((element) => { element.inert = true; });
 const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast, enqueueRadioCall);
@@ -1966,6 +2029,9 @@ function showLevelUp(_pendingPicks: number): void {
         </button>`;
       }).join("")}
     </div>`;
+  if (GROWTH_MISSIONS[companyState.growthMission.step]?.id === "skill") {
+    skillChoices.querySelector<HTMLButtonElement>("[data-skill]:not(:disabled)")?.classList.add("mission-target");
+  }
   levelUpOverlay.classList.add("show");
 }
 
@@ -1997,14 +2063,26 @@ function growthMissionProgress(state: GameState, id: GrowthMissionId): number {
   }
 }
 
+function setGrowthGuideCompact(compact: boolean, persist = true): void {
+  growthGuideCompact = compact;
+  document.body.classList.toggle("growth-guide-compact", compact);
+  growthGuideToggle.textContent = compact ? "GUIDE +" : "간단히";
+  growthGuideToggle.setAttribute("aria-pressed", String(!compact));
+  growthGuideToggle.setAttribute("aria-label", compact ? "상세 성장 가이드 펼치기" : "성장 가이드 간단히 보기");
+  if (!persist) return;
+  try { localStorage.setItem("sky-harvest-growth-guide-compact", compact ? "1" : "0"); } catch { /* 저장이 막혀도 가이드는 계속 작동합니다. */ }
+}
+
 function renderGrowthMission(state: GameState): void {
   const step = state.growthMission.step;
   const complete = step >= GROWTH_MISSIONS.length;
   growthMission.classList.toggle("hidden", complete);
-  [returnButton, contractList, processingFacilityButton, skillTreeButton, baseGarageButton, promotionCard, launchButton]
+  baseHubGuide.classList.toggle("hidden", complete);
+  [returnButton, contractList, processingFacilityButton, claimProcessingButton, skillTreeButton, baseGarageButton, promotionCard, launchButton]
     .forEach((element) => element.classList.remove("mission-target"));
   if (complete) return;
   const mission = GROWTH_MISSIONS[step];
+  const guide = GROWTH_GUIDES[mission.id];
   const progress = Math.min(mission.target, growthMissionProgress(state, mission.id));
   growthMissionCode.textContent = mission.code;
   growthMissionTitle.textContent = mission.title;
@@ -2012,6 +2090,19 @@ function renderGrowthMission(state: GameState): void {
   growthMissionCount.textContent = `${progress.toLocaleString()} / ${mission.target.toLocaleString()}`;
   growthMissionFill.style.width = `${progress / mission.target * 100}%`;
   growthMissionReward.textContent = mission.rewardLabel;
+  growthMissionPortrait.src = guide.portrait;
+  growthMissionPortrait.alt = guide.portraitAlt;
+  growthMissionSpeaker.textContent = guide.speaker;
+  growthMissionGuide.textContent = mission.id === "collect" && progress > 0
+    ? `${progress}개 확보. 흐름을 끊지 말고 남은 ${mission.target - progress}개를 연속으로 터뜨리세요.`
+    : guide.guide;
+  growthMissionControl.textContent = guide.control;
+  baseHubGuide.textContent = `${mission.code} NEXT · ${guide.baseControl}`;
+  growthMission.dataset.loopStep = String(guide.loopStep);
+  Array.from(growthMissionLoop.children).forEach((element, index) => {
+    element.classList.toggle("active", index === guide.loopStep);
+    element.classList.toggle("done", index < guide.loopStep);
+  });
   const missionTargets: Partial<Record<GrowthMissionId, HTMLElement>> = {
     return: returnButton,
     contract: contractList,
@@ -2022,6 +2113,7 @@ function renderGrowthMission(state: GameState): void {
     rain: launchButton,
   };
   missionTargets[mission.id]?.classList.add("mission-target");
+  if (mission.id === "ship") claimProcessingButton.classList.add("mission-target");
   if (mission.id === "return" || mission.id === "contract") launchButton.classList.add("mission-target");
   if (renderedGrowthMissionStep !== null && renderedGrowthMissionStep !== step) {
     growthMission.classList.remove("advance");
@@ -2121,6 +2213,9 @@ function renderState(state: GameState): void {
       </button>
     `;
   }).join("");
+  if (GROWTH_MISSIONS[state.growthMission.step]?.id === "upgrade") {
+    upgradeList.querySelector<HTMLButtonElement>("[data-upgrade]:not(:disabled)")?.classList.add("mission-target");
+  }
 
   const next = RANKS[state.rank + 1];
   if (!next) {
@@ -2150,6 +2245,7 @@ function renderState(state: GameState): void {
 
 storyNextButton.addEventListener("click", advanceStory);
 storySkipButton.addEventListener("click", finishStoryScene);
+growthGuideToggle.addEventListener("click", () => setGrowthGuideCompact(!growthGuideCompact));
 storyFrame.addEventListener("click", (event) => {
   if ((event.target as HTMLElement).closest("button")) return;
   advanceStory();

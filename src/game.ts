@@ -927,13 +927,18 @@ export class CloudHarvestGame {
     this.droneBeams = [];
     this.harvestLinks = [];
     this.harvestDrones = [];
-    this.formationCooldown = 2.8;
+    const calibrationFlight = this.isFirstDayCalibrationFlight();
+    this.formationCooldown = calibrationFlight ? .8 : 2.8;
     this.clearCascade();
     this.goldenFront = false;
     this.goldenFrontClaimed = false;
     const flightFrontDelay = this.run.flight === 3 ? 3.5 : this.run.flight === 2 ? .72 : 1;
-    this.frontTimer = FLIGHT_ROUTES[routeId].frontDelay * flightFrontDelay;
+    this.frontTimer = Math.min(
+      FLIGHT_ROUTES[routeId].frontDelay * flightFrontDelay,
+      calibrationFlight ? 4.5 : Number.POSITIVE_INFINITY,
+    );
     this.run.fever = Math.max(this.run.fever, FLIGHT_ROUTES[routeId].startingFever);
+    if (calibrationFlight) this.run.fever = Math.max(this.run.fever, 52);
     this.player.x = this.width * .5;
     this.player.y = this.height * .61;
     this.player.targetX = this.width * .5;
@@ -941,7 +946,9 @@ export class CloudHarvestGame {
     const phaseName = this.run.flight === 3 ? "최종 수확" : this.run.flight === 2 ? "고밀도 운항" : "탐색 운항";
     this.rankReveal = 2.4;
     this.commit();
-    this.onToast(`FLIGHT ${this.run.flight}/3 ${phaseName} — ${RANKS[mapRank].name}`, "success");
+    this.onToast(calibrationFlight
+      ? "CALIBRATION BOOST — 피버 52% 충전 · 고밀도 구름 전선 5초 전"
+      : `FLIGHT ${this.run.flight}/3 ${phaseName} — ${RANKS[mapRank].name}`, "success");
     this.playTone(165, .28);
     return true;
   }
@@ -1302,7 +1309,8 @@ export class CloudHarvestGame {
       }
       const infiniteSpeedMultiplier = 1 + this.state.infiniteResearch.speed * .025;
       const skillSpeedMultiplier = (1 + this.run.skills.intakeServo * .22 + this.run.skills.vacuumMomentum * .28 + this.run.skills.aeroDrive * .18) * infiniteSpeedMultiplier;
-      const maxSpeed = (315 + this.run.skills.overclock * 18) * skillSpeedMultiplier * feverMovementBoost;
+      const calibrationSpeed = this.isFirstDayCalibrationFlight() ? 1.12 : 1;
+      const maxSpeed = (315 + this.run.skills.overclock * 18) * skillSpeedMultiplier * feverMovementBoost * calibrationSpeed;
       const speed = Math.hypot(this.playerVelocity.x, this.playerVelocity.y);
       if (speed > maxSpeed) {
         this.playerVelocity.x = this.playerVelocity.x / speed * maxSpeed;
@@ -1437,7 +1445,8 @@ export class CloudHarvestGame {
       : 1;
     const overloadPower = this.overload > 0 ? 0.22 : 1;
     const infinitePower = 1 + this.state.infiniteResearch.power * .04;
-    const suctionPower = basePower * skillPower * feverPower * overloadPower * infinitePower;
+    const calibrationPower = this.isFirstDayCalibrationFlight() ? 1.18 : 1;
+    const suctionPower = basePower * skillPower * feverPower * overloadPower * infinitePower * calibrationPower;
     const collected: Cloud[] = [];
 
     for (const cloud of this.clouds) {
@@ -4299,15 +4308,20 @@ export class CloudHarvestGame {
     return 9 + routeFuelBonus + this.run.skills.auxTank * 3 + this.run.skills.recoveryReservoir * 3 + this.state.infiniteResearch.fuel * .75;
   }
 
+  private isFirstDayCalibrationFlight(): boolean {
+    return this.run.day === 1 && this.run.flight === 2 && this.state.rank === 0;
+  }
+
   private getMaxClouds(): number {
-    return 22 + this.run.mapRank * 7 + (this.run.flight - 1) * 6 + this.state.levels.radius * 3 + this.run.skills.wideIntake * 4
+    const calibrationReserve = this.isFirstDayCalibrationFlight() ? 8 : 0;
+    return 22 + this.run.mapRank * 7 + (this.run.flight - 1) * 6 + calibrationReserve + this.state.levels.radius * 3 + this.run.skills.wideIntake * 4
       + this.run.skills.massInduction * 6 + this.run.skills.blackHole * 8 + this.run.skills.eventHorizon * 12
       + (this.run.feverActive ? this.run.skills.cycloneCore * 6 + this.run.skills.cargoCyclone * 14 : 0);
   }
 
   private getMinimumClouds(): number {
     const maxClouds = this.getMaxClouds();
-    const ratio = this.run.feverActive ? .78 : .55;
+    const ratio = this.run.feverActive ? .78 : this.isFirstDayCalibrationFlight() ? .68 : .55;
     const feverReserve = this.run.feverActive ? 3 + this.run.skills.stormCatalyst * 2 + this.run.skills.cargoCyclone * 8 : 0;
     return Math.min(maxClouds, Math.max(12, Math.ceil(maxClouds * ratio) + feverReserve));
   }
@@ -4323,7 +4337,8 @@ export class CloudHarvestGame {
     const cycloneInduction = this.run.feverActive ? this.run.skills.cycloneCore * .45 : 0;
     const runInduction = Math.max(.28, 1 - this.run.skills.wideIntake * .08 - this.run.skills.massInduction * .06
       - this.run.skills.blackHole * .15 - this.run.skills.eventHorizon * .12 - cycloneInduction);
-    return Math.max(.11, (0.78 - this.run.mapRank * .08) * FLIGHT_ROUTES[this.run.routeId].spawnInterval * (1 - flightPressure * .14) * permanentInduction * runInduction);
+    const calibrationFlow = this.isFirstDayCalibrationFlight() ? .78 : 1;
+    return Math.max(.11, (0.78 - this.run.mapRank * .08) * FLIGHT_ROUTES[this.run.routeId].spawnInterval * (1 - flightPressure * .14) * permanentInduction * runInduction * calibrationFlow);
   }
 
   private emitAll(): void { this.onStateChange(this.getState()); this.onRunChange(this.getRunState()); }
