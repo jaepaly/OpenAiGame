@@ -758,6 +758,21 @@ export class CloudHarvestGame {
     }
   }
 
+  playRigEvolutionSound(tier: number): void {
+    if (!this.state.sound) return;
+    this.unlockAudio();
+    const root = 196 + Math.min(5, tier) * 22;
+    this.playSynthTone(root, .42, .026, "sawtooth", 0, root * 1.82);
+    [0, 4, 7, 12].forEach((semitone, index) => {
+      const frequency = this.midiToFrequency(57 + tier + semitone);
+      this.playSynthTone(frequency, .18 + index * .035, .03, index === 3 ? "sine" : "triangle", .22 + index * .11, frequency * 1.04);
+    });
+    this.playSynthTone(880 + tier * 70, .28, .018, "sine", .72, 1320 + tier * 85);
+    if (tier >= 5) {
+      [0, 7, 12, 16].forEach((semitone, index) => this.playSynthTone(this.midiToFrequency(69 + semitone), .3, .018, "sine", .82 + index * .07));
+    }
+  }
+
   setStoryPaused(paused: boolean): void {
     this.storyPaused = paused;
     this.pointer.active = false;

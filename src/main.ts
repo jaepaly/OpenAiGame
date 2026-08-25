@@ -198,6 +198,35 @@ app.innerHTML = `
         </div>
       </section>
 
+      <section class="rig-evolution-overlay" id="rigEvolutionOverlay" role="dialog" aria-modal="true" aria-labelledby="rigEvolutionTitle" aria-hidden="true">
+        <div class="rig-evolution-panel" id="rigEvolutionPanel" data-tier="1">
+          <button class="rig-evolution-skip" id="rigEvolutionSkip" type="button">연출 건너뛰기</button>
+          <header><span>SHIPYARD SYSTEM // RIG EVOLUTION</span><b id="rigEvolutionSystem">CORE MODULE ONLINE</b></header>
+          <div class="rig-evolution-stage" aria-hidden="true">
+            <div class="rig-evolution-orbit orbit-a"></div><div class="rig-evolution-orbit orbit-b"></div>
+            <div class="rig-evolution-ship">
+              <i class="rig-aura rig-part" data-part-tier="5"></i>
+              <i class="rig-compressor rig-compressor-top rig-part" data-part-tier="3"></i><i class="rig-compressor rig-compressor-bottom rig-part" data-part-tier="3"></i>
+              <i class="rig-pod rig-pod-top rig-part" data-part-tier="2"></i><i class="rig-pod rig-pod-bottom rig-part" data-part-tier="2"></i>
+              <i class="rig-wing rig-wing-top"></i><i class="rig-wing rig-wing-bottom"></i>
+              <i class="rig-turbine rig-part" data-part-tier="1"></i>
+              <i class="rig-hull"></i><i class="rig-cockpit"></i><i class="rig-core rig-part" data-part-tier="1"></i>
+              <i class="rig-intake"></i>
+              <i class="rig-overdrive rig-overdrive-a rig-part" data-part-tier="4"></i><i class="rig-overdrive rig-overdrive-b rig-part" data-part-tier="4"></i><i class="rig-overdrive rig-overdrive-c rig-part" data-part-tier="5"></i>
+            </div>
+            <div class="rig-scanline"></div>
+          </div>
+          <div class="rig-evolution-copy">
+            <div class="rig-mark-change"><span id="rigPreviousMark">MK-0</span><i>→</i><strong id="rigEvolutionMark">MK-I</strong></div>
+            <small id="rigEvolutionKicker">STARTER HARVEST RIG</small>
+            <h2 id="rigEvolutionTitle">스타터 리그 완성</h2>
+            <p id="rigEvolutionDescription">첫 코어 장비가 비행선 프레임에 연결되었습니다.</p>
+            <div class="rig-evolution-unlocks" id="rigEvolutionUnlocks"></div>
+          </div>
+          <button class="rig-evolution-continue" id="rigEvolutionContinue" type="button" disabled><span>진화한 비행선 확인</span><b>CONTINUE</b></button>
+        </div>
+      </section>
+
       <section class="factory-overlay" id="factoryOverlay" aria-label="구름 가공 공장">
         <div class="factory-panel">
           <header class="factory-heading">
@@ -541,6 +570,18 @@ const harvestRigDetail = required<HTMLElement>("#harvestRigDetail");
 const harvestRigFill = required<HTMLElement>("#harvestRigFill");
 const harvestRigCount = required<HTMLElement>("#harvestRigCount");
 const garageTip = required<HTMLElement>("#garageTip");
+const rigEvolutionOverlay = required<HTMLElement>("#rigEvolutionOverlay");
+const rigEvolutionPanel = required<HTMLElement>("#rigEvolutionPanel");
+const rigEvolutionSkip = required<HTMLButtonElement>("#rigEvolutionSkip");
+const rigEvolutionSystem = required<HTMLElement>("#rigEvolutionSystem");
+const rigPreviousMark = required<HTMLElement>("#rigPreviousMark");
+const rigEvolutionMark = required<HTMLElement>("#rigEvolutionMark");
+const rigEvolutionKicker = required<HTMLElement>("#rigEvolutionKicker");
+const rigEvolutionTitle = required<HTMLElement>("#rigEvolutionTitle");
+const rigEvolutionDescription = required<HTMLElement>("#rigEvolutionDescription");
+const rigEvolutionUnlocks = required<HTMLElement>("#rigEvolutionUnlocks");
+const rigEvolutionContinue = required<HTMLButtonElement>("#rigEvolutionContinue");
+rigEvolutionOverlay.inert = true;
 const cloudLegend = required<HTMLElement>("#cloudLegend");
 const toast = required<HTMLElement>("#toast");
 const processingOverlay = required<HTMLElement>("#processingOverlay");
@@ -1274,6 +1315,12 @@ pauseOverlay.addEventListener("keydown", (event) => {
 });
 window.addEventListener("keydown", (event) => {
   if (event.code !== "Escape" || titleScreenOpen) return;
+  if (rigEvolutionOverlay.classList.contains("show")) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    closeRigEvolution();
+    return;
+  }
   if (pauseMenuOpen) {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -2615,10 +2662,76 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
+const RIG_EVOLUTION_DETAILS = [
+  null,
+  { system: "CORE MODULE ONLINE", kicker: "MK-I // STARTER HARVEST RIG", title: "스타터 리그 완성", description: "첫 코어 장비가 비행선 프레임에 연결되었습니다. 이제 수확선의 성장 흔적이 비행마다 선명하게 남습니다.", unlocks: ["청록 진공 코어", "3중 흡입 궤적", "수확음 1단 상승"] },
+  { system: "TWIN TURBINE SYNCHRONIZED", kicker: "MK-II // DUAL FLOW DRIVE", title: "트윈 터빈 점화", description: "쌍발 보조 터빈이 주 추진축과 동기화되었습니다. 더 빠르고 날카로운 수확 리듬이 기체에 드러납니다.", unlocks: ["쌍발 보조 터빈", "4중 흡입 궤적", "강조음 가속"] },
+  { system: "COMPRESSION FRAME LOCKED", kicker: "MK-III // PRESSURE CHASSIS", title: "압축 프레임 결합", description: "상하 압축 프레임이 고출력 진동을 붙잡습니다. 보라색 압력파와 묵직한 기체 실루엣이 활성화됩니다.", unlocks: ["상하 압축 프레임", "5중 흡입 궤적", "보라 코어 파장"] },
+  { system: "OVERDRIVE NOZZLE DEPLOYED", kicker: "MK-IV // GOLD PRESSURE DRIVE", title: "오버드라이브 전개", description: "전방 다중 흡입 링이 압력파를 연속 방출합니다. 화면을 가르는 금빛 수확선으로 진화했습니다.", unlocks: ["다중 오버드라이브 링", "전방 압력 펄스", "금빛 수확 공명"] },
+  { system: "AURORA CIRCUIT STABILIZED", kicker: "MK-V // COMPLETE SKY HARVESTER", title: "오로라 완성형 도달", description: "모든 코어 장비가 하나의 순환 회로로 연결되었습니다. 회사의 최종 수확선이 하늘 위에서 완성됩니다.", unlocks: ["오로라 순환 링", "완성형 6중 흡입장", "최종 수확 화음"] },
+] as const;
+let rigEvolutionReadyTimer = 0;
+
+function showRigEvolution(tier: number): void {
+  const detail = RIG_EVOLUTION_DETAILS[tier];
+  if (!detail) return;
+  window.clearTimeout(rigEvolutionReadyTimer);
+  const roman = ["0", "I", "II", "III", "IV", "V"];
+  rigEvolutionPanel.dataset.tier = String(tier);
+  rigEvolutionSystem.textContent = detail.system;
+  rigPreviousMark.textContent = `MK-${roman[tier - 1]}`;
+  rigEvolutionMark.textContent = `MK-${roman[tier]}`;
+  rigEvolutionKicker.textContent = detail.kicker;
+  rigEvolutionTitle.textContent = detail.title;
+  rigEvolutionDescription.textContent = detail.description;
+  rigEvolutionUnlocks.innerHTML = detail.unlocks.map((unlock, index) => `<span style="--unlock-delay:${.72 + index * .12}s"><i>0${index + 1}</i>${unlock}</span>`).join("");
+  const parts = Array.from(rigEvolutionPanel.querySelectorAll<HTMLElement>("[data-part-tier]"));
+  parts.forEach((part) => part.classList.remove("unlocked", "newly-assembled"));
+  void rigEvolutionPanel.offsetWidth;
+  parts.forEach((part) => {
+    const partTier = Number(part.dataset.partTier);
+    part.classList.toggle("unlocked", partTier <= tier);
+    part.classList.toggle("newly-assembled", partTier === tier);
+  });
+  rigEvolutionContinue.disabled = true;
+  garageOverlay.inert = true;
+  rigEvolutionOverlay.inert = false;
+  rigEvolutionOverlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("rig-evolution-open");
+  rigEvolutionOverlay.classList.add("show");
+  rigEvolutionSkip.focus({ preventScroll: true });
+  game.playRigEvolutionSound(tier);
+  rigEvolutionReadyTimer = window.setTimeout(() => {
+    rigEvolutionContinue.disabled = false;
+    rigEvolutionContinue.focus({ preventScroll: true });
+  }, 1450);
+}
+
+function closeRigEvolution(): void {
+  if (!rigEvolutionOverlay.classList.contains("show")) return;
+  window.clearTimeout(rigEvolutionReadyTimer);
+  rigEvolutionOverlay.classList.remove("show");
+  rigEvolutionOverlay.setAttribute("aria-hidden", "true");
+  rigEvolutionOverlay.inert = true;
+  garageOverlay.inert = false;
+  document.body.classList.remove("rig-evolution-open");
+  rigEvolutionContinue.disabled = true;
+  garageCloseButton.focus({ preventScroll: true });
+}
+
+rigEvolutionSkip.addEventListener("click", closeRigEvolution);
+rigEvolutionContinue.addEventListener("click", () => {
+  game.playUiSound("confirm");
+  closeRigEvolution();
+});
+
 upgradeList.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-upgrade]");
   if (!button) return;
+  const previousRigTier = getHarvestRigTier(game.getState().levels);
   game.buyUpgrade(button.dataset.upgrade as UpgradeId);
+  const nextRigTier = getHarvestRigTier(game.getState().levels);
+  if (nextRigTier > previousRigTier) showRigEvolution(nextRigTier);
 });
 
 promoteButton.addEventListener("click", () => game.promote());
