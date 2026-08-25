@@ -1123,6 +1123,8 @@ const BALANCE_MILESTONE_LABELS: Record<string, string> = {
   archiveWon: "기록 복원", solarUnlocked: "태양 해금", engineWon: "엔진 정지", auroraUnlocked: "오로라 해금", skyRestored: "하늘 복구",
 };
 const balanceEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).get("balance") === "1";
+const captureEnabled = import.meta.env.DEV && new URLSearchParams(window.location.search).get("capture") === "1";
+const captureRushEnabled = captureEnabled && new URLSearchParams(window.location.search).get("rush") === "1";
 let balanceTimer = 0;
 const balanceTime = (seconds: number | null): string => {
   if (seconds === null) return "--:--";
@@ -1201,6 +1203,8 @@ balancePresets.addEventListener("click", (event) => {
   if (!game.startBalancePreset(mapRank)) return;
   closeBaseOverlaysForLaunch();
   setBalanceOpen(false);
+  if (captureEnabled) balanceToggle.hidden = true;
+  if (captureRushEnabled) window.setTimeout(() => game.startBalanceLastHarvest(), 2300);
   renderBalancePanel();
 });
 balanceClearButton.addEventListener("click", () => {

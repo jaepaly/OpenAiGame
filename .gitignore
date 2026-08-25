@@ -7,3 +7,6 @@ Thumbs.db
 .idea/
 .vscode/
 
+submission/video/raw/
+submission/video/work/
+submission/video/*.wav
