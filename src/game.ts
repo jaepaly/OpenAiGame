@@ -23,6 +23,7 @@ type CascadeHarvest = { cloudId: number; delay: number; depth: number };
 type DroneBeam = { x: number; y: number; targetX: number; targetY: number };
 type HarvestLink = { x: number; y: number; targetX: number; targetY: number; life: number; maxLife: number; color: string };
 type HarvestSource = "manual" | "drone" | "cascade";
+type HarvestAudioBatch = { kind: CloudKind; peakTier: number; cascadeDepth: number; dense: boolean; combo: number; count: number };
 type MusicScene = "title" | "factory" | "flight" | "fever" | "event" | "story" | "ending" | "transition" | "pause";
 export type UiSoundCue = "tap" | "confirm" | "back" | "warning" | "processing" | "payout" | "return";
 type MusicProfile = {
@@ -322,7 +323,11 @@ export class CloudHarvestGame {
   private musicScene: MusicScene = "title";
   private musicNextNoteAt = 0;
   private musicStep = 0;
-  private lastHarvestToneAt = 0;
+  private harvestAudioBatch?: HarvestAudioBatch;
+  private harvestAudioFlushTimer = 0;
+  private activeSfxVoices = 0;
+  private lastPressureToneAt = 0;
+  private comboMilestone?: { combo: number; label: string; color: string; life: number; maxLife: number };
   private discoveredCloudKinds = new Set<CloudKind>(["cumulus"]);
   private discoveryBanner?: { kind: CloudKind; life: number; maxLife: number };
   private pacingSeconds = 0;
@@ -1196,6 +1201,15 @@ export class CloudHarvestGame {
     this.run.fuelRecovered = 0;
     this.run.fuelRecoveryLimit = this.getFuelRecoveryLimit();
     this.run.emergencyReturn = false;
+    this.run.fever = FLIGHT_ROUTES[routeId].startingFever;
+    this.run.feverActive = false;
+    this.run.feverSeconds = 0;
+    this.run.combo = 0;
+    this.run.comboTime = 0;
+    this.combo = 0;
+    this.comboTimer = 0;
+    this.comboMilestone = undefined;
+    this.clearHarvestAudioBatch();
     this.flightStats = freshFlightStats();
     this.pendingFlightReport = undefined;
     this.balanceFlightStartedAt = this.pacingSeconds;
@@ -1239,8 +1253,14 @@ export class CloudHarvestGame {
       FLIGHT_ROUTES[routeId].frontDelay * flightFrontDelay,
       calibrationFlight ? 4.5 : Number.POSITIVE_INFINITY,
     );
-    this.run.fever = Math.max(this.run.fever, FLIGHT_ROUTES[routeId].startingFever);
     if (calibrationFlight) this.run.fever = Math.max(this.run.fever, 52);
+    if (import.meta.env.DEV) {
+      delete this.canvas.dataset.comboStinger;
+      delete this.canvas.dataset.harvestAudioBatch;
+      delete this.canvas.dataset.harvestAudioCombo;
+      delete this.canvas.dataset.harvestAudioKind;
+      this.canvas.dataset.sfxVoicePeak = "0";
+    }
     this.player.x = this.width * .5;
     this.player.y = this.height * .61;
     this.player.targetX = this.width * .5;
@@ -1470,6 +1490,8 @@ export class CloudHarvestGame {
     this.recentHarvestRate = 0;
     this.formationId = 0;
     this.combo = 0;
+    this.clearHarvestAudioBatch();
+    this.comboMilestone = undefined;
     this.droneBeams = [];
     this.harvestLinks = [];
     this.harvestDrones = [];
@@ -1491,6 +1513,7 @@ export class CloudHarvestGame {
     this.state.processing.lastUpdatedAt = Date.now();
     this.commit();
     this.running = false;
+    this.clearHarvestAudioBatch();
     if (this.engineOscillator) {
       try { this.engineOscillator.stop(); } catch { /* 이미 종료된 오실레이터 */ }
     }
@@ -1731,6 +1754,10 @@ export class CloudHarvestGame {
     this.impactFlash = Math.max(0, this.impactFlash - dt * 4.6);
     this.fuelPickupFlash = Math.max(0, this.fuelPickupFlash - dt * 2.8);
     this.comboPunch = Math.max(0, this.comboPunch - dt * 3.8);
+    if (this.comboMilestone) {
+      this.comboMilestone.life -= dt;
+      if (this.comboMilestone.life <= 0) this.comboMilestone = undefined;
+    }
     this.cascadeTimer = Math.max(0, this.cascadeTimer - dt);
     this.cascadePunch = Math.max(0, this.cascadePunch - dt * 7);
     if (this.cascadeTimer <= 0 && this.cascadeQueue.length === 0) this.cascadeCount = 0;
@@ -1754,6 +1781,7 @@ export class CloudHarvestGame {
         this.run.feverActive = false;
         this.run.fever = 0;
         this.onToast("피버 종료 — 다시 게이지를 채우세요!");
+        this.playFeverTransition(false);
       }
     }
     const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.pressureChamber * 18
@@ -2962,6 +2990,7 @@ export class CloudHarvestGame {
     this.impactFreeze = this.run.feverActive ? 0 : Math.min(.025, .008 + this.combo * .0006);
     this.comboPunch = 1;
     this.playHarvestTone(cloud.kind, cascadeDepth, cloud.dense);
+    this.triggerComboMilestone(cloud.x, cloud.y);
     if (countsForRivalRace) {
       this.addFloatingText({
         x: cloud.x,
@@ -3260,7 +3289,7 @@ export class CloudHarvestGame {
     this.shake = this.run.feverActive ? .8 : 5;
     this.impactFlash = .9;
     this.impactFreeze = this.run.feverActive ? 0 : .035;
-    this.playChord();
+    this.playPressureSurgeTone();
   }
 
   private completeCloudFront(x: number, y: number): void {
@@ -3295,7 +3324,7 @@ export class CloudHarvestGame {
     this.comboPunch = 1;
     this.onToast(this.run.skills.goldenStorm ? "황금 폭풍! 흡입력 360% · 가치 150%" : "SKY FEVER! 흡입력 265%", "success");
     this.burst(this.player.x, this.player.y, "#fff36f", 65, 310);
-    this.playChord();
+    this.playFeverTransition(true);
   }
 
   private spawnCloud(initial: boolean, forcedKind?: CloudKind, forceEdge = false): void {
@@ -4530,6 +4559,8 @@ export class CloudHarvestGame {
   }
 
   private drawImpactOverlay(ctx: CanvasRenderingContext2D, time: number): void {
+    const focusPresentation = this.state.focusHud && !this.atFactory && !this.returning && !this.launching
+      && (this.isSuctionActive() || this.combo >= 10 || this.run.feverActive || this.refillSurge > 0);
     if (this.impactFlash > 0) {
       const zoom = this.getWorldZoom();
       const playerScreenX = this.player.x * zoom;
@@ -4553,21 +4584,24 @@ export class CloudHarvestGame {
       ctx.fillStyle = "#cce7ed"; ctx.font = "800 12px Outfit, sans-serif"; ctx.fillText("새로운 수집 반응이 활성화되었습니다", 0, 38);
       ctx.restore();
     }
-    if (this.combo >= 3 && this.comboTimer > 0) {
+    if (this.combo >= 3 && this.comboTimer > 0 && (!focusPresentation || this.comboMilestone)) {
       const fade = Math.min(1, this.comboTimer * 1.6);
       const punch = 1 + this.comboPunch * .42;
-      ctx.save(); ctx.translate(this.width * .5, this.height * .28); ctx.scale(punch, punch);
+      const milestone = this.comboMilestone;
+      const comboY = focusPresentation ? (this.frontBanner > 0 ? .46 : .37) : .28;
+      ctx.save(); ctx.translate(this.width * .5, this.height * comboY); ctx.scale(punch, punch);
       ctx.globalAlpha = fade;
       ctx.textAlign = "center";
       ctx.strokeStyle = "rgba(25,52,71,.58)"; ctx.lineWidth = 9;
       ctx.font = `900 ${38 + Math.min(32, this.combo * 1.4)}px Outfit, sans-serif`;
       ctx.strokeText(`${this.combo} COMBO`, 0, 0);
-      ctx.fillStyle = this.run.feverActive ? "#fff36f" : "#ffffff"; ctx.fillText(`${this.combo} COMBO`, 0, 0);
+      ctx.fillStyle = milestone?.color ?? (this.run.feverActive ? "#fff36f" : "#ffffff"); ctx.fillText(`${this.combo} COMBO`, 0, 0);
       ctx.font = "900 13px Outfit, sans-serif"; ctx.letterSpacing = "4px";
-      ctx.fillStyle = "#ffdc66"; ctx.fillText(this.run.feverActive ? "FEVER HARVEST" : "PRESSURE CHAIN", 0, 24);
+      ctx.fillStyle = milestone?.color ?? "#ffdc66";
+      ctx.fillText(milestone ? `${milestone.label} // ${milestone.combo} CHAIN` : this.run.feverActive ? "FEVER HARVEST" : "PRESSURE CHAIN", 0, 24);
       ctx.restore();
     }
-    if (this.cascadeCount >= 2 && this.cascadeTimer > 0) {
+    if (this.cascadeCount >= 2 && this.cascadeTimer > 0 && !this.comboMilestone) {
       const alpha = Math.min(1, this.cascadeTimer * 3);
       const scale = 1 + this.cascadePunch * .24;
       ctx.save(); ctx.translate(this.width * .5, this.height * .39); ctx.scale(scale, scale);
@@ -5076,34 +5110,108 @@ export class CloudHarvestGame {
     }, { once: true });
   }
   private playHarvestTone(kind: CloudKind, cascadeDepth: number, dense: boolean): void {
-    if (this.combo === 10 || (this.combo >= 25 && this.combo % 25 === 0)) this.playComboStinger();
-    const now = performance.now();
-    const minimumGap = this.run.feverActive ? 30 : cascadeDepth > 0 ? 52 : 38;
-    if (now - this.lastHarvestToneAt < minimumGap) return;
-    this.lastHarvestToneAt = now;
+    if (!this.state.sound) return;
     const tier = CLOUD_ORDER.indexOf(kind);
-    const comboScale = [0, 2, 4, 7, 9, 12, 14, 16];
-    const comboNote = comboScale[Math.min(comboScale.length - 1, Math.floor(Math.max(0, this.combo - 1) / 2))];
-    const baseMidi: Record<CloudKind, number> = { cumulus: 66, rain: 62, electric: 71, ice: 74, solar: 78, aurora: 81 };
-    const wave: Record<CloudKind, OscillatorType> = { cumulus: "sine", rain: "triangle", electric: "square", ice: "triangle", solar: "sawtooth", aurora: "sine" };
-    const frequency = this.midiToFrequency(baseMidi[kind] + comboNote + Math.min(5, cascadeDepth));
-    this.playSynthTone(frequency, cascadeDepth > 0 ? .045 : .075, .032 + tier * .003, wave[kind], 0, frequency * 1.035);
-    if (dense || tier >= 3) this.playSynthTone(frequency * (dense ? 1.5 : 2), .09, dense ? .026 : .018, "triangle", .018, frequency * (dense ? 1.62 : 2.06));
+    if (this.harvestAudioBatch) {
+      const batch = this.harvestAudioBatch;
+      batch.count += 1;
+      batch.combo = Math.max(batch.combo, this.combo);
+      batch.cascadeDepth = Math.max(batch.cascadeDepth, cascadeDepth);
+      batch.dense ||= dense;
+      if (tier >= batch.peakTier) {
+        batch.kind = kind;
+        batch.peakTier = tier;
+      }
+      return;
+    }
+    this.harvestAudioBatch = { kind, peakTier: tier, cascadeDepth, dense, combo: this.combo, count: 1 };
+    this.harvestAudioFlushTimer = window.setTimeout(() => this.flushHarvestAudioBatch(), this.run.feverActive ? 16 : 24);
   }
 
-  private playComboStinger(): void {
-    const root = this.combo >= 50 ? 523 : 440;
-    [1, 1.25, 1.5, 2].forEach((ratio, index) => this.playSynthTone(root * ratio, .13, .03, "triangle", index * .035));
+  private flushHarvestAudioBatch(): void {
+    const batch = this.harvestAudioBatch;
+    this.harvestAudioBatch = undefined;
+    this.harvestAudioFlushTimer = 0;
+    if (!batch || !this.state.sound) return;
+    const phrase = [0, 2, 4, 7, 9];
+    const phraseNote = phrase[(Math.max(1, batch.combo) - 1) % phrase.length];
+    const comboLift = Math.min(10, Math.floor(Math.max(0, batch.combo - 1) / 25) * 2);
+    const feverLift = this.run.feverActive ? 5 : 0;
+    const baseMidi: Record<CloudKind, number> = { cumulus: 66, rain: 61, electric: 71, ice: 75, solar: 78, aurora: 81 };
+    const wave: Record<CloudKind, OscillatorType> = { cumulus: "sine", rain: "triangle", electric: "square", ice: "triangle", solar: "sawtooth", aurora: "sine" };
+    const frequency = this.midiToFrequency(baseMidi[batch.kind] + phraseNote + comboLift + feverLift + Math.min(3, batch.cascadeDepth));
+    const duration = this.run.feverActive || batch.cascadeDepth > 0 ? .046 : .072;
+    const volume = Math.min(.044, .026 + batch.peakTier * .0024 + Math.min(.008, batch.count * .0014));
+    this.playSynthTone(frequency, duration, volume, wave[batch.kind], 0, frequency * (batch.kind === "rain" ? .94 : 1.045));
+    if (batch.dense || batch.peakTier >= 3 || batch.count >= 4) {
+      const accentRatio = batch.dense ? 1.5 : batch.kind === "aurora" ? 2.5 : 2;
+      this.playSynthTone(frequency * accentRatio, .082, Math.min(.026, .014 + batch.count * .0012), "triangle", .012, frequency * accentRatio * 1.035);
+    }
+    if (import.meta.env.DEV) {
+      this.canvas.dataset.harvestAudioBatch = String(batch.count);
+      this.canvas.dataset.harvestAudioKind = batch.kind;
+      this.canvas.dataset.harvestAudioCombo = String(batch.combo);
+    }
+  }
+
+  private clearHarvestAudioBatch(): void {
+    if (this.harvestAudioFlushTimer) window.clearTimeout(this.harvestAudioFlushTimer);
+    this.harvestAudioFlushTimer = 0;
+    this.harvestAudioBatch = undefined;
+  }
+
+  private triggerComboMilestone(x: number, y: number): void {
+    const milestone = this.combo === 10 ? { label: "FLOW LOCK", color: "#8fffe9" }
+      : this.combo === 25 ? { label: "CLOUD CHORUS", color: "#fff36f" }
+      : this.combo === 50 ? { label: "SKY RHYTHM", color: "#ffad82" }
+      : this.combo >= 100 && this.combo % 100 === 0 ? { label: "HARVEST OVERDRIVE", color: "#e8b7ff" }
+      : undefined;
+    if (!milestone) return;
+    this.comboMilestone = { combo: this.combo, ...milestone, life: 1.35, maxLife: 1.35 };
+    this.comboPunch = 1;
+    this.impactFlash = Math.max(this.impactFlash, this.combo >= 100 ? .92 : .62);
+    this.addShockwave({ x, y, radius: this.combo >= 100 ? 46 : 30, life: .82, maxLife: .82, color: milestone.color });
+    this.burst(x, y, milestone.color, this.combo >= 100 ? 34 : 18, this.combo >= 100 ? 410 : 300);
+    this.playComboStinger(this.combo);
+    if (import.meta.env.DEV) this.canvas.dataset.comboStinger = String(this.combo);
+  }
+
+  private playComboStinger(combo: number): void {
+    const rootMidi = combo >= 100 ? 74 : combo >= 50 ? 72 : combo >= 25 ? 70 : 69;
+    const notes = combo >= 100 ? [0, 7, 12, 16, 19] : combo >= 50 ? [0, 4, 7, 12] : combo >= 25 ? [0, 7, 12] : [0, 4, 7];
+    notes.forEach((offset, index) => this.playSynthTone(this.midiToFrequency(rootMidi + offset), .12 + index * .012, .032, "triangle", index * .032, undefined, true));
+  }
+
+  private playPressureSurgeTone(): void {
+    if (this.comboMilestone?.combo === this.combo) return;
+    const now = performance.now();
+    if (now - this.lastPressureToneAt < 90) return;
+    this.lastPressureToneAt = now;
+    const root = this.midiToFrequency(55 + Math.min(7, Math.floor(this.combo / 20)));
+    this.playSynthTone(root, .11, .024, "triangle", 0, root * 1.5);
+    this.playSynthTone(root * 2, .075, .018, "sine", .022, root * 2.25);
+  }
+
+  private playFeverTransition(entering: boolean): void {
+    if (import.meta.env.DEV) this.canvas.dataset.feverTransition = entering ? "enter" : "exit";
+    const notes = entering ? [72, 76, 79, 84, 88] : [84, 79, 76, 72];
+    notes.forEach((note, index) => this.playSynthTone(this.midiToFrequency(note), entering ? .11 : .14, entering ? .034 : .022, entering ? "triangle" : "sine", index * (entering ? .035 : .055), undefined, true));
   }
 
   private playTone(frequency: number, duration: number): void {
     this.playSynthTone(frequency, duration);
   }
 
-  private playSynthTone(frequency: number, duration: number, volume = .045, wave: OscillatorType = "sine", delay = 0, endFrequency?: number): void {
+  private playSynthTone(frequency: number, duration: number, volume = .045, wave: OscillatorType = "sine", delay = 0, endFrequency?: number, priority = false): void {
     if (!this.state.sound) return;
     this.ensureAudio();
     if (!this.audioContext || !this.sfxGain) return;
+    if (this.activeSfxVoices >= (priority ? 36 : 24)) return;
+    this.activeSfxVoices += 1;
+    if (import.meta.env.DEV) {
+      this.canvas.dataset.sfxVoices = String(this.activeSfxVoices);
+      this.canvas.dataset.sfxVoicePeak = String(Math.max(Number(this.canvas.dataset.sfxVoicePeak ?? 0), this.activeSfxVoices));
+    }
     const start = this.audioContext.currentTime + Math.max(0, delay);
     const oscillator = this.audioContext.createOscillator();
     const gain = this.audioContext.createGain();
@@ -5116,7 +5224,11 @@ export class CloudHarvestGame {
     oscillator.connect(gain).connect(this.sfxGain);
     oscillator.start(start);
     oscillator.stop(start + duration + .015);
-    oscillator.addEventListener("ended", () => { oscillator.disconnect(); gain.disconnect(); }, { once: true });
+    oscillator.addEventListener("ended", () => {
+      this.activeSfxVoices = Math.max(0, this.activeSfxVoices - 1);
+      if (import.meta.env.DEV) this.canvas.dataset.sfxVoices = String(this.activeSfxVoices);
+      oscillator.disconnect(); gain.disconnect();
+    }, { once: true });
   }
   private playChord(): void {
     const root = this.midiToFrequency(60 + Math.min(5, this.run.mapRank));
