@@ -46,6 +46,12 @@ app.innerHTML = `
         <div class="route-status"><small id="dayFlight">DAY 1 · FLIGHT 1/3</small><b id="routeName">순풍 회랑</b></div>
       </div>
 
+      <aside class="focus-hud-strip" id="focusHudStrip" aria-live="polite" aria-hidden="true">
+        <span id="focusHudKicker">HARVEST FOCUS</span>
+        <strong id="focusHudTitle">연속 수확 중</strong>
+        <em id="focusHudDetail">COMBO READY</em>
+      </aside>
+
       <aside class="rival-race" id="rivalRace" aria-live="polite" aria-hidden="true">
         <header><span>LIVE ROUTE CONTEST</span><strong id="rivalRaceTitle">RAIN CLOUD RUSH</strong><em id="rivalRaceTarget">FIRST TO 5</em></header>
         <div class="rival-race-board">
@@ -387,6 +393,14 @@ app.innerHTML = `
               <output id="sfxVolumeValue" for="sfxVolume">85%</output>
             </label>
           </section>
+          <section class="display-console" aria-label="화면 표시 설정">
+            <header><span>DISPLAY ASSIST</span><strong>수확 중 화면 표시</strong></header>
+            <button class="focus-hud-toggle active" id="focusHudToggle" type="button" aria-pressed="true">
+              <span class="focus-hud-icon">◎</span>
+              <span class="focus-hud-copy"><strong>집중 수확 HUD</strong><small>흡입·고콤보·피버 중 보조 패널을 자동으로 접습니다.</small></span>
+              <span class="focus-hud-state"><small>AUTO</small><strong id="focusHudState">ON</strong></span>
+            </button>
+          </section>
           <div class="pause-controls-guide"><span><kbd>WASD</kbd> 이동</span><span><kbd>LMB</kbd> 흡입</span><span><kbd>SPACE</kbd> 귀환</span><span><kbd>ESC</kbd> 메뉴</span></div>
           <footer class="pause-actions">
             <button class="pause-sound-toggle" id="pauseSoundToggle"><span>MASTER AUDIO</span><strong>전체 소리 켜짐</strong></button>
@@ -548,6 +562,8 @@ const musicVolume = required<HTMLInputElement>("#musicVolume");
 const musicVolumeValue = required<HTMLOutputElement>("#musicVolumeValue");
 const sfxVolume = required<HTMLInputElement>("#sfxVolume");
 const sfxVolumeValue = required<HTMLOutputElement>("#sfxVolumeValue");
+const focusHudToggle = required<HTMLButtonElement>("#focusHudToggle");
+const focusHudState = required<HTMLElement>("#focusHudState");
 const resetButton = required<HTMLButtonElement>("#resetButton");
 const tutorial = required<HTMLElement>("#tutorial");
 const growthMission = required<HTMLElement>("#growthMission");
@@ -570,6 +586,10 @@ const feverFill = required<HTMLElement>("#feverFill");
 const feverText = required<HTMLElement>("#feverText");
 const routeName = required<HTMLElement>("#routeName");
 const dayFlight = required<HTMLElement>("#dayFlight");
+const focusHudStrip = required<HTMLElement>("#focusHudStrip");
+const focusHudKicker = required<HTMLElement>("#focusHudKicker");
+const focusHudTitle = required<HTMLElement>("#focusHudTitle");
+const focusHudDetail = required<HTMLElement>("#focusHudDetail");
 const rivalRace = required<HTMLElement>("#rivalRace");
 const rivalRaceTitle = required<HTMLElement>("#rivalRaceTitle");
 const rivalRaceTarget = required<HTMLElement>("#rivalRaceTarget");
@@ -1008,6 +1028,8 @@ let storyTransitioning = false;
 let titleScreenOpen = true;
 let pauseMenuOpen = false;
 let pausePreviousFocus: HTMLElement | null = null;
+let focusHudEnabled = true;
+let focusHudReleaseTimer = 0;
 const titleBlockedElements = Array.from(titleScreen.parentElement?.children ?? [])
   .filter((element): element is HTMLElement => element instanceof HTMLElement && element !== titleScreen);
 const pauseBlockedElements = Array.from(pauseOverlay.parentElement?.children ?? [])
@@ -1218,6 +1240,7 @@ function updateVolumePreview(channel: "music" | "sfx", input: HTMLInputElement, 
 pauseButton.addEventListener("click", openPauseMenu);
 pauseResumeButton.addEventListener("click", closePauseMenu);
 pauseSoundToggle.addEventListener("click", () => game.toggleSound());
+focusHudToggle.addEventListener("click", () => game.setFocusHud(!game.getState().focusHud));
 pauseOverlay.addEventListener("click", (event) => { if (event.target === pauseOverlay) closePauseMenu(); });
 musicVolume.addEventListener("input", () => updateVolumePreview("music", musicVolume, musicVolumeValue, false));
 musicVolume.addEventListener("change", () => updateVolumePreview("music", musicVolume, musicVolumeValue, true));
@@ -1559,7 +1582,68 @@ function canAffordInfiniteResearch(id: InfiniteResearchId, state: RunState): boo
   return cloudMass(state.materials) >= infiniteResearchCost(id, state.infiniteResearch[id]);
 }
 
+function focusHudCopy(state: RunState): { kicker: string; title: string; detail: string } {
+  const comboLabel = state.combo > 0 ? `×${state.combo} COMBO` : "COMBO READY";
+  if (state.openSky.status === "active") return {
+    kicker: "FINAL OBJECTIVE // SKYLOOP",
+    title: "오로라 회로 복구 중",
+    detail: `${state.openSky.circuits}/${state.openSky.circuitTarget} 회로 · 불안정 ${Math.floor(state.openSky.instability)}% · ${comboLabel}`,
+  };
+  if (state.solarEngine.status === "active") return {
+    kicker: "LIVE OBJECTIVE // PRESSURE ENGINE",
+    title: "기압 엔진 과충전",
+    detail: `출력 ${Math.floor(state.solarEngine.charge / Math.max(1, state.solarEngine.chargeTarget) * 100)}% · 열 ${Math.floor(state.solarEngine.heat)}% · ${comboLabel}`,
+  };
+  if (state.archiveRelay.status === "active") return {
+    kicker: "LIVE OBJECTIVE // FROZEN ARCHIVE",
+    title: "빙정 기록 연쇄 복원",
+    detail: `${state.archiveRelay.fragments}/${state.archiveRelay.fragmentTarget} 기록 · 연쇄 ${state.archiveRelay.streak}/${state.archiveRelay.chainTarget} · ${comboLabel}`,
+  };
+  if (state.signalTrace.status === "active") return {
+    kicker: "LIVE OBJECTIVE // THUNDER TRACE",
+    title: "전하 좌표 추적",
+    detail: `${state.signalTrace.progress}/${state.signalTrace.target} 신호 · ${state.signalTrace.timeLeft.toFixed(1)}s · ${comboLabel}`,
+  };
+  if (state.rivalRace.status === "active") return {
+    kicker: "LIVE OBJECTIVE // RAIN CLOUD RUSH",
+    title: "비구름 선점 경쟁",
+    detail: `YOU ${state.rivalRace.playerScore}/${state.rivalRace.target} · RIVAL ${state.rivalRace.rivalScore}/${state.rivalRace.target} · ${comboLabel}`,
+  };
+  if (state.refillSurgeActive) return { kicker: "ATMOSPHERIC SURGE", title: "기압 쇄도 · 새 구름 전선 유입", detail: `COMBO HOLD · ${comboLabel}` };
+  if (state.feverActive) return { kicker: "SKY FEVER // MAX OUTPUT", title: "피버 수확 가속", detail: `${Math.max(0, state.feverSeconds).toFixed(1)}s · ${comboLabel}` };
+  return { kicker: "HARVEST FOCUS", title: "연속 수확 중", detail: `흡입 유지 · ${comboLabel}` };
+}
+
+function updateFocusHudPresentation(state: RunState): void {
+  const active = focusHudEnabled && state.focusHudActive;
+  const copy = focusHudCopy(state);
+  focusHudKicker.textContent = copy.kicker;
+  focusHudTitle.textContent = copy.title;
+  focusHudDetail.textContent = copy.detail;
+  if (active) {
+    window.clearTimeout(focusHudReleaseTimer);
+    focusHudReleaseTimer = 0;
+    document.body.classList.add("focus-hud-active");
+    focusHudStrip.setAttribute("aria-hidden", "false");
+    return;
+  }
+  if (!focusHudEnabled) {
+    window.clearTimeout(focusHudReleaseTimer);
+    focusHudReleaseTimer = 0;
+    document.body.classList.remove("focus-hud-active");
+    focusHudStrip.setAttribute("aria-hidden", "true");
+    return;
+  }
+  if (!document.body.classList.contains("focus-hud-active") || focusHudReleaseTimer) return;
+  focusHudReleaseTimer = window.setTimeout(() => {
+    focusHudReleaseTimer = 0;
+    document.body.classList.remove("focus-hud-active");
+    focusHudStrip.setAttribute("aria-hidden", "true");
+  }, 1200);
+}
+
 function renderRunState(state: RunState): void {
+  updateFocusHudPresentation(state);
   runLevel.textContent = `LV.${state.level}`;
   runLevel.classList.remove("ready");
   const treeCode = skillTreeButton.querySelector<HTMLElement>("b");
@@ -2385,6 +2469,16 @@ function renderState(state: GameState): void {
   sfxVolume.value = String(sfxPercent);
   sfxVolumeValue.value = `${sfxPercent}%`;
   sfxVolume.style.setProperty("--volume", `${sfxPercent}%`);
+  focusHudEnabled = state.focusHud;
+  focusHudToggle.classList.toggle("active", state.focusHud);
+  focusHudToggle.setAttribute("aria-pressed", String(state.focusHud));
+  focusHudState.textContent = state.focusHud ? "ON" : "OFF";
+  if (!state.focusHud) {
+    window.clearTimeout(focusHudReleaseTimer);
+    focusHudReleaseTimer = 0;
+    document.body.classList.remove("focus-hud-active");
+    focusHudStrip.setAttribute("aria-hidden", "true");
+  }
   pauseOverlay.classList.toggle("muted", !state.sound);
   pauseSoundToggle.setAttribute("aria-pressed", String(state.sound));
   const pauseSoundLabel = pauseSoundToggle.querySelector<HTMLElement>("strong");

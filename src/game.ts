@@ -183,6 +183,8 @@ const freshRunState = (day = 1): RunState => ({
   fever: 0,
   feverActive: false,
   feverSeconds: 0,
+  focusHudActive: false,
+  refillSurgeActive: false,
   combo: 0,
   comboTime: 0,
   pendingPicks: 0,
@@ -609,6 +611,9 @@ export class CloudHarvestGame {
   }
   getRunState(): RunState {
     const state = structuredClone(this.run);
+    state.refillSurgeActive = this.refillSurge > 0;
+    state.focusHudActive = !this.atFactory && !this.returning && !this.launching
+      && (this.isSuctionActive() || this.run.combo >= 10 || this.run.feverActive || state.refillSurgeActive);
     state.fuelCapacity = this.getFuelCapacity();
     state.fuel = Math.min(state.fuel, state.fuelCapacity);
     state.fuelRecovered = this.run.fuelRecovered;
@@ -683,6 +688,12 @@ export class CloudHarvestGame {
     this.touchDirect = false;
     this.keys.clear();
     this.playerVelocity = { x: 0, y: 0 };
+  }
+
+  setFocusHud(enabled: boolean): void {
+    this.state.focusHud = enabled;
+    this.commit();
+    this.onStateChange(this.getState());
   }
 
   setAudioVolume(channel: "music" | "sfx", value: number, persist = true): void {
@@ -4573,7 +4584,7 @@ export class CloudHarvestGame {
       ctx.fillText(this.run.skills.blackHole ? "BLACK HOLE COLLAPSE" : "PRESSURE POP CHAIN", 0, 24);
       ctx.restore();
     }
-    if (this.refillSurge > 0) {
+    if (this.refillSurge > 0 && !this.state.focusHud) {
       const progress = this.refillSurge / 2.6;
       const alpha = Math.min(1, (1 - progress) * 6, progress * 2.4);
       const color = RANKS[this.run.mapRank].color;

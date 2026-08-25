@@ -154,6 +154,7 @@ export interface GameState {
   sound: boolean;
   musicVolume: number;
   sfxVolume: number;
+  focusHud: boolean;
   materials: Record<CloudKind, number>;
   processing: ProcessingState;
   career: CareerProgress;
@@ -324,6 +325,8 @@ export interface RunState {
   fever: number;
   feverActive: boolean;
   feverSeconds: number;
+  focusHudActive: boolean;
+  refillSurgeActive: boolean;
   combo: number;
   comboTime: number;
   pendingPicks: number;
