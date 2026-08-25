@@ -360,7 +360,7 @@ export class CloudHarvestGame {
     this.prepareSolarEngine(this.run.mapRank);
     this.prepareOpenSky(this.run.mapRank);
     window.addEventListener("resize", () => this.resize());
-    for (let i = 0; i < Math.min(18, this.getMaxClouds()); i += 1) this.spawnCloud(true);
+    this.seedCloudField();
     this.emitAll();
     requestAnimationFrame((time) => this.frame(time));
   }
@@ -1456,7 +1456,7 @@ export class CloudHarvestGame {
     this.discoveryBanner = undefined;
     this.formationCooldown = 4;
     this.clearCascade();
-    for (let i = 0; i < Math.min(18, this.getMaxClouds()); i += 1) this.spawnCloud(true);
+    this.seedCloudField();
     this.musicStep = 0;
     this.musicNextNoteAt = this.audioContext ? this.audioContext.currentTime + .04 : 0;
     this.setMasterVolume(.82, .05);
@@ -1858,7 +1858,7 @@ export class CloudHarvestGame {
         this.particles = [];
         this.player.x = -100 / this.getWorldZoom();
         this.player.y = this.getWorldHeight() * .62;
-        for (let index = 0; index < Math.min(18 + (this.run.flight - 1) * 4, this.getMaxClouds()); index += 1) this.spawnCloud(true);
+        this.seedCloudField();
       }
     } else {
       const entry = Math.min(1, (this.launchTimer - 1.1) / .62);
@@ -4617,7 +4617,7 @@ export class CloudHarvestGame {
 
   private getMaxClouds(): number {
     const calibrationReserve = this.isFirstDayCalibrationFlight() ? 8 : 0;
-    return 22 + this.run.mapRank * 7 + (this.run.flight - 1) * 6 + calibrationReserve + this.state.levels.radius * 3 + this.run.skills.wideIntake * 4
+    return 22 + this.run.mapRank * 8 + (this.run.flight - 1) * 6 + calibrationReserve + this.state.levels.radius * 3 + this.run.skills.wideIntake * 4
       + this.run.skills.massInduction * 6 + this.run.skills.blackHole * 8 + this.run.skills.eventHorizon * 12
       + (this.run.feverActive ? this.run.skills.cycloneCore * 6 + this.run.skills.cargoCyclone * 14 : 0);
   }
@@ -4626,7 +4626,13 @@ export class CloudHarvestGame {
     const maxClouds = this.getMaxClouds();
     const ratio = this.run.feverActive ? .78 : this.isFirstDayCalibrationFlight() ? .68 : .55;
     const feverReserve = this.run.feverActive ? 3 + this.run.skills.stormCatalyst * 2 + this.run.skills.cargoCyclone * 8 : 0;
-    return Math.min(maxClouds, Math.max(12, Math.ceil(maxClouds * ratio) + feverReserve));
+    const mapDensityFloor = 13 + this.run.mapRank * 6 + (this.run.flight - 1) * 4;
+    return Math.min(maxClouds, Math.max(mapDensityFloor, Math.ceil(maxClouds * ratio) + feverReserve));
+  }
+
+  private seedCloudField(): void {
+    const target = Math.min(this.getMaxClouds(), Math.max(18 + (this.run.flight - 1) * 4, this.getMinimumClouds()));
+    while (this.clouds.length < target) this.spawnCloud(true);
   }
 
   private replenishCloudFloor(dt: number): void {
