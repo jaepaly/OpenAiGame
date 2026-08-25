@@ -243,6 +243,7 @@ export class CloudHarvestGame {
   private lastTime = 0;
   private spawnTimer = 0;
   private cloudFloorBudget = 2;
+  private recentHarvestRate = 0;
   private cloudId = 0;
   private formationId = 0;
   private formationCooldown = 4;
@@ -1204,6 +1205,7 @@ export class CloudHarvestGame {
     this.playerVelocity = { x: 0, y: 0 };
     this.clouds = [];
     this.cloudFloorBudget = 2;
+    this.recentHarvestRate = 0;
     this.formationId = 0;
     this.particles = [];
     this.texts = [];
@@ -1447,6 +1449,7 @@ export class CloudHarvestGame {
     this.goldenFrontClaimed = false;
     this.clouds = [];
     this.cloudFloorBudget = 2;
+    this.recentHarvestRate = 0;
     this.formationId = 0;
     this.combo = 0;
     this.droneBeams = [];
@@ -2878,6 +2881,7 @@ export class CloudHarvestGame {
     if (cloudIndex < 0) return;
     this.queuedCascadeIds.delete(cloud.id);
     this.clouds.splice(cloudIndex, 1);
+    this.recentHarvestRate = Math.min(30, this.recentHarvestRate + .9);
     const definition = CLOUDS[cloud.kind];
     const countsForRivalRace = this.run.rivalRace.status === "active" && cloud.kind === "rain";
     const countsForSignalTrace = this.run.signalTrace.status === "active" && source !== "drone" && cloud.id === this.signalTargetId && cloud.signalTarget;
@@ -2985,6 +2989,7 @@ export class CloudHarvestGame {
         + this.run.skills.cascadeGrid * 95 + this.run.skills.chainReactor * 145;
       for (const nearby of this.clouds) {
         if (source === "drone" && (nearby.archiveShard || nearby.solarCore || nearby.auroraNode)) continue;
+        if (nearby.age < .2) continue;
         const distance = Math.hypot(nearby.x - cloud.x, nearby.y - cloud.y);
         if (distance < chainRadius) {
           nearby.health -= 11 + chainStacks * 12 + this.run.skills.relayBurst * 15 + this.run.skills.blackHole * 25
@@ -3272,7 +3277,7 @@ export class CloudHarvestGame {
     this.playChord();
   }
 
-  private spawnCloud(initial: boolean, forcedKind?: CloudKind): void {
+  private spawnCloud(initial: boolean, forcedKind?: CloudKind, forceEdge = false): void {
     const zoom = this.getWorldZoom();
     const worldWidth = this.getWorldWidth();
     const worldHeight = this.getWorldHeight();
@@ -3297,7 +3302,9 @@ export class CloudHarvestGame {
     const scale = radius / ((definition.radius[0] + definition.radius[1]) * .5);
     let x = 90 / zoom + Math.random() * Math.max(100 / zoom, worldWidth - 180 / zoom);
     let y = 205 / zoom + Math.random() * Math.max(90 / zoom, worldHeight - 390 / zoom);
-    const interiorSpawn = initial || Math.random() < .78;
+    const interiorSpawn = !forceEdge && (initial || Math.random() < .78);
+    let entryVx = (Math.random() - .5) * 8;
+    let entryVy = (Math.random() - .5) * 6;
     if (interiorSpawn) {
       for (let attempt = 0; attempt < 6 && Math.hypot(x - this.player.x, y - this.player.y) < 175; attempt += 1) {
         x = 90 / zoom + Math.random() * Math.max(100 / zoom, worldWidth - 180 / zoom);
@@ -3306,13 +3313,14 @@ export class CloudHarvestGame {
       if (x > worldWidth - 405 / zoom && y < 345 / zoom) y = 350 / zoom + Math.random() * Math.max(60 / zoom, worldHeight - 500 / zoom);
     } else {
       const side = Math.floor(Math.random() * 3);
-      if (side === 0) { x = radius + 4 / zoom; y = 220 / zoom + Math.random() * Math.max(80 / zoom, worldHeight - 410 / zoom); }
-      if (side === 1) { x = worldWidth - radius - 4 / zoom; y = 350 / zoom + Math.random() * Math.max(55 / zoom, worldHeight - 520 / zoom); }
-      if (side === 2) { y = 180 / zoom + radius; x = 85 / zoom + Math.random() * Math.max(100 / zoom, worldWidth - 540 / zoom); }
+      const entrySpeed = forceEdge ? 58 + Math.random() * 34 : 20 + Math.random() * 18;
+      if (side === 0) { x = radius + 4 / zoom; y = 220 / zoom + Math.random() * Math.max(80 / zoom, worldHeight - 410 / zoom); entryVx = entrySpeed; }
+      if (side === 1) { x = worldWidth - radius - 4 / zoom; y = 350 / zoom + Math.random() * Math.max(55 / zoom, worldHeight - 520 / zoom); entryVx = -entrySpeed; }
+      if (side === 2) { y = 180 / zoom + radius; x = 85 / zoom + Math.random() * Math.max(100 / zoom, worldWidth - 540 / zoom); entryVy = entrySpeed * .72; }
     }
     const altitudeResistance = 1 + this.run.mapRank * .2;
     const health = definition.health * scale * (dense ? 1.65 : 1) * altitudeResistance;
-    this.clouds.push({ id: ++this.cloudId, kind, x, y, vx: (Math.random() - .5) * 8, vy: (Math.random() - .5) * 6, radius, phase: Math.random() * Math.PI * 2, charged: false, age: initial ? .6 + Math.random() * 4.4 : 0, health, maxHealth: health, hurtFlash: 0, dense, front: false });
+    this.clouds.push({ id: ++this.cloudId, kind, x, y, vx: entryVx, vy: entryVy, radius, phase: Math.random() * Math.PI * 2, charged: false, age: initial ? .6 + Math.random() * 4.4 : 0, health, maxHealth: health, hurtFlash: 0, dense, front: false });
     this.announceCloudDiscovery(kind);
   }
 
@@ -4636,6 +4644,7 @@ export class CloudHarvestGame {
   }
 
   private replenishCloudFloor(dt: number): void {
+    this.recentHarvestRate *= Math.exp(-dt * .9);
     const minimumClouds = this.getMinimumClouds();
     const deficit = minimumClouds - this.clouds.length;
     if (deficit <= 0) {
@@ -4646,10 +4655,16 @@ export class CloudHarvestGame {
     const feverRate = this.run.feverActive
       ? 1.5 + this.run.skills.cycloneCore * 1.2 + this.run.skills.cargoCyclone * 1.8
       : 0;
-    const cascadeThrottle = this.cascadeQueue.length > 0 ? .25 : 1;
-    this.cloudFloorBudget = Math.min(4, this.cloudFloorBudget + dt * Math.min(8, baseRate + feverRate) * cascadeThrottle);
-    const spawnCount = Math.min(deficit, 2, Math.floor(this.cloudFloorBudget));
-    for (let index = 0; index < spawnCount; index += 1) this.spawnCloud(false);
+    const fillRatio = this.clouds.length / Math.max(1, minimumClouds);
+    const urgencyMultiplier = fillRatio < .4 ? 4 : fillRatio < .7 ? 2 : 1;
+    const harvestResponse = Math.min(10, this.recentHarvestRate * .7);
+    const cascadeThrottle = this.cascadeQueue.length > 0 ? .75 : 1;
+    const refillRate = Math.min(20, (baseRate + feverRate + harvestResponse) * urgencyMultiplier * cascadeThrottle);
+    const budgetCap = fillRatio < .4 ? 8 : fillRatio < .7 ? 6 : 4;
+    const frameCap = fillRatio < .4 ? 4 : fillRatio < .7 ? 3 : 2;
+    this.cloudFloorBudget = Math.min(budgetCap, this.cloudFloorBudget + dt * refillRate);
+    const spawnCount = Math.min(deficit, frameCap, Math.floor(this.cloudFloorBudget));
+    for (let index = 0; index < spawnCount; index += 1) this.spawnCloud(false, undefined, true);
     this.cloudFloorBudget -= spawnCount;
   }
 
