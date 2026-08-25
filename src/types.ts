@@ -190,6 +190,9 @@ export interface FlightReport {
   fuelRemaining: number;
   fuelEfficiency: number;
   emergencyReturn: boolean;
+  lastHarvestTriggered: boolean;
+  lastHarvestClouds: number;
+  lastHarvestBonus: number;
   newRecords: FlightRecordKind[];
   records: FlightRecords;
 }
@@ -328,6 +331,10 @@ export interface RunState {
   feverSeconds: number;
   focusHudActive: boolean;
   refillSurgeActive: boolean;
+  lastHarvestActive: boolean;
+  lastHarvestTriggered: boolean;
+  lastHarvestClouds: number;
+  lastHarvestBonus: number;
   combo: number;
   comboTime: number;
   pendingPicks: number;

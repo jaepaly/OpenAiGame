@@ -187,6 +187,10 @@ const freshRunState = (day = 1): RunState => ({
   feverSeconds: 0,
   focusHudActive: false,
   refillSurgeActive: false,
+  lastHarvestActive: false,
+  lastHarvestTriggered: false,
+  lastHarvestClouds: 0,
+  lastHarvestBonus: 0,
   combo: 0,
   comboTime: 0,
   pendingPicks: 0,
@@ -312,6 +316,7 @@ export class CloudHarvestGame {
   private runEmitTimer = 0;
   private processingEmitTimer = 0;
   private fuelWarningStage = 0;
+  private lastHarvestPulseTimer = 0;
   private fuelPity = 0;
   private fuelPickupFlash = 0;
   private audioContext?: AudioContext;
@@ -620,7 +625,7 @@ export class CloudHarvestGame {
     const state = structuredClone(this.run);
     state.refillSurgeActive = this.refillSurge > 0;
     state.focusHudActive = !this.atFactory && !this.returning && !this.launching
-      && (this.isSuctionActive() || this.run.combo >= 10 || this.run.feverActive || state.refillSurgeActive);
+      && (this.isSuctionActive() || this.run.combo >= 10 || this.run.feverActive || state.refillSurgeActive || state.lastHarvestActive);
     state.fuelCapacity = this.getFuelCapacity();
     state.fuel = Math.min(state.fuel, state.fuelCapacity);
     state.fuelRecovered = this.run.fuelRecovered;
@@ -867,6 +872,9 @@ export class CloudHarvestGame {
       fuelRemaining,
       fuelEfficiency,
       emergencyReturn,
+      lastHarvestTriggered: this.run.lastHarvestTriggered,
+      lastHarvestClouds: this.run.lastHarvestClouds,
+      lastHarvestBonus: this.run.lastHarvestBonus,
       newRecords,
       records: next,
     };
@@ -878,6 +886,12 @@ export class CloudHarvestGame {
     if (this.run.archiveRelay.status === "active") this.finishArchiveRelay(false, "return");
     if (this.run.solarEngine.status === "active") this.finishSolarEngine(false, "return");
     if (this.run.openSky.status === "active") this.finishOpenSky(false, "return");
+    if (this.run.lastHarvestTriggered) {
+      this.run.lastHarvestBonus = Math.round((25 + this.run.mapRank * 22 + this.run.lastHarvestClouds * (3 + this.run.mapRank))
+        * FLIGHT_ROUTES[this.run.routeId].valueMultiplier);
+      this.run.cargoBonus += this.run.lastHarvestBonus;
+    }
+    this.run.lastHarvestActive = false;
     this.run.emergencyReturn = false;
     this.pendingFlightReport = this.captureFlightReport(false);
     this.recordBalanceFlight(this.pendingFlightReport);
@@ -892,7 +906,10 @@ export class CloudHarvestGame {
     this.clearCascade();
     this.player.targetX = this.getWorldWidth() * .5;
     this.player.targetY = this.getWorldHeight() * .53;
-    this.onToast("관제탑 승인 — 기지 복귀 항로 진입", "success");
+    this.onRunChange(this.getRunState());
+    this.onToast(this.run.lastHarvestTriggered
+      ? `LAST RUSH SECURED — 화물 보존 · 귀환 보너스 ◈ ${this.run.lastHarvestBonus.toLocaleString()}`
+      : "관제탑 승인 — 기지 복귀 항로 진입", "success");
     this.playUiSound("return");
     return true;
   }
@@ -903,6 +920,7 @@ export class CloudHarvestGame {
     const altitudeDrain = RANKS[this.run.mapRank].fuelDrain;
     this.run.fuel = Math.max(0, this.run.fuel - amount * feverEfficiency * altitudeDrain);
     const ratio = this.run.fuel / Math.max(1, this.getFuelCapacity());
+    if (this.run.fuel > 0 && ratio <= .25 && !this.run.lastHarvestTriggered) this.startLastHarvestRush();
     if (ratio <= .15 && this.fuelWarningStage < 2) {
       this.fuelWarningStage = 2;
       this.onToast("연료 15% — 지금 귀환하지 않으면 화물을 모두 잃습니다!", "warning");
@@ -924,6 +942,8 @@ export class CloudHarvestGame {
     if (this.run.solarEngine.status === "active") this.finishSolarEngine(false, "fuel");
     if (this.run.openSky.status === "active") this.finishOpenSky(false, "fuel");
     const discarded = this.getCargoCount();
+    this.run.lastHarvestActive = false;
+    this.run.lastHarvestBonus = 0;
     this.pendingFlightReport = this.captureFlightReport(true);
     this.recordBalanceFlight(this.pendingFlightReport);
     this.run.cargo = emptyCloudStock();
@@ -1221,6 +1241,10 @@ export class CloudHarvestGame {
     this.run.fever = FLIGHT_ROUTES[routeId].startingFever;
     this.run.feverActive = false;
     this.run.feverSeconds = 0;
+    this.run.lastHarvestActive = false;
+    this.run.lastHarvestTriggered = false;
+    this.run.lastHarvestClouds = 0;
+    this.run.lastHarvestBonus = 0;
     this.run.combo = 0;
     this.run.comboTime = 0;
     this.combo = 0;
@@ -1237,6 +1261,7 @@ export class CloudHarvestGame {
     this.prepareSolarEngine(mapRank);
     this.prepareOpenSky(mapRank);
     this.fuelWarningStage = 0;
+    this.lastHarvestPulseTimer = 0;
     this.fuelPity = 0;
     this.fuelPickupFlash = 0;
     this.launching = true;
@@ -1769,6 +1794,7 @@ export class CloudHarvestGame {
     this.overload = Math.max(0, this.overload - dt);
     this.shockToastCooldown = Math.max(0, this.shockToastCooldown - dt);
     const comboDecay = this.refillSurge > 0 ? .22 : 1;
+    this.updateLastHarvestRush(dt);
     this.comboTimer -= dt * comboDecay;
     if (this.comboTimer <= 0) this.combo = 0;
     this.run.combo = this.combo;
@@ -2962,7 +2988,8 @@ export class CloudHarvestGame {
     const countsForSolarEngine = this.run.solarEngine.status === "active" && source !== "drone" && cloud.solarCore;
     const countsForOpenSky = this.run.openSky.status === "active" && source !== "drone" && cloud.auroraNode;
     this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
-    this.comboTimer = 3.4 + FLIGHT_ROUTES[this.run.routeId].comboWindowBonus + this.run.skills.comboCapacitor * .35 + this.run.skills.vacuumMomentum * .22;
+    this.comboTimer = 3.4 + FLIGHT_ROUTES[this.run.routeId].comboWindowBonus + this.run.skills.comboCapacitor * .35 + this.run.skills.vacuumMomentum * .22
+      + (this.run.lastHarvestActive ? 1.15 : 0);
     this.state.bestCombo = Math.max(this.state.bestCombo, this.combo);
     const comboMultiplier = 1 + Math.min(1.8, Math.floor(this.combo / 3) * .17);
     const permanentValue = (1 + this.state.levels.value * .24)
@@ -2980,6 +3007,7 @@ export class CloudHarvestGame {
     const earned = Math.round(definition.value * comboMultiplier * permanentValue * runValue * insulationValue * densityValue * altitudeValue);
     this.run.cargo[cloud.kind] += 1;
     this.run.cargoValue[cloud.kind] += earned;
+    if (this.run.lastHarvestActive) this.run.lastHarvestClouds += 1;
     this.flightStats.maxCombo = Math.max(this.flightStats.maxCombo, this.combo);
     if (cloud.kind !== "cumulus" && cloud.kind !== "rain") this.flightStats.rareClouds += 1;
     if (cloud.dense) this.flightStats.denseClouds += 1;
@@ -4922,17 +4950,19 @@ export class CloudHarvestGame {
 
   private getMaxClouds(): number {
     const calibrationReserve = this.isFirstDayRigFlight() ? 3 : 0;
+    const lastHarvestReserve = this.run.lastHarvestActive ? 10 + this.run.mapRank * 2 : 0;
     return 22 + this.run.mapRank * 8 + (this.run.flight - 1) * 6 + calibrationReserve + this.state.levels.radius * 3 + this.run.skills.wideIntake * 4
       + this.run.skills.massInduction * 6 + this.run.skills.blackHole * 8 + this.run.skills.eventHorizon * 12
-      + (this.run.feverActive ? this.run.skills.cycloneCore * 6 + this.run.skills.cargoCyclone * 14 : 0);
+      + lastHarvestReserve + (this.run.feverActive ? this.run.skills.cycloneCore * 6 + this.run.skills.cargoCyclone * 14 : 0);
   }
 
   private getMinimumClouds(): number {
     const maxClouds = this.getMaxClouds();
-    const ratio = this.run.feverActive ? .78 : this.isFirstDayRigFlight() ? .62 : .55;
+    const ratio = this.run.lastHarvestActive ? .82 : this.run.feverActive ? .78 : this.isFirstDayRigFlight() ? .62 : .55;
     const feverReserve = this.run.feverActive ? 3 + this.run.skills.stormCatalyst * 2 + this.run.skills.cargoCyclone * 8 : 0;
+    const lastHarvestReserve = this.run.lastHarvestActive ? 4 + this.run.mapRank : 0;
     const mapDensityFloor = 13 + this.run.mapRank * 6 + (this.run.flight - 1) * 4;
-    return Math.min(maxClouds, Math.max(mapDensityFloor, Math.ceil(maxClouds * ratio) + feverReserve));
+    return Math.min(maxClouds, Math.max(mapDensityFloor, Math.ceil(maxClouds * ratio) + feverReserve + lastHarvestReserve));
   }
 
   private seedCloudField(): void {
@@ -4950,6 +4980,47 @@ export class CloudHarvestGame {
     this.playSynthTone(660, .14, .028, "triangle", .08, 990);
   }
 
+  private startLastHarvestRush(): void {
+    if (this.run.lastHarvestTriggered || this.atFactory || this.returning || this.launching) return;
+    this.run.lastHarvestActive = true;
+    this.run.lastHarvestTriggered = true;
+    this.run.lastHarvestClouds = 0;
+    this.run.lastHarvestBonus = 0;
+    this.lastHarvestPulseTimer = 0;
+    this.refillSurge = Math.max(this.refillSurge, 3.2);
+    this.refillSurgeDirection = Math.random() < .5 ? 1 : -1;
+    const frontKind = CLOUD_ORDER[Math.min(this.run.mapRank, CLOUD_ORDER.length - 1)];
+    const frontCount = Math.min(Math.max(4, this.getMaxClouds() - this.clouds.length), 8 + this.run.mapRank * 2);
+    for (let index = 0; index < frontCount; index += 1) {
+      this.spawnCloud(false, frontKind, true);
+      const cloud = this.clouds[this.clouds.length - 1];
+      cloud.vx *= 1.28;
+      cloud.vy *= 1.18;
+      if (index % 3 === 0 && !cloud.dense) {
+        cloud.dense = true;
+        cloud.maxHealth *= 1.45;
+        cloud.health = cloud.maxHealth;
+        cloud.radius *= 1.08;
+      }
+    }
+    this.impactFlash = Math.max(this.impactFlash, .28);
+    this.addShockwave({ x: this.player.x, y: this.player.y, radius: 34, life: .9, maxLife: .9, color: "#ffe26f" });
+    this.addFloatingText({ x: this.player.x, y: this.player.y - 76, text: `LAST HARVEST  ·  ${CLOUDS[frontKind].name} 전선`, color: "#ffe26f", life: 2.2 });
+    this.onToast(`LAST HARVEST — ${CLOUDS[frontKind].name} 전선 유입! 연료가 남아 있을 때 복귀하세요.`, "warning");
+    this.playTransitionWhoosh(true);
+    this.playSynthTone(520, .12, .026, "triangle", .07, 780);
+    this.onRunChange(this.getRunState());
+  }
+
+  private updateLastHarvestRush(dt: number): void {
+    if (!this.run.lastHarvestActive) return;
+    this.lastHarvestPulseTimer -= dt;
+    if (this.lastHarvestPulseTimer > 0) return;
+    const fuelRatio = Math.max(0, Math.min(.25, this.run.fuel / Math.max(1, this.getFuelCapacity())));
+    this.playSynthTone(310 + (1 - fuelRatio / .25) * 80, .04, .011, "sine");
+    this.lastHarvestPulseTimer = Math.max(.42, .56 + fuelRatio * 1.5);
+  }
+
   private replenishCloudFloor(dt: number): void {
     this.recentHarvestRate *= Math.exp(-dt * .9);
     const minimumClouds = this.getMinimumClouds();
@@ -4962,17 +5033,23 @@ export class CloudHarvestGame {
     const feverRate = this.run.feverActive
       ? 1.5 + this.run.skills.cycloneCore * 1.2 + this.run.skills.cargoCyclone * 1.8
       : 0;
+    const lastHarvestRate = this.run.lastHarvestActive ? 8 + this.run.mapRank * 1.4 : 0;
     const fillRatio = this.clouds.length / Math.max(1, minimumClouds);
     if (fillRatio < .68 && this.recentHarvestRate >= 4.5 && this.refillSurgeCooldown <= 0) this.startRefillSurge();
     const urgencyMultiplier = fillRatio < .4 ? 4 : fillRatio < .7 ? 2 : 1;
     const harvestResponse = Math.min(10, this.recentHarvestRate * .7);
     const cascadeThrottle = this.cascadeQueue.length > 0 ? .75 : 1;
-    const refillRate = Math.min(20, (baseRate + feverRate + harvestResponse) * urgencyMultiplier * cascadeThrottle);
-    const budgetCap = fillRatio < .4 ? 8 : fillRatio < .7 ? 6 : 4;
-    const frameCap = fillRatio < .4 ? 4 : fillRatio < .7 ? 3 : 2;
+    const refillRate = Math.min(this.run.lastHarvestActive ? 34 : 20, (baseRate + feverRate + lastHarvestRate + harvestResponse) * urgencyMultiplier * cascadeThrottle);
+    const budgetCap = this.run.lastHarvestActive ? 10 : fillRatio < .4 ? 8 : fillRatio < .7 ? 6 : 4;
+    const frameCap = this.run.lastHarvestActive ? 5 : fillRatio < .4 ? 4 : fillRatio < .7 ? 3 : 2;
     this.cloudFloorBudget = Math.min(budgetCap, this.cloudFloorBudget + dt * refillRate);
     const spawnCount = Math.min(deficit, frameCap, Math.floor(this.cloudFloorBudget));
-    for (let index = 0; index < spawnCount; index += 1) this.spawnCloud(false, undefined, true);
+    for (let index = 0; index < spawnCount; index += 1) {
+      const rushKind = this.run.lastHarvestActive && Math.random() < .45
+        ? CLOUD_ORDER[Math.min(this.run.mapRank, CLOUD_ORDER.length - 1)]
+        : undefined;
+      this.spawnCloud(false, rushKind, true);
+    }
     this.cloudFloorBudget -= spawnCount;
   }
 
@@ -4983,7 +5060,8 @@ export class CloudHarvestGame {
     const runInduction = Math.max(.28, 1 - this.run.skills.wideIntake * .08 - this.run.skills.massInduction * .06
       - this.run.skills.blackHole * .15 - this.run.skills.eventHorizon * .12 - cycloneInduction);
     const calibrationFlow = this.isFirstDayRigFlight() ? .88 : 1;
-    return Math.max(.55, (0.78 - this.run.mapRank * .08) * FLIGHT_ROUTES[this.run.routeId].spawnInterval * (1 - flightPressure * .14) * permanentInduction * runInduction * calibrationFlow);
+    const lastHarvestFlow = this.run.lastHarvestActive ? .34 : 1;
+    return Math.max(this.run.lastHarvestActive ? .16 : .55, (0.78 - this.run.mapRank * .08) * FLIGHT_ROUTES[this.run.routeId].spawnInterval * (1 - flightPressure * .14) * permanentInduction * runInduction * calibrationFlow * lastHarvestFlow);
   }
 
   private emitAll(): void { this.onStateChange(this.getState()); this.onRunChange(this.getRunState()); }

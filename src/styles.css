@@ -15,6 +15,9 @@ button { font: inherit; }
 body { min-width: 320px; background: #92ddf7; }
 .game-shell, .game-stage { width: 100%; height: 100%; }
 .game-stage { position: relative; overflow: hidden; isolation: isolate; }
+.game-stage::after { content: ""; position: absolute; z-index: 7; inset: 0; pointer-events: none; opacity: 0; box-shadow: inset 0 0 0 3px rgba(255,226,111,.64),inset 0 0 78px rgba(255,176,70,.3); transition: opacity .25s ease; }
+body.last-harvest-active .game-stage::after { opacity: .72; animation: last-harvest-edge 1.05s ease-in-out infinite alternate; }
+@keyframes last-harvest-edge { to { opacity: .36; box-shadow: inset 0 0 0 2px rgba(113,255,224,.52),inset 0 0 56px rgba(255,226,111,.2); } }
 #gameCanvas { width: 100%; height: 100%; display: block; outline: none; touch-action: none; cursor: grab; }
 #gameCanvas:active { cursor: grabbing; }
 
@@ -309,6 +312,9 @@ body { min-width: 320px; background: #92ddf7; }
 .fuel-warning small { display: block; color: #ffe26f; font: 900 12px "Outfit",sans-serif; letter-spacing: .15em; }
 .fuel-warning strong { display: block; margin-top: 5px; font-size: 20px; }
 .fuel-warning span { display: block; margin-top: 5px; color: #ffd8b4; font-size: 13px; font-weight: 900; }
+.fuel-warning.last-harvest { color: #173849; background: linear-gradient(145deg,rgba(255,226,111,.97),rgba(113,255,224,.95)); border-color: #fff; box-shadow: 0 8px 0 rgba(73,74,28,.3),0 0 42px rgba(255,226,111,.5); }
+.fuel-warning.last-harvest small,.fuel-warning.last-harvest span { color: #245367; }
+.fuel-warning.last-harvest strong { color: #173849; }
 .fuel-warning.critical { background: linear-gradient(145deg,rgba(155,42,35,.97),rgba(75,20,28,.98)); border-color: #fff36f; animation-duration: .42s; }
 .fuel-warning.critical strong { color: #fff36f; }
 body.base-open .fuel-warning, body.garage-open .fuel-warning, .returning .fuel-warning, .launching .fuel-warning { opacity: 0 !important; animation: none; }

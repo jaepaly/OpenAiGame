@@ -119,7 +119,7 @@ app.innerHTML = `
       <div class="toast" id="toast" aria-live="polite"></div>
       <div class="fuel-warning" id="fuelWarning">
         <small id="fuelWarningKicker">LOW FUEL</small>
-        <strong>연료가 0이 되면 화물을 전부 버리고 비상 귀환합니다</strong>
+        <strong id="fuelWarningMessage">연료가 0이 되면 화물을 전부 버리고 비상 귀환합니다</strong>
         <span id="fuelWarningValue">연료 35%</span>
       </div>
 
@@ -538,6 +538,7 @@ const harvested = required<HTMLElement>("#harvested");
 const combo = required<HTMLElement>("#combo");
 const fuelWarning = required<HTMLElement>("#fuelWarning");
 const fuelWarningKicker = required<HTMLElement>("#fuelWarningKicker");
+const fuelWarningMessage = required<HTMLElement>("#fuelWarningMessage");
 const fuelWarningValue = required<HTMLElement>("#fuelWarningValue");
 const radioCall = required<HTMLElement>("#radioCall");
 const radioCallPortrait = required<HTMLImageElement>("#radioCallPortrait");
@@ -1225,6 +1226,7 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("repo
       cargo: { cumulus: 18, rain: 13, electric: 7, ice: 0, solar: 0, aurora: 0 },
       totalCollected: 38, grossValue: 1840, maxCombo: 27, rareClouds: 7, denseClouds: 6,
       droneHarvested: 9, feverActivations: 3, fuelCapacity: 31, fuelRemaining: 8.7, fuelEfficiency: .28,
+      lastHarvestTriggered: true, lastHarvestClouds: 11, lastHarvestBonus: 146,
       emergencyReturn: false, newRecords: ["harvest", "value", "combo", "rare"],
       records: { harvest: 38, value: 1840, combo: 27, rare: 7 },
     }, {
@@ -1737,11 +1739,18 @@ function renderRunState(state: RunState): void {
   garageButton.disabled = cargoCount > 0;
   document.body.classList.toggle("fuel-low", fuelRatio <= .35);
   document.body.classList.toggle("fuel-critical", fuelRatio <= .15);
+  document.body.classList.toggle("last-harvest-active", state.lastHarvestActive);
   const showFuelWarning = fuelRatio <= .35 && state.fuel > 0 && !state.emergencyReturn;
   fuelWarning.classList.toggle("show", showFuelWarning);
   fuelWarning.classList.toggle("critical", fuelRatio <= .15);
-  fuelWarningKicker.textContent = fuelRatio <= .15 ? "FUEL CRITICAL // EMERGENCY RETURN" : "LOW FUEL // RETURN NOW";
-  fuelWarningValue.textContent = `남은 연료 ${Math.ceil(state.fuel)} / ${Math.round(state.fuelCapacity)} · ${Math.ceil(fuelRatio * 100)}%`;
+  fuelWarning.classList.toggle("last-harvest", state.lastHarvestActive && fuelRatio > .15);
+  fuelWarningKicker.textContent = fuelRatio <= .15
+    ? "FUEL CRITICAL // EMERGENCY RETURN"
+    : state.lastHarvestActive ? "LAST HARVEST // RARE FRONT" : "LOW FUEL // RETURN NOW";
+  fuelWarningMessage.textContent = fuelRatio <= .15
+    ? "연료가 0이 되면 화물을 전부 버리고 비상 귀환합니다"
+    : state.lastHarvestActive ? "희귀 전선 유입 · SPACE 안전 귀환 시 정산 보너스" : "욕심낼지 귀환할지 지금 결정하세요";
+  fuelWarningValue.textContent = `남은 연료 ${Math.ceil(state.fuel)} / ${Math.round(state.fuelCapacity)} · ${Math.ceil(fuelRatio * 100)}%${state.lastHarvestActive ? ` · RUSH +${state.lastHarvestClouds} CLOUD` : ""}`;
   document.body.classList.toggle("fever-active", state.feverActive);
   const race = state.rivalRace;
   const raceVisible = race.status !== "inactive";
@@ -2132,7 +2141,7 @@ function showFlightReport(report: FlightReport, processingResult: ProcessingEnqu
   document.body.classList.add("report-open");
   flightReportOverlay.classList.toggle("emergency", report.emergencyReturn);
   flightReportCode.textContent = `${report.emergencyReturn ? "EMERGENCY LOG" : "SORTIE REPORT"} // DAY ${String(report.day).padStart(2, "0")}`;
-  flightReportTitle.textContent = report.emergencyReturn ? "비상 견인 귀환" : report.newRecords.length > 0 ? "기록을 갈아치웠습니다!" : "수확 비행 완료!";
+  flightReportTitle.textContent = report.emergencyReturn ? "비상 견인 귀환" : report.lastHarvestBonus > 0 ? "LAST RUSH SECURED!" : report.newRecords.length > 0 ? "기록을 갈아치웠습니다!" : "수확 비행 완료!";
   flightReportRoute.textContent = `${rank.altitude} · ${rank.name} · ${route.name} · FLIGHT ${report.flight}/3`;
   flightReportRecord.classList.toggle("show", report.newRecords.length > 0);
   flightReportRecord.textContent = report.newRecords.length > 1 ? `${report.newRecords.length} NEW RECORDS` : "NEW RECORD";
@@ -2145,14 +2154,17 @@ function showFlightReport(report: FlightReport, processingResult: ProcessingEnqu
   flightReportFuel.textContent = `${fuelPercent}%`;
   flightReportFuelDetail.textContent = `${report.fuelRemaining.toFixed(1)} / ${report.fuelCapacity.toFixed(1)} FUEL`;
   flightReportDrone.textContent = report.droneHarvested.toLocaleString();
-  flightReportExtra.textContent = `DENSE ${report.denseClouds} · FEVER ${report.feverActivations}`;
+  flightReportExtra.textContent = `D${report.denseClouds} · F${report.feverActivations}${report.lastHarvestTriggered ? report.lastHarvestClouds > 0 ? ` · RUSH ${report.lastHarvestClouds}` : " · RUSH ON" : ""}`;
   flightReportTransfer.classList.toggle("lost", report.emergencyReturn);
   if (report.emergencyReturn) {
     flightReportProcessTitle.textContent = "연료 고갈 · 화물 전량 폐기";
-    flightReportProcessDetail.textContent = `${report.totalCollected}개의 구름과 ◈ ${report.grossValue.toLocaleString()} 상당 화물을 잃었습니다.`;
+    flightReportProcessDetail.textContent = `${report.totalCollected}개의 구름과 ◈ ${report.grossValue.toLocaleString()} 상당 화물을 잃었습니다.${report.lastHarvestClouds > 0 ? ` LAST HARVEST에서 확보한 ${report.lastHarvestClouds}개도 함께 소실됐습니다.` : report.lastHarvestTriggered ? " LAST HARVEST 귀환 보너스도 소실됐습니다." : ""}`;
   } else if (processingResult) {
     flightReportProcessTitle.textContent = `${processingResult.batches}개 가공 묶음 전송 완료`;
-    flightReportProcessDetail.textContent = `예상 ${processingTime(processingResult.seconds)} · 비행 중에도 자동 가공됩니다.`;
+    flightReportProcessDetail.textContent = `예상 ${processingTime(processingResult.seconds)} · 비행 중에도 자동 가공됩니다.${report.lastHarvestBonus > 0 ? ` · 귀환 보너스 ◈ ${report.lastHarvestBonus.toLocaleString()} 포함` : ""}`;
+  } else if (report.lastHarvestBonus > 0) {
+    flightReportProcessTitle.textContent = `LAST RUSH 귀환 보너스 ◈ ${report.lastHarvestBonus.toLocaleString()}`;
+    flightReportProcessDetail.textContent = `${report.lastHarvestClouds}개를 끝까지 추가 확보했습니다. 화물을 가공 계약에 배정하세요.`;
   } else {
     flightReportProcessTitle.textContent = "반입할 화물이 없습니다";
     flightReportProcessDetail.textContent = "기체 점검을 마친 뒤 다음 항로를 선택하세요.";
@@ -2176,6 +2188,14 @@ function showFlightReport(report: FlightReport, processingResult: ProcessingEnqu
     speaker = "수석 정비사 모카 · EMERGENCY REVIEW";
     dialogue = "기체는 살렸지만 화물은 전부 버렸어. 다음엔 마지막 한 방보다 돌아올 연료를 먼저 남겨 둬.";
     reviewTone = "warning";
+  } else if (report.lastHarvestBonus > 0) {
+    portrait = mokaNeutralPortrait;
+    portraitAlt = "정비사 모카";
+    speaker = "수석 정비사 모카 · LAST RUSH REVIEW";
+    dialogue = report.lastHarvestClouds > 0
+      ? `끝까지 밀어붙이고도 화물을 지켜 왔네. LAST HARVEST ${report.lastHarvestClouds}개, 귀환 보너스까지 완벽하게 확보했어.`
+      : "위험 구간에 들어서자마자 판단했네. 화물도 지키고 LAST RUSH 귀환 보너스도 확보했어.";
+    reviewTone = "record";
   } else if (recordNames.length > 0) {
     portrait = sonaSeriousPortrait;
     dialogue = `${recordNames.join("·")} 최고 기록 갱신! 이 상승 곡선이면 다음 고도에서도 충분히 통합니다.`;
