@@ -612,6 +612,27 @@ body.base-open .promotion-card { top: 28px; }
 .equipment-slot.locked .equipment-visual i { filter: grayscale(1); opacity: .45; }
 .equipment-slot.locked .equipment-visual::after { content: "🔒"; position: absolute; font-size: 26px; }
 .garage-tip { margin-top: 18px; padding: 10px 14px; color: #52717f; background: rgba(255,255,255,.65); border-radius: 12px; font-size: 10px; font-weight: 800; }
+.harvest-rig-status {
+  --rig-color: #80d9e4; flex-shrink: 0; margin: -4px 0 14px; padding: 13px 15px; display: grid;
+  grid-template-columns: 108px minmax(180px,1fr) minmax(210px,270px); align-items: center; gap: 16px;
+  background: linear-gradient(105deg,rgba(13,50,68,.98),rgba(27,78,92,.94)); border: 3px solid rgba(255,255,255,.88);
+  border-radius: 20px; box-shadow: 0 7px 0 rgba(21,74,91,.22),inset 0 0 22px color-mix(in srgb,var(--rig-color) 17%,transparent);
+}
+.harvest-rig-status[data-tier="1"] { --rig-color: #79ffe2; }
+.harvest-rig-status[data-tier="2"] { --rig-color: #58d9ff; }
+.harvest-rig-status[data-tier="3"] { --rig-color: #aa91ff; }
+.harvest-rig-status[data-tier="4"] { --rig-color: #ffd15e; }
+.harvest-rig-status[data-tier="5"] { --rig-color: #baffea; background: linear-gradient(105deg,#173b55,#4c3974 58%,#2c796d); }
+.harvest-rig-badge { min-height: 58px; padding: 8px 10px; display: grid; place-content: center; text-align: center; color: #102e3d; background: var(--rig-color); border-radius: 14px; box-shadow: inset 0 -5px 0 rgba(17,53,68,.2),0 0 18px color-mix(in srgb,var(--rig-color) 38%,transparent); }
+.harvest-rig-badge small { font: 900 8px "Outfit",sans-serif; letter-spacing: .12em; }
+.harvest-rig-badge strong { margin-top: 2px; font: 1000 24px/1 "Outfit",sans-serif; letter-spacing: .03em; }
+.harvest-rig-copy { min-width: 0; display: grid; gap: 4px; text-align: left; }
+.harvest-rig-copy span { color: white; font-size: 17px; font-weight: 1000; }
+.harvest-rig-copy b { color: #c9e3ea; font-size: 11px; line-height: 1.35; }
+.harvest-rig-progress { display: grid; gap: 7px; }
+.harvest-rig-progress > div { height: 14px; padding: 3px; overflow: hidden; background: rgba(1,24,35,.58); border: 1px solid rgba(255,255,255,.2); border-radius: 99px; }
+.harvest-rig-progress i { width: 0; height: 100%; display: block; background: linear-gradient(90deg,var(--rig-color),#fff6a6); border-radius: inherit; box-shadow: 0 0 13px var(--rig-color); transition: width .35s cubic-bezier(.2,.9,.3,1); }
+.harvest-rig-progress strong { color: var(--rig-color); font: 900 11px "Outfit",sans-serif; letter-spacing: .08em; text-align: right; }
 
 .factory-overlay {
   position: absolute; z-index: 29; inset: 0; padding: 22px; display: grid; place-items: center;
@@ -1444,6 +1465,12 @@ body.base-open .promotion-card { top: 28px; }
 .factory-panel { max-height: calc(100dvh - 32px); margin: auto; overflow-y: auto; overscroll-behavior: contain; }
 
 @media (max-width: 680px) {
+  .harvest-rig-status { padding: 10px; grid-template-columns: 84px 1fr; gap: 10px; }
+  .harvest-rig-badge { min-height: 50px; }
+  .harvest-rig-badge strong { font-size: 19px; }
+  .harvest-rig-copy span { font-size: 14px; }
+  .harvest-rig-copy b { font-size: 9px; }
+  .harvest-rig-progress { grid-column: 1 / -1; }
   .garage-overlay { padding: 8px; }
   .garage-panel { width: calc(100% - 4px); max-height: calc(100dvh - 16px); padding: 18px 12px 16px; border-radius: 24px; }
   .garage-heading { margin-bottom: 12px; }

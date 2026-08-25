@@ -1,5 +1,17 @@
 import type { CloudDefinition, CloudKind, FlightRouteDefinition, FlightRouteId, GrowthMissionDefinition, InfiniteResearchDefinition, InfiniteResearchId, ProcessingContract, ProcessingJob, RankDefinition, ResearchDefinition, ResearchId, RunSkillCost, RunSkillDefinition, RunSkillId, SkillTreeBranch, StorySceneId, UpgradeDefinition } from "./types";
 
+export const HARVEST_RIG_THRESHOLDS = [1, 4, 10, 20, 32] as const;
+export const HARVEST_RIG_NAMES = ["표준 수확선", "스타터 리그", "트윈 터빈", "압축 프레임", "오버드라이브", "오로라 완성형"] as const;
+
+export function getHarvestRigScore(levels: { power: number; radius: number; value: number }): number {
+  return levels.power + levels.radius + levels.value;
+}
+
+export function getHarvestRigTier(levels: { power: number; radius: number; value: number }): number {
+  const score = getHarvestRigScore(levels);
+  return HARVEST_RIG_THRESHOLDS.filter((threshold) => score >= threshold).length;
+}
+
 export const GROWTH_MISSIONS: GrowthMissionDefinition[] = [
   { id: "collect", code: "JOB 01", title: "첫 수확을 시작하세요", description: "뭉게구름 6개를 수확", target: 6, reward: { money: 4 }, rewardLabel: "◈ 4" },
   { id: "return", code: "JOB 02", title: "연료를 남기고 귀환하세요", description: "RTB로 안전 귀환 1회", target: 1, reward: { materials: { cumulus: 2 } }, rewardLabel: "☁ 원재료 2" },

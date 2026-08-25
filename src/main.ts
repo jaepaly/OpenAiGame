@@ -6,7 +6,7 @@ import mokaWorriedPortrait from "./assets/characters/moka-worried.png";
 import sonaNeutralPortrait from "./assets/characters/sona-neutral.png";
 import sonaSeriousPortrait from "./assets/characters/sona-serious.png";
 import sonaWorriedPortrait from "./assets/characters/sona-worried.png";
-import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
+import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, HARVEST_RIG_NAMES, HARVEST_RIG_THRESHOLDS, INFINITE_RESEARCH, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, SKILL_TREE_BRANCHES, UPGRADES, getHarvestRigScore, getHarvestRigTier, infiniteResearchCost, upgradeCost } from "./config";
 import { CloudHarvestGame, getPromotionEventGate, type RadioCall } from "./game";
 import type { ContractId, FlightReport, GameState, GrowthMissionId, InfiniteResearchId, ProcessingEnqueueResult, ResearchId, RunSkillId, RunState, StorySceneId, UpgradeId } from "./types";
 
@@ -188,8 +188,13 @@ app.innerHTML = `
             <div><span>SHIP WORKSHOP</span><h2>비행선 정비소</h2><p>수확한 코인으로 다음 비행까지 이어지는 영구 장비를 강화하세요.</p></div>
             <button id="garageCloseButton" aria-label="정비소 닫기">×</button>
           </header>
+          <section class="harvest-rig-status" id="harvestRigStatus" data-tier="0" aria-label="수확선 외형 진화 진행도">
+            <div class="harvest-rig-badge"><small>HARVEST RIG</small><strong id="harvestRigBadge">MK-0</strong></div>
+            <div class="harvest-rig-copy"><span id="harvestRigTitle">표준 수확선</span><b id="harvestRigDetail">코어 장비 첫 장착 시 MK-I 진화</b></div>
+            <div class="harvest-rig-progress"><div><i id="harvestRigFill"></i></div><strong id="harvestRigCount">CORE PARTS 0 / 1</strong></div>
+          </section>
           <div class="upgrade-list" id="upgradeList"></div>
-          <div class="garage-tip">NOTE // TBN·INT·CMP 첫 장착 시 MK-I 수확 리그가 활성화됩니다. 모든 장비는 날짜가 바뀌어도 유지됩니다.</div>
+          <div class="garage-tip" id="garageTip">NOTE // TBN·INT·CMP 누적 강화로 비행선이 MK-I~V까지 진화합니다. 모든 장비와 외형은 날짜가 바뀌어도 유지됩니다.</div>
         </div>
       </section>
 
@@ -529,6 +534,13 @@ const promotionRequirements = required<HTMLElement>("#promotionRequirements");
 const promoteButton = required<HTMLButtonElement>("#promoteButton");
 const promotionCard = required<HTMLElement>(".promotion-card");
 const upgradeList = required<HTMLElement>("#upgradeList");
+const harvestRigStatus = required<HTMLElement>("#harvestRigStatus");
+const harvestRigBadge = required<HTMLElement>("#harvestRigBadge");
+const harvestRigTitle = required<HTMLElement>("#harvestRigTitle");
+const harvestRigDetail = required<HTMLElement>("#harvestRigDetail");
+const harvestRigFill = required<HTMLElement>("#harvestRigFill");
+const harvestRigCount = required<HTMLElement>("#harvestRigCount");
+const garageTip = required<HTMLElement>("#garageTip");
 const cloudLegend = required<HTMLElement>("#cloudLegend");
 const toast = required<HTMLElement>("#toast");
 const processingOverlay = required<HTMLElement>("#processingOverlay");
@@ -2508,6 +2520,27 @@ function renderState(state: GameState): void {
     .filter((cloud) => cloud.unlockRank <= state.rank)
     .map((cloud) => `<span class="legend-item ${cloud.kind}">${cloud.icon} ${cloud.name}<b>${cloud.value}+</b></span>`)
     .join("");
+
+  const rigScore = getHarvestRigScore(state.levels);
+  const rigTier = getHarvestRigTier(state.levels);
+  const rigRoman = ["0", "I", "II", "III", "IV", "V"][rigTier];
+  const nextRigThreshold = HARVEST_RIG_THRESHOLDS[rigTier];
+  const nextRigTier = Math.min(5, rigTier + 1);
+  harvestRigStatus.dataset.tier = String(rigTier);
+  harvestRigBadge.textContent = `MK-${rigRoman}`;
+  harvestRigTitle.textContent = HARVEST_RIG_NAMES[rigTier];
+  if (nextRigThreshold === undefined) {
+    harvestRigDetail.textContent = "최종 외형 완성 · 오로라 순환 코어 안정화";
+    harvestRigCount.textContent = `CORE PARTS ${rigScore} · MAXIMUM`;
+    harvestRigFill.style.width = "100%";
+    garageTip.textContent = "MAXIMUM // MK-V 완성형 수확선입니다. 장비 강화는 계속되며 외형의 광량과 추진 흔적도 성능에 맞춰 성장합니다.";
+  } else {
+    const remaining = Math.max(0, nextRigThreshold - rigScore);
+    harvestRigDetail.textContent = `다음 외형 MK-${["", "I", "II", "III", "IV", "V"][nextRigTier]}까지 코어 강화 ${remaining}회`;
+    harvestRigCount.textContent = `CORE PARTS ${rigScore} / ${nextRigThreshold}`;
+    harvestRigFill.style.width = `${Math.min(100, rigScore / nextRigThreshold * 100)}%`;
+    garageTip.textContent = `NEXT RIG // TBN·INT·CMP 중 어느 장비를 강화해도 MK-${["", "I", "II", "III", "IV", "V"][nextRigTier]} 진화에 누적됩니다. 외형과 수확음이 함께 달라집니다.`;
+  }
 
   upgradeList.innerHTML = UPGRADES.map((upgrade, index) => {
     const level = state.levels[upgrade.id];

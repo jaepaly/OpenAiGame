@@ -1,4 +1,4 @@
-import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, INFINITE_RESEARCH, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, infiniteResearchCost, upgradeCost } from "./config";
+import { CLOUDS, FLIGHT_ROUTES, GROWTH_MISSIONS, HARVEST_RIG_NAMES, INFINITE_RESEARCH, INITIAL_STATE, PROCESSING_CONTRACTS, PROCESSING_SECONDS, RANKS, RESEARCH_PROJECTS, RUN_SKILL_COSTS, RUN_SKILLS, UPGRADES, getHarvestRigScore, getHarvestRigTier, infiniteResearchCost, upgradeCost } from "./config";
 import type { ArchiveRelayState, Cloud, CloudFormationKind, CloudKind, ContractId, FlightRecordKind, FlightReport, FloatingText, GameState, GrowthMissionId, InfiniteResearchId, OpenSkyState, Particle, ProcessingClaimResult, ProcessingEnqueueResult, ProcessingEstimate, ProcessingJob, ProcessingState, ResearchId, RivalRaceState, RunSkillId, RunState, SignalTraceState, SolarEngineState, StorySceneId, UpgradeId } from "./types";
 
 type StateListener = (state: GameState) => void;
@@ -1296,7 +1296,7 @@ export class CloudHarvestGame {
   buyUpgrade(id: UpgradeId): void {
     const upgrade = UPGRADES.find((item) => item.id === id);
     if (!upgrade) return;
-    const starterRigWasActive = this.hasStarterHarvestRig();
+    const previousRigTier = this.getHarvestRigTier();
     const level = this.state.levels[id];
     if (level >= upgrade.maxLevel) return;
     if (id === "insulation" && this.state.rank < 2) {
@@ -1310,13 +1310,15 @@ export class CloudHarvestGame {
     }
     this.state.money -= cost;
     this.state.levels[id] += 1;
-    const starterRigActivated = !starterRigWasActive && this.hasStarterHarvestRig();
+    const nextRigTier = this.getHarvestRigTier();
+    const rigEvolved = nextRigTier > previousRigTier;
     this.markPacingMilestone("firstUpgrade");
-    this.burst(this.player.x, this.player.y, starterRigActivated ? "#79ffe2" : "#ffd166", starterRigActivated ? 38 : 22, starterRigActivated ? 220 : 150);
-    if (starterRigActivated) {
-      this.addShockwave({ x: this.player.x, y: this.player.y, radius: 38, life: .9, maxLife: .9, color: "#79ffe2" });
+    const rigColor = this.getHarvestRigColor(nextRigTier);
+    this.burst(this.player.x, this.player.y, rigEvolved ? rigColor : "#ffd166", rigEvolved ? 38 + nextRigTier * 5 : 22, rigEvolved ? 220 + nextRigTier * 22 : 150);
+    if (rigEvolved) {
+      this.addShockwave({ x: this.player.x, y: this.player.y, radius: 38 + nextRigTier * 6, life: .9, maxLife: .9, color: rigColor });
       this.playChord();
-      this.onToast(`MK-I 수확 리그 완성 — ${upgrade.name} 장착 · 다음 비행 유입 보정`, "success");
+      this.onToast(`MK-${["", "I", "II", "III", "IV", "V"][nextRigTier]} ${HARVEST_RIG_NAMES[nextRigTier]} 진화 — ${upgrade.name} 장착`, "success");
     } else {
       this.playTone(520 + this.state.levels[id] * 40, 0.09);
       this.onToast(`${upgrade.name} Lv.${this.state.levels[id]} 장착!`, "success");
@@ -3482,6 +3484,8 @@ export class CloudHarvestGame {
     ctx.clearRect(0, 0, this.width, this.height);
     if (import.meta.env.DEV) {
       this.canvas.dataset.starterRig = this.hasStarterHarvestRig() ? "on" : "off";
+      this.canvas.dataset.rigTier = String(this.getHarvestRigTier());
+      this.canvas.dataset.rigScore = String(this.getHarvestRigScore());
       this.canvas.dataset.rigCalibration = this.isFirstDayRigFlight() ? "on" : "off";
       this.canvas.dataset.cloudCap = String(this.getMaxClouds());
       this.canvas.dataset.cloudFloor = String(this.getMinimumClouds());
@@ -4327,14 +4331,18 @@ export class CloudHarvestGame {
 
   private drawSuctionField(ctx: CanvasRenderingContext2D, time: number): void {
     const cycloneActive = this.run.feverActive && this.run.skills.cycloneCore > 0;
-    const starterRigActive = this.hasStarterHarvestRig();
+    const rigTier = this.getHarvestRigTier();
+    const starterRigActive = rigTier > 0;
     const powerLevel = this.state.levels.power;
+    const rigCore = ["rgba(23,111,153,.3)", "rgba(121,255,226,.4)", "rgba(88,217,255,.42)", "rgba(170,145,255,.43)", "rgba(255,209,94,.44)", "rgba(186,255,234,.48)"][rigTier];
+    const rigMid = ["rgba(31,145,176,.15)", "rgba(64,205,220,.2)", "rgba(49,174,237,.21)", "rgba(132,103,236,.22)", "rgba(245,164,49,.23)", "rgba(116,229,211,.25)"][rigTier];
+    const rigStroke = ["rgba(16,91,137,.9)", "rgba(91,239,224,.96)", "rgba(69,205,255,.96)", "rgba(165,132,255,.96)", "rgba(255,196,73,.98)", "rgba(183,255,235,.98)"][rigTier];
     const radius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.pressureChamber * 18
       + this.run.skills.blackHole * 80 + this.run.skills.eventHorizon * 140 + (cycloneActive ? 120 : 0)
       + (this.run.feverActive ? this.run.skills.goldenVacuum * 80 : 0);
     const gradient = ctx.createRadialGradient(this.player.x, this.player.y, 20, this.player.x, this.player.y, radius);
-    gradient.addColorStop(0, this.run.feverActive ? "rgba(255,224,70,.34)" : starterRigActive ? "rgba(121,255,226,.4)" : "rgba(23,111,153,.3)");
-    gradient.addColorStop(.62, this.run.feverActive ? "rgba(255,168,64,.14)" : starterRigActive ? "rgba(64,205,220,.2)" : "rgba(31,145,176,.15)");
+    gradient.addColorStop(0, this.run.feverActive ? "rgba(255,224,70,.34)" : rigCore);
+    gradient.addColorStop(.62, this.run.feverActive ? "rgba(255,168,64,.14)" : rigMid);
     gradient.addColorStop(1, this.run.feverActive ? "rgba(255,185,55,0)" : "rgba(18,91,133,0)");
     const aimAngle = this.getAimAngle();
     const halfAngle = this.getSuctionHalfAngle();
@@ -4348,8 +4356,8 @@ export class CloudHarvestGame {
       ctx.closePath();
     }
     ctx.fill();
-    ctx.strokeStyle = this.overload > 0 ? "rgba(255,111,74,.92)" : this.run.feverActive ? "rgba(255,190,52,.95)" : starterRigActive ? "rgba(91,239,224,.96)" : "rgba(16,91,137,.9)";
-    ctx.lineWidth = this.run.feverActive ? 6 : starterRigActive ? 5 : 4; ctx.setLineDash([12, 9]); ctx.lineDashOffset = -time * (this.run.feverActive ? 90 : starterRigActive ? 66 : 48);
+    ctx.strokeStyle = this.overload > 0 ? "rgba(255,111,74,.92)" : this.run.feverActive ? "rgba(255,190,52,.95)" : rigStroke;
+    ctx.lineWidth = this.run.feverActive ? 6 : 4 + Math.min(2.5, rigTier * .5); ctx.setLineDash([12, 9]); ctx.lineDashOffset = -time * (this.run.feverActive ? 90 : 48 + rigTier * 14);
     const pulseRadius = radius * (.88 + Math.sin(time * 6) * .03);
     ctx.beginPath();
     ctx.arc(this.player.x, this.player.y, pulseRadius, fullCircle ? 0 : aimAngle - halfAngle, fullCircle ? Math.PI * 2 : aimAngle + halfAngle);
@@ -4363,20 +4371,35 @@ export class CloudHarvestGame {
     if (starterRigActive && !cycloneActive) {
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
-      ctx.strokeStyle = `rgba(125,255,231,${.28 + Math.min(.22, powerLevel * .035)})`;
-      ctx.lineWidth = 2 + Math.min(2, powerLevel * .25);
-      ctx.shadowColor = "#79ffe2";
-      ctx.shadowBlur = 8 + Math.min(10, powerLevel * 2);
-      for (let lane = 0; lane < 3; lane += 1) {
-        const laneRadius = radius * (.46 + lane * .17);
-        const laneSpread = fullCircle ? Math.PI : halfAngle * (.58 + lane * .1);
+      ctx.strokeStyle = rigStroke;
+      ctx.globalAlpha = .3 + Math.min(.28, rigTier * .045 + powerLevel * .012);
+      ctx.lineWidth = 1.8 + Math.min(3, rigTier * .42 + powerLevel * .08);
+      ctx.shadowColor = this.getHarvestRigColor(rigTier);
+      ctx.shadowBlur = 7 + rigTier * 3 + Math.min(8, powerLevel);
+      const laneCount = Math.min(6, 2 + rigTier);
+      for (let lane = 0; lane < laneCount; lane += 1) {
+        const laneProgress = laneCount <= 1 ? 0 : lane / (laneCount - 1);
+        const laneRadius = radius * (.4 + laneProgress * .48);
+        const laneSpread = fullCircle ? Math.PI : halfAngle * (.55 + laneProgress * .34);
         ctx.setLineDash([5 + lane * 2, 13 - lane * 2]);
-        ctx.lineDashOffset = -time * (74 + lane * 16);
+        ctx.lineDashOffset = -time * (66 + rigTier * 10 + lane * 13);
         ctx.beginPath();
         ctx.arc(this.player.x, this.player.y, laneRadius, fullCircle ? 0 : aimAngle - laneSpread, fullCircle ? Math.PI * 2 : aimAngle + laneSpread);
         ctx.stroke();
       }
       ctx.setLineDash([]);
+      ctx.restore();
+    }
+    if (rigTier >= 4 && !cycloneActive) {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.strokeStyle = this.run.feverActive ? "rgba(255,244,170,.72)" : rigStroke;
+      ctx.lineWidth = rigTier === 5 ? 3.5 : 2.5;
+      ctx.globalAlpha = .48 + Math.sin(time * (5 + rigTier)) * .15;
+      const surgeRadius = radius * (.58 + ((time * .38) % 1) * .37);
+      ctx.beginPath();
+      ctx.arc(this.player.x, this.player.y, surgeRadius, fullCircle ? 0 : aimAngle - halfAngle * .72, fullCircle ? Math.PI * 2 : aimAngle + halfAngle * .72);
+      ctx.stroke();
       ctx.restore();
     }
     if (cycloneActive) {
@@ -4422,7 +4445,9 @@ export class CloudHarvestGame {
     const radiusLevel = this.state.levels.radius;
     const valueLevel = this.state.levels.value;
     const insulationLevel = this.state.levels.insulation;
-    const starterRigActive = this.hasStarterHarvestRig();
+    const rigTier = this.getHarvestRigTier();
+    const starterRigActive = rigTier > 0;
+    const rigColor = this.getHarvestRigColor(rigTier);
     const totalParts = powerLevel + radiusLevel + valueLevel + this.state.levels.drone + insulationLevel;
     const shipScale = 1 + Math.min(.25, totalParts * .018);
     ctx.save();
@@ -4430,6 +4455,19 @@ export class CloudHarvestGame {
     if (!this.atFactory && !this.returning && !this.launching && this.pointer.visible && !this.touchDirect) ctx.rotate(this.getAimAngle());
     ctx.scale(shipScale, shipScale);
     if (this.run.feverActive) { ctx.shadowColor = "#fff36f"; ctx.shadowBlur = 34; }
+
+    if (rigTier >= 5) {
+      ctx.save();
+      ctx.rotate(time * .42);
+      ctx.strokeStyle = "rgba(186,255,234,.78)";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([14, 8]);
+      ctx.lineDashOffset = -time * 40;
+      ctx.shadowColor = "#a98bff";
+      ctx.shadowBlur = 18;
+      ctx.beginPath(); ctx.ellipse(0, 0, 73, 45, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
 
     if (insulationLevel > 0) {
       ctx.strokeStyle = `rgba(134,232,255,${.36 + insulationLevel * .2})`; ctx.lineWidth = 3 + insulationLevel;
@@ -4453,19 +4491,38 @@ export class CloudHarvestGame {
       ctx.globalAlpha = 1;
     }
 
-    ctx.fillStyle = starterRigActive ? "#e8ffff" : "#244f67"; ctx.beginPath(); ctx.roundRect(-57, -19, starterRigActive ? 29 : 26, 38, 10); ctx.fill();
+    ctx.fillStyle = starterRigActive ? "#e8ffff" : "#244f67"; ctx.beginPath(); ctx.roundRect(-57 - Math.min(4, rigTier), -19 - Math.min(3, rigTier), starterRigActive ? 29 + Math.min(7, rigTier) : 26, 38 + Math.min(6, rigTier * 2), 10); ctx.fill();
     if (starterRigActive) {
-      ctx.strokeStyle = "#79ffe2"; ctx.lineWidth = 3; ctx.stroke();
+      ctx.strokeStyle = rigColor; ctx.lineWidth = 2.5 + rigTier * .3; ctx.stroke();
       ctx.fillStyle = "#17495b"; ctx.beginPath(); ctx.roundRect(-53, -15, 20, 30, 7); ctx.fill();
-      ctx.shadowColor = "#79ffe2"; ctx.shadowBlur = 12;
+      ctx.shadowColor = rigColor; ctx.shadowBlur = 9 + rigTier * 3;
     }
-    ctx.strokeStyle = starterRigActive ? "#79ffe2" : "#80d9e4"; ctx.lineWidth = starterRigActive ? 4 : 3;
+    ctx.strokeStyle = starterRigActive ? rigColor : "#80d9e4"; ctx.lineWidth = starterRigActive ? 3.5 + rigTier * .2 : 3;
     for (let ring = 0; ring < 2 + Math.min(3, powerLevel); ring += 1) {
       const angle = time * (5 + powerLevel) + ring * Math.PI / 2;
       ctx.beginPath(); ctx.moveTo(-43 + Math.cos(angle) * 13, Math.sin(angle) * 13); ctx.lineTo(-43 - Math.cos(angle) * 13, -Math.sin(angle) * 13); ctx.stroke();
     }
     ctx.fillStyle = starterRigActive ? "#fff36f" : "#ff735b"; ctx.beginPath(); ctx.arc(-43, 0, starterRigActive ? 7 : 6, 0, Math.PI * 2); ctx.fill();
     ctx.shadowColor = "transparent";
+
+    if (rigTier >= 2) {
+      for (const side of [-1, 1]) {
+        ctx.fillStyle = "#173d51";
+        ctx.beginPath(); ctx.roundRect(-50, side * 29 - 7, 26, 14, 6); ctx.fill();
+        ctx.strokeStyle = rigColor; ctx.lineWidth = 2.5; ctx.stroke();
+        ctx.fillStyle = rigTier >= 4 ? "#fff0a1" : "#cffff6";
+        ctx.beginPath(); ctx.ellipse(-47, side * 29, 5, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    if (rigTier >= 3) {
+      for (const side of [-1, 1]) {
+        ctx.fillStyle = rigTier >= 4 ? "#fff4c2" : "#e9e5ff";
+        ctx.beginPath(); ctx.roundRect(-10, side * 34 - 7, 31, 14, 6); ctx.fill();
+        ctx.strokeStyle = rigColor; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = "#315e73"; ctx.fillRect(0, side * 34 - 5, 4, 10);
+      }
+    }
 
     const bodyGradient = ctx.createLinearGradient(-38, -20, 42, 22);
     bodyGradient.addColorStop(0, this.overload > 0 ? "#ee8b61" : "#ffd969"); bodyGradient.addColorStop(1, this.run.feverActive ? "#fff07a" : "#f3ad35");
@@ -4474,15 +4531,15 @@ export class CloudHarvestGame {
     ctx.fillStyle = "#e56b55"; ctx.beginPath(); ctx.moveTo(-30, -18); ctx.lineTo(-46, -30); ctx.lineTo(-9, -23); ctx.closePath(); ctx.fill();
     ctx.fillStyle = "#d7534b"; ctx.beginPath(); ctx.moveTo(-28, 19); ctx.lineTo(-43, 31); ctx.lineTo(-7, 24); ctx.closePath(); ctx.fill();
     if (starterRigActive) {
-      ctx.strokeStyle = "#79ffe2";
-      ctx.lineWidth = 4;
+      ctx.strokeStyle = rigColor;
+      ctx.lineWidth = 3.5 + rigTier * .25;
       ctx.beginPath(); ctx.arc(0, 0, 38, -.64, .64); ctx.stroke();
       ctx.fillStyle = "#133d50";
-      ctx.beginPath(); ctx.roundRect(-24, -31, 28, 13, 5); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(-27, -32, 34, 14, 5); ctx.fill();
       ctx.fillStyle = "#cafff3";
-      ctx.font = "900 8px Outfit, sans-serif";
+      ctx.font = "900 8.5px Outfit, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("MK-I", -10, -22);
+      ctx.fillText(`MK-${["", "I", "II", "III", "IV", "V"][rigTier]}`, -10, -22);
     }
 
     ctx.fillStyle = "#f4ffff"; ctx.beginPath(); ctx.arc(-4, -7, 21, Math.PI, 0); ctx.fill();
@@ -4501,6 +4558,15 @@ export class CloudHarvestGame {
     ctx.fillStyle = "#39748c"; ctx.fillRect(40, -8, 5, 16);
     ctx.strokeStyle = this.run.feverActive ? "#fff36f" : "#8de6ed"; ctx.lineWidth = 3 + Math.min(4, radiusLevel);
     ctx.beginPath(); ctx.ellipse(35 + nozzleLength, 0, 5 + radiusLevel, 13 + radiusLevel * 1.2, 0, 0, Math.PI * 2); ctx.stroke();
+    if (rigTier >= 4) {
+      ctx.strokeStyle = rigColor;
+      ctx.lineWidth = 2.5;
+      for (let ring = 1; ring <= (rigTier === 5 ? 3 : 2); ring += 1) {
+        ctx.globalAlpha = 1 - ring * .18;
+        ctx.beginPath(); ctx.ellipse(35 + nozzleLength + ring * 6, 0, 6 + radiusLevel + ring, 14 + radiusLevel * 1.2 + ring * 2, 0, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
 
     ctx.restore();
   }
@@ -4820,7 +4886,19 @@ export class CloudHarvestGame {
   }
 
   private hasStarterHarvestRig(): boolean {
-    return this.state.levels.power + this.state.levels.radius + this.state.levels.value > 0;
+    return this.getHarvestRigTier() > 0;
+  }
+
+  private getHarvestRigScore(): number {
+    return getHarvestRigScore(this.state.levels);
+  }
+
+  private getHarvestRigTier(): number {
+    return getHarvestRigTier(this.state.levels);
+  }
+
+  private getHarvestRigColor(tier = this.getHarvestRigTier()): string {
+    return ["#80d9e4", "#79ffe2", "#58d9ff", "#aa91ff", "#ffd15e", "#baffea"][tier] ?? "#baffea";
   }
 
   private isFirstDayRigFlight(): boolean {
@@ -5253,15 +5331,17 @@ export class CloudHarvestGame {
     const phraseNote = phrase[(Math.max(1, batch.combo) - 1) % phrase.length];
     const comboLift = Math.min(10, Math.floor(Math.max(0, batch.combo - 1) / 25) * 2);
     const feverLift = this.run.feverActive ? 5 : 0;
-    const starterRigLift = this.hasStarterHarvestRig() ? 2 : 0;
+    const rigTier = this.getHarvestRigTier();
+    const rigPitchLift = Math.min(6, rigTier);
     const baseMidi: Record<CloudKind, number> = { cumulus: 66, rain: 61, electric: 71, ice: 75, solar: 78, aurora: 81 };
     const wave: Record<CloudKind, OscillatorType> = { cumulus: "sine", rain: "triangle", electric: "square", ice: "triangle", solar: "sawtooth", aurora: "sine" };
-    const frequency = this.midiToFrequency(baseMidi[batch.kind] + phraseNote + comboLift + feverLift + starterRigLift + Math.min(3, batch.cascadeDepth));
+    const frequency = this.midiToFrequency(baseMidi[batch.kind] + phraseNote + comboLift + feverLift + rigPitchLift + Math.min(3, batch.cascadeDepth));
     const duration = this.run.feverActive || batch.cascadeDepth > 0 ? .046 : .072;
-    const volume = Math.min(.048, .026 + starterRigLift * .0018 + batch.peakTier * .0024 + Math.min(.008, batch.count * .0014));
+    const volume = Math.min(.05, .026 + rigTier * .0012 + batch.peakTier * .0024 + Math.min(.008, batch.count * .0014));
     this.playSynthTone(frequency, duration, volume, wave[batch.kind], 0, frequency * (batch.kind === "rain" ? .94 : 1.045));
-    if (starterRigLift > 0 && (batch.combo <= 2 || batch.combo % 5 === 0)) {
-      this.playSynthTone(frequency * 1.5, .052, .009, "sine", .006, frequency * 1.56);
+    const rigAccentCadence = Math.max(2, 6 - rigTier);
+    if (rigTier > 0 && (batch.combo <= 2 || batch.combo % rigAccentCadence === 0)) {
+      this.playSynthTone(frequency * (1.48 + rigTier * .015), .052, .008 + rigTier * .0008, "sine", .006, frequency * (1.54 + rigTier * .018));
     }
     if (batch.dense || batch.peakTier >= 3 || batch.count >= 4) {
       const accentRatio = batch.dense ? 1.5 : batch.kind === "aurora" ? 2.5 : 2;
@@ -5272,6 +5352,8 @@ export class CloudHarvestGame {
       this.canvas.dataset.harvestAudioKind = batch.kind;
       this.canvas.dataset.harvestAudioCombo = String(batch.combo);
       this.canvas.dataset.starterRig = this.hasStarterHarvestRig() ? "on" : "off";
+      this.canvas.dataset.rigTier = String(rigTier);
+      this.canvas.dataset.rigScore = String(this.getHarvestRigScore());
     }
   }
 
