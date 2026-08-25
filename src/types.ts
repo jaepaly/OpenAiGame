@@ -192,6 +192,7 @@ export interface FlightReport {
   emergencyReturn: boolean;
   lastHarvestTriggered: boolean;
   lastHarvestClouds: number;
+  lastHarvestValue: number;
   lastHarvestBonus: number;
   newRecords: FlightRecordKind[];
   records: FlightRecords;
@@ -334,6 +335,7 @@ export interface RunState {
   lastHarvestActive: boolean;
   lastHarvestTriggered: boolean;
   lastHarvestClouds: number;
+  lastHarvestValue: number;
   lastHarvestBonus: number;
   combo: number;
   comboTime: number;

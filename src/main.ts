@@ -449,7 +449,7 @@ app.innerHTML = `
         <section class="balance-live" id="balanceLive"></section>
         <section class="balance-unlock" id="balanceUnlock"></section>
         <section class="balance-lab">
-          <header><div><span>TEST SANDBOX</span><b>고도별 대표 성장 상태</b></div><div><button id="balanceClearButton" type="button">샘플 초기화</button><button id="balanceRestoreButton" type="button" hidden>실제 저장 복귀</button></div></header>
+          <header><div><span>TEST SANDBOX</span><b>고도별 대표 성장 상태</b></div><div><button id="balanceRushButton" type="button">LAST RUSH 25%</button><button id="balanceClearButton" type="button">샘플 초기화</button><button id="balanceRestoreButton" type="button" hidden>실제 저장 복귀</button></div></header>
           <div class="balance-presets" id="balancePresets"></div>
           <p>프리셋 플레이는 실제 로컬 저장을 덮어쓰지 않습니다. 각 고도의 핵심 사건이 활성화된 상태로 출격합니다.</p>
         </section>
@@ -607,6 +607,7 @@ const balanceLive = required<HTMLElement>("#balanceLive");
 const balanceUnlock = required<HTMLElement>("#balanceUnlock");
 const balancePresets = required<HTMLElement>("#balancePresets");
 const balanceSimulation = required<HTMLElement>("#balanceSimulation");
+const balanceRushButton = required<HTMLButtonElement>("#balanceRushButton");
 const balanceClearButton = required<HTMLButtonElement>("#balanceClearButton");
 const balanceRestoreButton = required<HTMLButtonElement>("#balanceRestoreButton");
 const balanceMilestones = required<HTMLElement>("#balanceMilestones");
@@ -1156,7 +1157,7 @@ const renderBalancePanel = (): void => {
     <button type="button" data-balance-preset="${mapRank}" class="${report.sandbox && report.company.rank === mapRank ? "active" : ""}" style="--preset-color:${rank.color}">
       <small>${rank.code}</small><strong>${rank.icon} ${rank.altitude}</strong><em>즉시 출격</em>
     </button>`).join("");
-  balanceSimulation.innerHTML = `<table><thead><tr><th>고도</th><th>근거</th><th>비행</th><th>구름/분</th><th>가치/분</th><th>연료</th><th>가공</th><th>다음 구간</th></tr></thead><tbody>${simulation.map((row) => `
+  balanceSimulation.innerHTML = `<table><thead><tr><th>고도</th><th>근거</th><th>비행</th><th>구름/분</th><th>가치/분</th><th>연료</th><th>LAST RUSH</th><th>가공</th><th>다음 구간</th></tr></thead><tbody>${simulation.map((row) => `
     <tr class="${row.tone}">
       <td><b>${row.code}</b><small>${row.nextName}</small></td>
       <td><em class="${row.source.toLowerCase()}">${row.source}${row.sampleCount ? ` ×${row.sampleCount}` : ""}</em></td>
@@ -1164,6 +1165,7 @@ const renderBalancePanel = (): void => {
       <td>${row.harvestPerMinute.toFixed(1)}</td>
       <td>◈${Math.round(row.valuePerMinute).toLocaleString()}</td>
       <td>${Math.round(row.fuelUsedPercent)}%</td>
+      <td><strong>${row.lastHarvestSeconds.toFixed(1)}s</strong><small>10개 ◈${row.lastHarvestBonusAtTen.toLocaleString()}</small></td>
       <td>${Math.round(row.processingSeconds)}s</td>
       <td><strong>${row.projectedFlights}회 · ${row.projectedMinutes.toFixed(1)}분</strong><small>목표 ${row.targetMinutes}분</small></td>
     </tr>`).join("")}</tbody></table>`;
@@ -1187,6 +1189,11 @@ if (balanceEnabled) {
 }
 balanceToggle.addEventListener("click", () => setBalanceOpen(!balancePanel.classList.contains("show")));
 balanceCloseButton.addEventListener("click", () => setBalanceOpen(false));
+balanceRushButton.addEventListener("click", () => {
+  if (!game.startBalanceLastHarvest()) return;
+  setBalanceOpen(false);
+  renderBalancePanel();
+});
 balancePresets.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-balance-preset]");
   if (!button) return;
@@ -1226,7 +1233,7 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("repo
       cargo: { cumulus: 18, rain: 13, electric: 7, ice: 0, solar: 0, aurora: 0 },
       totalCollected: 38, grossValue: 1840, maxCombo: 27, rareClouds: 7, denseClouds: 6,
       droneHarvested: 9, feverActivations: 3, fuelCapacity: 31, fuelRemaining: 8.7, fuelEfficiency: .28,
-      lastHarvestTriggered: true, lastHarvestClouds: 11, lastHarvestBonus: 146,
+      lastHarvestTriggered: true, lastHarvestClouds: 11, lastHarvestValue: 1280, lastHarvestBonus: 383,
       emergencyReturn: false, newRecords: ["harvest", "value", "combo", "rare"],
       records: { harvest: 38, value: 1840, combo: 27, rare: 7 },
     }, {
