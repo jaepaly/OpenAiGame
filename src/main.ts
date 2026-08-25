@@ -189,7 +189,7 @@ app.innerHTML = `
             <button id="garageCloseButton" aria-label="정비소 닫기">×</button>
           </header>
           <div class="upgrade-list" id="upgradeList"></div>
-          <div class="garage-tip">NOTE // 정비소 장비와 장기 스킬트리는 날짜가 바뀌어도 모두 유지됩니다.</div>
+          <div class="garage-tip">NOTE // TBN·INT·CMP 첫 장착 시 MK-I 수확 리그가 활성화됩니다. 모든 장비는 날짜가 바뀌어도 유지됩니다.</div>
         </div>
       </section>
 
