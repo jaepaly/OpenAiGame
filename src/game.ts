@@ -2890,7 +2890,6 @@ export class CloudHarvestGame {
           target.hurtFlash = .7;
           if (Math.random() < dt * 18) this.particles.push({ x: drone.x, y: drone.y, vx: dx * 1.8, vy: dy * 1.8, life: .24, maxLife: .24, size: 2.5, color: "#6ff6e2" });
           if (target.health <= 0) {
-            this.addFloatingText({ x: target.x, y: target.y - 24, text: "DRONE HARVEST!", color: "#8fffe9", life: .8 });
             this.collectCloud(target, 0, true, "drone");
             harvested = true;
             drone.targetId = undefined;
@@ -2979,10 +2978,6 @@ export class CloudHarvestGame {
       this.cascadeTimer = .72;
       this.cascadePunch = 1;
     }
-    const cascadeLabel = cascadeDepth > 0 ? `  CASCADE ×${this.cascadeCount}` : "";
-    const harvestVerb: Record<CloudKind, string> = { cumulus: "POP", rain: "COMPRESS", electric: "ARC", ice: "SHATTER", solar: "FLARE", aurora: "SPECTRUM" };
-    this.addFloatingText({ x: cloud.x, y: cloud.y, text: `${harvestVerb[cloud.kind]}  ${cloud.dense ? "DENSE  " : ""}+1  ◈${earned}${cascadeLabel}`, color: cloud.dense || definition.value >= 28 || cascadeDepth > 0 ? "#fff27a" : "#ffffff", life: 1.15 });
-    if (this.combo >= 3 && this.combo % 3 === 0) this.addFloatingText({ x: cloud.x, y: cloud.y + 28, text: `${this.combo} COMBO!`, color: "#ffdf70", life: .9 });
     this.triggerCloudHarvestEffect(cloud, cascadeDepth);
     const harvestShake = Math.min(3.2, .7 + this.combo * .12 + Math.min(1.2, cascadeDepth * .24));
     this.shake = this.run.feverActive ? Math.min(.8, harvestShake) : harvestShake;
@@ -3020,8 +3015,6 @@ export class CloudHarvestGame {
     if (countsForOpenSky) this.registerOpenSkyNode(cloud);
 
     if (cascadeDepth > 0 && this.cascadeCount % 5 === 0) {
-      const milestone = this.cascadeCount >= 30 ? "MEGA HARVEST" : this.cascadeCount >= 20 ? "SUPER CASCADE" : this.cascadeCount >= 10 ? "CHAIN REACTION" : "CASCADE";
-      this.addFloatingText({ x: cloud.x, y: cloud.y - 34, text: `${milestone} ×${this.cascadeCount}!`, color: "#fff36f", life: 1.35 });
       this.addShockwave({ x: cloud.x, y: cloud.y, radius: 24, life: .78, maxLife: .78, color: "#fff36f" });
       this.burst(cloud.x, cloud.y, "#fff36f", 16 + Math.min(34, this.cascadeCount), 390);
       const milestoneShake = Math.min(5, 2.4 + this.cascadeCount * .07);
@@ -3283,7 +3276,6 @@ export class CloudHarvestGame {
       nearby.vx += dx / length * 150 * force;
       nearby.vy += dy / length * 150 * force;
     }
-    this.addFloatingText({ x, y: y - 35, text: `PRESSURE SURGE  +${bonus}`, color: "#fff36f", life: 1.45 });
     this.addShockwave({ x, y, radius: 28, life: .78, maxLife: .78, color: "#fff36f" });
     this.burst(x, y, "#fff36f", 42, 390);
     this.shake = this.run.feverActive ? .8 : 5;
@@ -3549,6 +3541,7 @@ export class CloudHarvestGame {
       ctx.beginPath(); ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
+    if (import.meta.env.DEV) this.canvas.dataset.floatingTextCount = String(this.texts.length);
     for (const text of this.texts) {
       ctx.globalAlpha = Math.min(1, text.life * 1.7);
       ctx.fillStyle = text.color;
@@ -4157,9 +4150,20 @@ export class CloudHarvestGame {
       ctx.globalAlpha = 1;
     }
     if (cloud.health < cloud.maxHealth) {
-      const width = cloud.radius * 1.35;
-      ctx.fillStyle = "rgba(25,54,74,.32)"; ctx.fillRect(cloud.x - width / 2, cloud.y + cloud.radius + 12, width, 5);
-      ctx.fillStyle = definition.color; ctx.fillRect(cloud.x - width / 2, cloud.y + cloud.radius + 12, width * Math.max(0, cloud.health / cloud.maxHealth), 5);
+      const ratio = Math.max(0, cloud.health / cloud.maxHealth);
+      const width = Math.max(34, cloud.radius * 1.5);
+      const height = 7;
+      const barX = cloud.x - width / 2;
+      const barY = cloud.y + cloud.radius + 11;
+      ctx.fillStyle = "rgba(16,42,58,.72)";
+      ctx.beginPath(); ctx.roundRect(barX - 2, barY - 2, width + 4, height + 4, 5); ctx.fill();
+      if (ratio > 0) {
+        ctx.fillStyle = ratio <= .25 ? "#ff826d" : ratio <= .55 ? "#fff06a" : definition.color;
+        ctx.beginPath(); ctx.roundRect(barX, barY, Math.max(3, width * ratio), height, 3); ctx.fill();
+      }
+      ctx.strokeStyle = "rgba(255,255,255,.72)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.roundRect(barX - 1, barY - 1, width + 2, height + 2, 4); ctx.stroke();
     }
   }
 
