@@ -281,6 +281,9 @@ export class CloudHarvestGame {
   private frontDirection: 1 | -1 = 1;
   private goldenFront = false;
   private goldenFrontClaimed = false;
+  private refillSurge = 0;
+  private refillSurgeCooldown = 0;
+  private refillSurgeDirection: 1 | -1 = 1;
   private atFactory = false;
   private returning = false;
   private returnTimer = 0;
@@ -1218,6 +1221,8 @@ export class CloudHarvestGame {
     this.clearCascade();
     this.goldenFront = false;
     this.goldenFrontClaimed = false;
+    this.refillSurge = 0;
+    this.refillSurgeCooldown = 0;
     const flightFrontDelay = this.run.flight === 3 ? 3.5 : this.run.flight === 2 ? .72 : 1;
     this.frontTimer = Math.min(
       FLIGHT_ROUTES[routeId].frontDelay * flightFrontDelay,
@@ -1447,6 +1452,8 @@ export class CloudHarvestGame {
     this.balanceFlights = [];
     this.goldenFront = false;
     this.goldenFrontClaimed = false;
+    this.refillSurge = 0;
+    this.refillSurgeCooldown = 0;
     this.clouds = [];
     this.cloudFloorBudget = 2;
     this.recentHarvestRate = 0;
@@ -1704,7 +1711,8 @@ export class CloudHarvestGame {
     if (this.consumeFuel((movementLoad * .32 * movementEfficiency + suctionLoad * suctionEfficiency) * dt)) return;
     this.overload = Math.max(0, this.overload - dt);
     this.shockToastCooldown = Math.max(0, this.shockToastCooldown - dt);
-    this.comboTimer -= dt;
+    const comboDecay = this.refillSurge > 0 ? .22 : 1;
+    this.comboTimer -= dt * comboDecay;
     if (this.comboTimer <= 0) this.combo = 0;
     this.run.combo = this.combo;
     this.run.comboTime = Math.max(0, this.comboTimer);
@@ -1723,6 +1731,8 @@ export class CloudHarvestGame {
     this.frontTimer -= dt;
     this.frontActive = Math.max(0, this.frontActive - dt);
     this.frontBanner = Math.max(0, this.frontBanner - dt);
+    this.refillSurge = Math.max(0, this.refillSurge - dt);
+    this.refillSurgeCooldown = Math.max(0, this.refillSurgeCooldown - dt);
     if (this.frontTimer <= 0) {
       if (!this.clouds.some((cloud) => cloud.front)) this.startCloudFront();
       else this.frontTimer = 5;
@@ -3312,7 +3322,7 @@ export class CloudHarvestGame {
       }
       if (x > worldWidth - 405 / zoom && y < 345 / zoom) y = 350 / zoom + Math.random() * Math.max(60 / zoom, worldHeight - 500 / zoom);
     } else {
-      const side = Math.floor(Math.random() * 3);
+      const side = forceEdge && Math.random() < .78 ? (this.refillSurgeDirection === 1 ? 0 : 1) : Math.floor(Math.random() * 3);
       const entrySpeed = forceEdge ? 58 + Math.random() * 34 : 20 + Math.random() * 18;
       if (side === 0) { x = radius + 4 / zoom; y = 220 / zoom + Math.random() * Math.max(80 / zoom, worldHeight - 410 / zoom); entryVx = entrySpeed; }
       if (side === 1) { x = worldWidth - radius - 4 / zoom; y = 350 / zoom + Math.random() * Math.max(55 / zoom, worldHeight - 520 / zoom); entryVx = -entrySpeed; }
@@ -3697,6 +3707,27 @@ export class CloudHarvestGame {
         const y = 175 + (index * 47) % Math.max(120, this.height - 330);
         const length = 34 + index % 5 * 13;
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - direction * length, y); ctx.stroke();
+      }
+    }
+    if (this.refillSurge > 0) {
+      const color = RANKS[this.run.mapRank].color;
+      const pulse = .55 + Math.sin(time * 10) * .12;
+      const fromLeft = this.refillSurgeDirection === 1;
+      const glowWidth = Math.min(360, this.width * .32);
+      const edgeX = fromLeft ? 0 : this.width;
+      const glow = ctx.createLinearGradient(edgeX, 0, fromLeft ? glowWidth : this.width - glowWidth, 0);
+      glow.addColorStop(0, `${color}${Math.round(pulse * 150).toString(16).padStart(2, "0")}`);
+      glow.addColorStop(1, `${color}00`);
+      ctx.fillStyle = glow;
+      ctx.fillRect(fromLeft ? 0 : this.width - glowWidth, 0, glowWidth, this.height);
+      ctx.strokeStyle = "rgba(232,255,250,.72)";
+      ctx.lineWidth = 2.5;
+      for (let index = 0; index < 24; index += 1) {
+        const travel = (time * (280 + index % 4 * 42) + index * 91) % (this.width + 220);
+        const x = fromLeft ? travel - 110 : this.width - travel + 110;
+        const y = 135 + (index * 67) % Math.max(140, this.height - 275);
+        const length = 26 + index % 5 * 12;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - this.refillSurgeDirection * length, y + Math.sin(index) * 5); ctx.stroke();
       }
     }
   }
@@ -4542,6 +4573,18 @@ export class CloudHarvestGame {
       ctx.fillText(this.run.skills.blackHole ? "BLACK HOLE COLLAPSE" : "PRESSURE POP CHAIN", 0, 24);
       ctx.restore();
     }
+    if (this.refillSurge > 0) {
+      const progress = this.refillSurge / 2.6;
+      const alpha = Math.min(1, (1 - progress) * 6, progress * 2.4);
+      const color = RANKS[this.run.mapRank].color;
+      ctx.save(); ctx.translate(this.width * .5, this.height - 220); ctx.globalAlpha = alpha;
+      ctx.fillStyle = "rgba(8,35,49,.88)"; ctx.beginPath(); ctx.roundRect(-205, -35, 410, 70, 18); ctx.fill();
+      ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.shadowColor = color; ctx.shadowBlur = 16; ctx.stroke();
+      ctx.shadowBlur = 0; ctx.textAlign = "center"; ctx.fillStyle = color; ctx.font = "900 12px Outfit, sans-serif";
+      ctx.fillText("ATMOSPHERIC SURGE // COMBO HOLD", 0, -10);
+      ctx.fillStyle = "#ffffff"; ctx.font = "900 25px Nunito, sans-serif"; ctx.fillText("기압 쇄도 · 구름 전선 유입", 0, 20);
+      ctx.restore();
+    }
     const frontRemaining = this.clouds.filter((cloud) => cloud.front).length;
     if (frontRemaining > 0) {
       const badgeWidth = this.goldenFront ? 360 : 280;
@@ -4643,6 +4686,16 @@ export class CloudHarvestGame {
     while (this.clouds.length < target) this.spawnCloud(true);
   }
 
+  private startRefillSurge(): void {
+    this.refillSurge = 2.6;
+    this.refillSurgeCooldown = 7.5;
+    this.refillSurgeDirection = Math.random() < .5 ? 1 : -1;
+    this.impactFlash = Math.max(this.impactFlash, .2);
+    this.onToast("기압 쇄도 — 수확 속도에 맞춰 새 구름 전선이 유입됩니다!", "success");
+    this.playTransitionWhoosh(true);
+    this.playSynthTone(660, .14, .028, "triangle", .08, 990);
+  }
+
   private replenishCloudFloor(dt: number): void {
     this.recentHarvestRate *= Math.exp(-dt * .9);
     const minimumClouds = this.getMinimumClouds();
@@ -4656,6 +4709,7 @@ export class CloudHarvestGame {
       ? 1.5 + this.run.skills.cycloneCore * 1.2 + this.run.skills.cargoCyclone * 1.8
       : 0;
     const fillRatio = this.clouds.length / Math.max(1, minimumClouds);
+    if (fillRatio < .68 && this.recentHarvestRate >= 4.5 && this.refillSurgeCooldown <= 0) this.startRefillSurge();
     const urgencyMultiplier = fillRatio < .4 ? 4 : fillRatio < .7 ? 2 : 1;
     const harvestResponse = Math.min(10, this.recentHarvestRate * .7);
     const cascadeThrottle = this.cascadeQueue.length > 0 ? .75 : 1;
