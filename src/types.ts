@@ -36,6 +36,7 @@ export interface Cloud {
   health: number;
   maxHealth: number;
   hurtFlash: number;
+  healthBarTime?: number;
   dense: boolean;
   front: boolean;
   formationId?: number;

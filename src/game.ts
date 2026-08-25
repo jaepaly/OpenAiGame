@@ -50,6 +50,7 @@ const MAX_FLOATING_TEXTS = 30;
 const MAX_SHOCKWAVES = 24;
 const MAX_HARVEST_LINKS = 24;
 const MAX_CASCADE_HARVESTS_PER_FRAME = 12;
+const MAX_STANDARD_HEALTH_BARS = 10;
 
 const MUSIC_PROFILES: Record<MusicScene, MusicProfile> = {
   title: { tempo: 86, root: 60, notes: [0, null, 7, 11, 4, null, 12, 7], bass: [0, 5, 0, 7], wave: "triangle", volume: .72 },
@@ -297,6 +298,7 @@ export class CloudHarvestGame {
   private flightStats = freshFlightStats();
   private pendingFlightReport?: FlightReport;
   private harvestDrones: HarvestDrone[] = [];
+  private visibleHealthBarIds = new Set<number>();
   private rivalHarvester: RivalHarvester = { x: 0, y: 0, vx: 0, vy: 0, angle: Math.PI, pulse: 0, delay: 0 };
   private signalTargetId?: number;
   private archiveWaveIndex = 0;
@@ -1800,6 +1802,8 @@ export class CloudHarvestGame {
 
     for (const cloud of this.clouds) {
       cloud.age += dt;
+      if (cloud.hurtFlash > 0) cloud.healthBarTime = Math.max(cloud.healthBarTime ?? 0, .58);
+      cloud.healthBarTime = Math.max(0, (cloud.healthBarTime ?? 0) - dt);
       cloud.hurtFlash = Math.max(0, cloud.hurtFlash - dt * 5);
       cloud.vx += Math.sin(cloud.phase + cloud.age * 0.6) * dt * 3;
       cloud.vy += Math.cos(cloud.phase + cloud.age * 0.48) * dt * 2;
@@ -3493,6 +3497,7 @@ export class CloudHarvestGame {
     this.drawFormationLinks(ctx, time);
     if (this.isSuctionActive()) this.drawSuctionField(ctx, time);
     this.drawCascadeLinks(ctx, time);
+    this.refreshVisibleHealthBars();
     for (const cloud of this.clouds) this.drawCloud(ctx, cloud, time);
     this.drawArchiveRelay(ctx, time);
     this.drawSolarEngine(ctx, time);
@@ -3971,6 +3976,52 @@ export class CloudHarvestGame {
     ctx.restore();
   }
 
+  private isPriorityHealthBarCloud(cloud: Cloud): boolean {
+    return Boolean(cloud.formationCore || cloud.signalTarget || cloud.archiveShard || cloud.solarCore || cloud.auroraNode);
+  }
+
+  private refreshVisibleHealthBars(): void {
+    const visible = new Set<number>();
+    const droneTargetIds = new Set(
+      this.harvestDrones
+        .map((drone) => drone.targetId)
+        .filter((targetId): targetId is number => targetId !== undefined),
+    );
+    const suctionRadius = 112 + this.state.levels.radius * 18 + this.run.skills.wideIntake * 34 + this.run.skills.pressureChamber * 18
+      + this.run.skills.blackHole * 80 + this.run.skills.eventHorizon * 140
+      + (this.run.feverActive ? this.run.skills.cycloneCore * 120 + this.run.skills.goldenVacuum * 80 : 0);
+    const suctionActive = this.isSuctionActive();
+    const standardCandidates: { id: number; priority: number; distanceSquared: number }[] = [];
+
+    for (const cloud of this.clouds) {
+      if (this.isPriorityHealthBarCloud(cloud) || droneTargetIds.has(cloud.id)) {
+        visible.add(cloud.id);
+        continue;
+      }
+      if (cloud.health >= cloud.maxHealth) continue;
+      const beingSucked = suctionActive && this.isCloudInSuctionArc(cloud, suctionRadius);
+      if (!beingSucked && (cloud.healthBarTime ?? 0) <= 0) continue;
+      const dx = cloud.x - this.player.x;
+      const dy = cloud.y - this.player.y;
+      standardCandidates.push({
+        id: cloud.id,
+        priority: beingSucked ? 0 : 1,
+        distanceSquared: dx * dx + dy * dy,
+      });
+    }
+
+    const persistentCount = visible.size;
+    standardCandidates
+      .sort((a, b) => a.priority - b.priority || a.distanceSquared - b.distanceSquared)
+      .slice(0, MAX_STANDARD_HEALTH_BARS)
+      .forEach((candidate) => visible.add(candidate.id));
+    this.visibleHealthBarIds = visible;
+    if (import.meta.env.DEV) {
+      this.canvas.dataset.healthBarCount = String(visible.size);
+      this.canvas.dataset.standardHealthBarCount = String(visible.size - persistentCount);
+    }
+  }
+
   private drawCloud(ctx: CanvasRenderingContext2D, cloud: Cloud, time: number): void {
     const definition = CLOUDS[cloud.kind];
     const reducedEffects = this.clouds.length > 58 || this.particles.length > 560;
@@ -4149,12 +4200,18 @@ export class CloudHarvestGame {
       ctx.beginPath(); ctx.arc(cloud.x, cloud.y, cloud.radius * (.55 + arrival * 1.1), 0, Math.PI * 2); ctx.stroke();
       ctx.globalAlpha = 1;
     }
-    if (cloud.health < cloud.maxHealth) {
+    if (this.visibleHealthBarIds.has(cloud.id)) {
       const ratio = Math.max(0, cloud.health / cloud.maxHealth);
+      const targetedByDrone = this.harvestDrones.some((drone) => drone.targetId === cloud.id);
+      const activelyTargeted = beingSucked || targetedByDrone || this.isPriorityHealthBarCloud(cloud);
+      const fade = activelyTargeted ? 1 : Math.min(1, (cloud.healthBarTime ?? 0) / .3);
+      const lowHealthPulse = ratio <= .25 ? .82 + Math.sin(time * 11) * .18 : 1;
       const width = Math.max(34, cloud.radius * 1.5);
       const height = 7;
       const barX = cloud.x - width / 2;
       const barY = cloud.y + cloud.radius + 11;
+      ctx.save();
+      ctx.globalAlpha = fade * lowHealthPulse;
       ctx.fillStyle = "rgba(16,42,58,.72)";
       ctx.beginPath(); ctx.roundRect(barX - 2, barY - 2, width + 4, height + 4, 5); ctx.fill();
       if (ratio > 0) {
@@ -4164,6 +4221,7 @@ export class CloudHarvestGame {
       ctx.strokeStyle = "rgba(255,255,255,.72)";
       ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.roundRect(barX - 1, barY - 1, width + 2, height + 2, 4); ctx.stroke();
+      ctx.restore();
     }
   }
 
