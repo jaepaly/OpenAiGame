@@ -24,11 +24,6 @@ app.innerHTML = `
           <div><span>SKY HARVEST</span><h1>구름 수확</h1><small id="rankName">골목 기상소</small></div>
         </div>
 
-        <div class="rank-chip">
-          <small>현재 고도</small>
-          <strong id="altitude">해발 120m</strong>
-        </div>
-
         <div class="resource-hud">
           <div class="mini-stat coin-stat"><span>◈</span><strong id="money">0</strong></div>
           <div class="mini-stat cargo-stat"><span>▣</span><strong id="harvested">0</strong></div>
@@ -40,10 +35,8 @@ app.innerHTML = `
       </header>
 
       <div class="run-meter">
-        <span class="level-badge" id="runLevel">LV.1</span>
-        <div class="meter-group xp-group"><small>FLIGHT XP</small><div class="meter-track"><i id="xpFill"></i></div><b id="xpText">0 / 6</b></div>
         <div class="meter-group fever-group"><small>SKY FEVER</small><div class="meter-track"><i id="feverFill"></i></div><b id="feverText">0%</b></div>
-        <div class="route-status"><small id="dayFlight">DAY 1 · FLIGHT 1/3</small><b id="routeName">순풍 회랑</b></div>
+        <div class="route-status"><small><span id="dayFlight">DAY 1 · FLIGHT 1/3</span><em id="altitude">해발 120m</em></small><b id="routeName">순풍 회랑</b></div>
       </div>
 
       <aside class="focus-hud-strip" id="focusHudStrip" aria-live="polite" aria-hidden="true">
@@ -634,9 +627,6 @@ const growthMissionSpeaker = required<HTMLElement>("#growthMissionSpeaker");
 const growthMissionGuide = required<HTMLElement>("#growthMissionGuide");
 const growthMissionControl = required<HTMLElement>("#growthMissionControl");
 const growthMissionLoop = required<HTMLElement>("#growthMissionLoop");
-const runLevel = required<HTMLElement>("#runLevel");
-const xpFill = required<HTMLElement>("#xpFill");
-const xpText = required<HTMLElement>("#xpText");
 const feverFill = required<HTMLElement>("#feverFill");
 const feverText = required<HTMLElement>("#feverText");
 const routeName = required<HTMLElement>("#routeName");
@@ -1712,8 +1702,6 @@ function updateFocusHudPresentation(state: RunState): void {
 
 function renderRunState(state: RunState): void {
   updateFocusHudPresentation(state);
-  runLevel.textContent = `LV.${state.level}`;
-  runLevel.classList.remove("ready");
   const treeCode = skillTreeButton.querySelector<HTMLElement>("b");
   const affordableFiniteSkill = (Object.keys(RUN_SKILLS) as RunSkillId[]).some((id) => {
     const requirementsMet = RUN_SKILLS[id].requirements?.every((requirement) => state.skills[requirement] >= 1) ?? true;
@@ -1727,8 +1715,6 @@ function renderRunState(state: RunState): void {
     ? infiniteUnlocked ? "∞ TREE! · FACILITY 02" : "TREE! · FACILITY 02"
     : "TREE · FACILITY 02";
   skillTreeButton.classList.toggle("ready", growthReady);
-  xpFill.style.width = `${Math.min(100, state.xp / state.xpNext * 100)}%`;
-  xpText.textContent = `${Math.floor(state.xp)} / ${state.xpNext}`;
   feverFill.style.width = `${Math.min(100, state.fever)}%`;
   feverText.textContent = state.feverActive ? `${Math.max(0, state.feverSeconds).toFixed(1)}s` : `${Math.floor(state.fever)}%`;
   dayFlight.textContent = `DAY ${state.day} · FLIGHT ${state.flight}/3`;

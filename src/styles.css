@@ -23,9 +23,9 @@ body.last-harvest-active .game-stage::after { opacity: .72; animation: last-harv
 
 .game-hud-top {
   position: absolute; z-index: 5; top: 16px; left: 18px; right: 18px;
-  display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; pointer-events: none;
+  display: flex; align-items: flex-start; justify-content: space-between; pointer-events: none;
 }
-.brand, .rank-chip, .resource-hud, .promotion-card, .upgrade-dock { pointer-events: auto; }
+.brand, .resource-hud, .promotion-card, .upgrade-dock { pointer-events: auto; }
 .brand { display: flex; align-items: center; gap: 10px; filter: drop-shadow(0 5px 8px rgba(38,92,117,.12)); }
 .brand-mark {
   width: 46px; height: 46px; display: grid; place-items: center; color: white;
@@ -36,14 +36,6 @@ body.last-harvest-active .game-stage::after { opacity: .72; animation: last-harv
 .brand h1 { margin: 1px 0 0; color: white; font: 900 24px/1 "Nunito",sans-serif; letter-spacing: -.04em; text-shadow: 0 2px 0 rgba(25,77,101,.35),0 4px 12px rgba(24,84,107,.18); }
 .brand small { display: inline-block; margin-top: 5px; padding: 2px 8px; color: #225d72; background: rgba(255,255,255,.72); border-radius: 7px; font-size: 9px; font-weight: 900; }
 
-.rank-chip {
-  justify-self: center; min-width: 224px; padding: 11px 26px 12px; text-align: center; color: white;
-  background: linear-gradient(135deg,rgba(29,118,158,.93),rgba(47,178,178,.93));
-  border: 2px solid rgba(255,255,255,.7); border-radius: 15px 15px 22px 22px;
-  box-shadow: 0 6px 0 rgba(24,91,117,.23),0 10px 24px rgba(24,91,117,.16); backdrop-filter: blur(8px);
-}
-.rank-chip small { display: block; opacity: .8; font-size: 11px; font-weight: 800; }
-.rank-chip strong { display: block; margin-top: 2px; font-size: 17px; }
 .resource-hud { justify-self: end; display: flex; align-items: stretch; gap: 7px; }
 .mini-stat {
   min-width: 88px; height: 56px; padding: 6px 14px; display: flex; align-items: center; justify-content: center; gap: 7px;
@@ -69,14 +61,11 @@ body.last-harvest-active .game-stage::after { opacity: .72; animation: last-harv
 
 .run-meter {
   position: absolute; z-index: 5; top: 82px; left: 50%; transform: translateX(-50%);
-  width: 570px; height: 54px; padding: 7px 12px; display: grid; grid-template-columns: 58px 1fr 1fr 115px;
+  width: 440px; height: 54px; padding: 7px 12px; display: grid; grid-template-columns: minmax(0,1fr) 155px;
   align-items: center; gap: 10px; color: white; background: rgba(25,69,91,.74);
   border: 2px solid rgba(255,255,255,.48); border-radius: 18px; box-shadow: 0 6px 0 rgba(20,58,77,.2);
   backdrop-filter: blur(9px); pointer-events: none;
 }
-.level-badge { display: grid; place-items: center; height: 36px; color: #23495c; background: #fff16e; border-radius: 11px; font: 900 14px "Outfit",sans-serif; }
-.level-badge.ready { color: white; background: linear-gradient(135deg,#ff9b55,#e96d8c); box-shadow: 0 0 22px rgba(255,127,100,.55); animation: reward-ready .85s ease-in-out infinite alternate; }
-@keyframes reward-ready { to { transform: scale(1.055); filter: brightness(1.12); } }
 .meter-group { min-width: 0; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 6px; }
 .meter-group small { font: 900 7px "Outfit",sans-serif; letter-spacing: .12em; opacity: .78; }
 .meter-group b { font-size: 8px; }
@@ -84,14 +73,14 @@ body.last-harvest-active .game-stage::after { opacity: .72; animation: last-harv
 .meter-track i { display: block; width: 0; height: 100%; background: linear-gradient(90deg,#48d7ee,#c6fbff); border-radius: inherit; transition: width .2s ease; }
 .fever-group .meter-track i { background: linear-gradient(90deg,#ff9a55,#fff36f); }
 .route-status { height: 36px; padding: 5px 9px; display: flex; flex-direction: column; justify-content: center; color: #17394a; background: #7ff5df; border-radius: 11px; overflow: hidden; }
-.route-status small { font: 900 7px "Outfit",sans-serif; letter-spacing: .13em; opacity: .65; }
+.route-status small { display: flex; justify-content: space-between; gap: 8px; font: 900 7px "Outfit",sans-serif; letter-spacing: .13em; opacity: .65; }
+.route-status small em { font-style: normal; letter-spacing: 0; white-space: nowrap; }
 .route-status b { margin-top: 1px; overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .fever-active .run-meter { border-color: #fff36f; box-shadow: 0 0 30px rgba(255,243,111,.5),0 6px 0 rgba(20,58,77,.2); }
 .flight-two .run-meter { border-color: #9eb8ff; box-shadow: 0 0 26px rgba(126,145,255,.28),0 6px 0 rgba(20,58,77,.2); }
 .flight-two .route-status { color: #f4f7ff; background: linear-gradient(135deg,#637fc7,#876fc0); }
 .flight-three .run-meter { border-color: #fff36f; box-shadow: 0 0 34px rgba(255,190,83,.45),0 6px 0 rgba(20,58,77,.2); }
 .flight-three .route-status { color: #493516; background: linear-gradient(135deg,#fff36f,#ff9b5e); }
-.flight-three .level-badge { color: white; background: linear-gradient(135deg,#8d63c8,#ec6d77); box-shadow: 0 0 18px rgba(238,111,111,.45); }
 
 .rival-race { position: absolute; z-index: 7; left: 50%; top: 150px; width: min(540px,calc(100% - 18px)); padding: 10px 13px 11px; color: white; background: linear-gradient(145deg,rgba(7,31,44,.96),rgba(26,29,42,.97)); border: 3px solid #ff6578; border-radius: 20px; box-shadow: 0 7px 0 rgba(70,24,39,.45),0 0 30px rgba(255,101,120,.24); opacity: 0; pointer-events: none; transform: translate(-50%,-12px) scale(.96); transition: opacity .2s ease,transform .2s ease; }
 .rival-race.show { opacity: 1; transform: translate(-50%,0) scale(1); }
@@ -1103,28 +1092,24 @@ body.base-open .promotion-card { top: 28px; }
 @media (max-width: 900px) {
   .brand h1 { font-size: 17px; }
   .brand span { display: none; }
-  .rank-chip { min-width: 145px; padding-inline: 12px; }
   .mini-stat { min-width: 58px; padding-inline: 8px; }
   .combo-stat { display: none; }
   .upgrade-card { width: 108px; }
   .dock-tip { display: none; }
   .promotion-card { top: 84px; width: 280px; }
-  .run-meter { top: 78px; width: 360px; }
+  .run-meter { top: 78px; width: 430px; }
   .tutorial { top: 140px; }
 }
 
 @media (max-width: 680px) {
-  .game-hud-top { top: 9px; left: 9px; right: 9px; grid-template-columns: auto 1fr; }
+  .game-hud-top { top: 9px; left: 9px; right: 9px; }
   .brand-mark { width: 40px; height: 40px; font-size: 22px; }
   .brand h1 { max-width: 130px; font-size: 14px; }
-  .rank-chip { position: absolute; top: 52px; left: 0; min-width: 128px; padding: 6px 10px; text-align: left; border-radius: 11px; }
-  .rank-chip strong { font-size: 11px; }
-  .resource-hud { grid-column: 2; }
   .mini-stat { height: 42px; min-width: 56px; padding: 4px 7px; }
   .mini-stat strong { font-size: 13px; }
   .mini-stat:nth-child(2), .reset-button { display: none; }
   .icon-button { width: 40px; height: 40px; }
-  .run-meter { top: 101px; width: calc(100% - 16px); height: 48px; grid-template-columns: 50px 1fr 1fr; }
+  .run-meter { top: 60px; width: calc(100% - 16px); height: 52px; grid-template-columns: minmax(0,1fr) minmax(116px,38%); }
   .rival-race { top: 158px; padding: 8px 9px 9px; border-radius: 16px; }
   .rival-race header span { font-size: 7px; }
   .rival-race header strong { font-size: 11px; }
@@ -1238,10 +1223,6 @@ body.base-open .promotion-card { top: 28px; }
   .brand h1 { font-size: 32px; }
   .brand small { margin-top: 7px; padding: 4px 11px; font-size: 12px; }
 
-  .rank-chip { min-width: 260px; padding: 15px 24px 16px; border-radius: 20px 20px 27px 27px; }
-  .rank-chip small { font-size: 14px; }
-  .rank-chip strong { font-size: 23px; }
-
   .resource-hud { gap: 10px; }
   .mini-stat { min-width: 100px; height: 70px; padding: 8px 13px; gap: 8px; border-radius: 18px; }
   .mini-stat span { font-size: 21px; }
@@ -1252,8 +1233,8 @@ body.base-open .promotion-card { top: 28px; }
   .icon-button { width: 62px; height: 62px; align-self: center; font-size: 25px; }
 
   .run-meter {
-    top: 105px; width: 660px; height: 70px; padding: 9px 15px;
-    grid-template-columns: 76px 1fr 1fr 138px; gap: 13px; border-radius: 22px;
+    top: 105px; width: 520px; height: 64px; padding: 9px 15px;
+    grid-template-columns: minmax(0,1fr) 190px; gap: 13px; border-radius: 22px;
   }
   .rival-race { top: 188px; width: 560px; padding: 12px 16px 13px; }
   .rival-race header span { font-size: 11px; }
@@ -1262,7 +1243,6 @@ body.base-open .promotion-card { top: 28px; }
   .rival-race-lane > span { font-size: 10px; }
   .rival-race-lane > strong { font-size: 28px; }
   .rival-race footer { font-size: 12px; }
-  .level-badge { height: 48px; border-radius: 14px; font-size: 19px; }
   .meter-group { gap: 4px 8px; }
   .meter-group small { font-size: 10px; }
   .meter-group b { font-size: 11px; }
@@ -1336,13 +1316,10 @@ body.base-open .promotion-card { top: 28px; }
 @media (max-width: 680px) {
   .brand h1 { font-size: 17px; }
   .brand small { font-size: 11px; }
-  .rank-chip strong { font-size: 14px; }
   .mini-stat { min-width: 66px; }
   .mini-stat strong { font-size: 16px; }
-  .run-meter { height: 56px; }
-  .route-status { display: none; }
-  .run-meter { grid-template-columns: 50px 1fr 1fr; }
-  .level-badge { font-size: 16px; }
+  .run-meter { height: 54px; grid-template-columns: minmax(0,1fr) minmax(116px,38%); }
+  .route-status { display: flex; }
   .meter-group small { font-size: 9px; }
   .meter-group b { font-size: 10px; }
   .tutorial b { font-size: 16px; }
@@ -1392,8 +1369,7 @@ body.base-open .promotion-card { top: 28px; }
 
 /* Readability pass: every gameplay panel must be legible at normal viewing distance. */
 @media (min-width: 681px) {
-  .run-meter { width: 740px; height: 78px; grid-template-columns: 82px 1fr 1fr 170px; }
-  .level-badge { height: 54px; font-size: 21px; }
+  .run-meter { width: 560px; height: 68px; grid-template-columns: minmax(0,1fr) 210px; }
   .meter-group small { font-size: 13px; }
   .meter-group b { font-size: 14px; }
   .route-status { height: 54px; }

@@ -1937,7 +1937,6 @@ export class CloudHarvestGame {
     this.updateRivalRace(dt);
     if (harvestedThisFrame) {
       this.commit();
-      this.bankLevelUps();
     }
     this.replenishCloudFloor(dt);
 
@@ -3056,10 +3055,6 @@ export class CloudHarvestGame {
     if (countsForRivalRace) this.run.rivalRace.playerScore += 1;
     if (cloud.kind === "rain") this.state.growthMission.rainHarvested += 1;
     if (source === "manual") this.tryRecoverFuel(cloud);
-    const baseXp = { cumulus: 2, rain: 5, electric: 9, ice: 14, solar: 22, aurora: 34 }[cloud.kind];
-    const sourceXp = source === "manual" ? 1 : source === "drone" ? .35 : .18;
-    const xp = Math.max(1, Math.round((cloud.dense ? baseXp * 2 : baseXp) * sourceXp));
-    this.run.xp += xp;
     const feverGain = (12 + Math.min(10, this.combo))
       * (1 + this.run.skills.feverDrive * .35 + this.run.skills.comboCapacitor * .12 + this.run.skills.feverInjector * .2);
     if (!this.run.feverActive) this.run.fever = Math.min(100, this.run.fever + feverGain);
@@ -3142,7 +3137,6 @@ export class CloudHarvestGame {
     if (!deferSync) {
       this.commit();
       this.onRunChange(this.getRunState());
-      this.bankLevelUps();
     }
   }
 
@@ -3328,19 +3322,6 @@ export class CloudHarvestGame {
       this.cascadeTimer = 0;
       this.cascadePunch = 0;
     }
-  }
-
-  private bankLevelUps(): void {
-    let gained = 0;
-    while (this.run.xp >= this.run.xpNext) {
-      this.run.xp -= this.run.xpNext;
-      this.run.level += 1;
-      this.run.xpNext = Math.round(6 + (this.run.level - 1) * 4.5);
-      gained += 1;
-    }
-    if (gained > 0) this.commit();
-    this.onRunChange(this.getRunState());
-    if (gained > 0) this.onToast(`COMPANY LEVEL ${this.run.level} — 성장 효율 상승`, "success");
   }
 
   private presentLevelUp(): void {
