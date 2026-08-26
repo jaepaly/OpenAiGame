@@ -3,6 +3,7 @@ name: Deploy Cloud Company to GitHub Pages
 on:
   push:
     branches:
+      - main
       - agent/cloud-front-events
   workflow_dispatch:
 
