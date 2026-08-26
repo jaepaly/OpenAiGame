@@ -3403,7 +3403,7 @@ export class CloudHarvestGame {
     this.playFeverTransition(true);
   }
 
-  private spawnCloud(initial: boolean, forcedKind?: CloudKind, forceEdge = false): void {
+  private spawnCloud(initial: boolean, forcedKind?: CloudKind, placement: "auto" | "edge" | "interior" = "auto"): void {
     const zoom = this.getWorldZoom();
     const worldWidth = this.getWorldWidth();
     const worldHeight = this.getWorldHeight();
@@ -3428,16 +3428,37 @@ export class CloudHarvestGame {
     const scale = radius / ((definition.radius[0] + definition.radius[1]) * .5);
     let x = 90 / zoom + Math.random() * Math.max(100 / zoom, worldWidth - 180 / zoom);
     let y = 205 / zoom + Math.random() * Math.max(90 / zoom, worldHeight - 390 / zoom);
-    const interiorSpawn = !forceEdge && (initial || Math.random() < .78);
+    const interiorSpawn = placement === "interior" || (placement === "auto" && (initial || Math.random() < .78));
     let entryVx = (Math.random() - .5) * 8;
     let entryVy = (Math.random() - .5) * 6;
     if (interiorSpawn) {
-      for (let attempt = 0; attempt < 6 && Math.hypot(x - this.player.x, y - this.player.y) < 175; attempt += 1) {
-        x = 90 / zoom + Math.random() * Math.max(100 / zoom, worldWidth - 180 / zoom);
-        y = 205 / zoom + Math.random() * Math.max(90 / zoom, worldHeight - 390 / zoom);
+      let bestX = x;
+      let bestY = y;
+      let bestClearance = -Infinity;
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const candidateX = 90 / zoom + Math.random() * Math.max(100 / zoom, worldWidth - 180 / zoom);
+        let candidateY = 205 / zoom + Math.random() * Math.max(90 / zoom, worldHeight - 390 / zoom);
+        if (candidateX > worldWidth - 405 / zoom && candidateY < 345 / zoom) {
+          candidateY = 350 / zoom + Math.random() * Math.max(60 / zoom, worldHeight - 500 / zoom);
+        }
+        const playerClearance = Math.hypot(candidateX - this.player.x, candidateY - this.player.y) - 175;
+        let cloudClearance = Infinity;
+        for (const cloud of this.clouds) {
+          const requiredSpacing = radius + cloud.radius + 24 / zoom;
+          cloudClearance = Math.min(cloudClearance, Math.hypot(candidateX - cloud.x, candidateY - cloud.y) - requiredSpacing);
+        }
+        const clearance = Math.min(playerClearance, cloudClearance);
+        if (clearance > bestClearance) {
+          bestX = candidateX;
+          bestY = candidateY;
+          bestClearance = clearance;
+        }
+        if (clearance >= 0) break;
       }
-      if (x > worldWidth - 405 / zoom && y < 345 / zoom) y = 350 / zoom + Math.random() * Math.max(60 / zoom, worldHeight - 500 / zoom);
+      x = bestX;
+      y = bestY;
     } else {
+      const forceEdge = placement === "edge";
       const side = forceEdge && Math.random() < .78 ? (this.refillSurgeDirection === 1 ? 0 : 1) : Math.floor(Math.random() * 3);
       const entrySpeed = forceEdge ? 58 + Math.random() * 34 : 20 + Math.random() * 18;
       if (side === 0) { x = radius + 4 / zoom; y = 220 / zoom + Math.random() * Math.max(80 / zoom, worldHeight - 410 / zoom); entryVx = entrySpeed; }
@@ -5024,7 +5045,7 @@ export class CloudHarvestGame {
     const frontKind = CLOUD_ORDER[Math.min(this.run.mapRank, CLOUD_ORDER.length - 1)];
     const frontCount = Math.min(Math.max(4, this.getMaxClouds() - this.clouds.length), 8 + this.run.mapRank * 2);
     for (let index = 0; index < frontCount; index += 1) {
-      this.spawnCloud(false, frontKind, true);
+      this.spawnCloud(false, frontKind, "edge");
       const cloud = this.clouds[this.clouds.length - 1];
       cloud.vx *= 1.28;
       cloud.vy *= 1.18;
@@ -5080,7 +5101,9 @@ export class CloudHarvestGame {
       const rushKind = this.run.lastHarvestActive && Math.random() < .45
         ? CLOUD_ORDER[Math.min(this.run.mapRank, CLOUD_ORDER.length - 1)]
         : undefined;
-      this.spawnCloud(false, rushKind, true);
+      const edgeEventActive = this.refillSurge > 0 || this.run.lastHarvestActive;
+      const placement = edgeEventActive || Math.random() < .3 ? "edge" : "interior";
+      this.spawnCloud(false, rushKind, placement);
     }
     this.cloudFloorBudget -= spawnCount;
   }
