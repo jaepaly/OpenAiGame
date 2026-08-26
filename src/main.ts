@@ -1717,7 +1717,7 @@ function renderRunState(state: RunState): void {
   skillTreeButton.classList.toggle("ready", growthReady);
   feverFill.style.width = `${Math.min(100, state.fever)}%`;
   feverText.textContent = state.feverActive ? `${Math.max(0, state.feverSeconds).toFixed(1)}s` : `${Math.floor(state.fever)}%`;
-  dayFlight.textContent = `DAY ${state.day} · FLIGHT ${state.flight}/3`;
+  dayFlight.textContent = `DAY ${state.day} · ${state.flight}/3`;
   document.body.classList.toggle("flight-two", state.flight === 2);
   document.body.classList.toggle("flight-three", state.flight === 3);
   altitude.textContent = RANKS[state.mapRank].altitude;

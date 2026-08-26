@@ -70,15 +70,17 @@ body.last-harvest-active .game-stage::after { opacity: .72; animation: last-harv
 .meter-group small {
   display: block; min-height: 1.3em; padding-top: 1px; overflow: visible; white-space: nowrap;
   font: 900 7px/1.3 "Outfit",sans-serif; letter-spacing: .12em; opacity: .78;
+  grid-column: 1; grid-row: 1;
 }
-.meter-group b { font-size: 8px; }
-.meter-track { grid-column: 1/3; height: 10px; overflow: hidden; background: rgba(10,39,54,.42); border: 2px solid rgba(255,255,255,.18); border-radius: 99px; }
+.meter-group b { grid-column: 2; grid-row: 1; align-self: center; font-size: 8px; line-height: 1.2; }
+.meter-track { grid-column: 1/3; grid-row: 2; height: 10px; overflow: hidden; background: rgba(10,39,54,.42); border: 2px solid rgba(255,255,255,.18); border-radius: 99px; }
 .meter-track i { display: block; width: 0; height: 100%; background: linear-gradient(90deg,#48d7ee,#c6fbff); border-radius: inherit; transition: width .2s ease; }
 .fever-group .meter-track i { background: linear-gradient(90deg,#ff9a55,#fff36f); }
 .route-status { height: 36px; padding: 5px 9px; display: flex; flex-direction: column; justify-content: center; color: #17394a; background: #7ff5df; border-radius: 11px; overflow: hidden; }
-.route-status small { display: flex; justify-content: space-between; gap: 8px; font: 900 7px "Outfit",sans-serif; letter-spacing: .13em; opacity: .65; }
+.route-status small { display: flex; justify-content: space-between; gap: 8px; font: 900 7px/1.15 "Outfit",sans-serif; letter-spacing: .13em; opacity: .65; white-space: nowrap; }
+.route-status small span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .route-status small em { font-style: normal; letter-spacing: 0; white-space: nowrap; }
-.route-status b { margin-top: 1px; overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.route-status b { flex: 0 0 auto; min-height: 1.2em; margin-top: 2px; overflow: hidden; font-size: 10px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 .fever-active .run-meter { border-color: #fff36f; box-shadow: 0 0 30px rgba(255,243,111,.5),0 6px 0 rgba(20,58,77,.2); }
 .flight-two .run-meter { border-color: #9eb8ff; box-shadow: 0 0 26px rgba(126,145,255,.28),0 6px 0 rgba(20,58,77,.2); }
 .flight-two .route-status { color: #f4f7ff; background: linear-gradient(135deg,#637fc7,#876fc0); }
@@ -2315,11 +2317,38 @@ body.base-open .focus-hud-strip,body.garage-open .focus-hud-strip,body.story-ope
   .display-console { padding:11px; }.focus-hud-toggle { grid-template-columns:40px minmax(0,1fr) 60px; gap:9px; }.focus-hud-icon { width:39px; height:39px; }.focus-hud-copy strong { font-size:14px; }.focus-hud-copy small { font-size:9px; }
 }
 
-/* On wide playfields the removed altitude/XP cards leave a clean top-center lane. */
-@media (min-width:1401px) {
+/* The cargo count already lives on the RTB button; audio/reset live in Settings. */
+.resource-hud .cargo-stat,
+.resource-hud #soundButton,
+.resource-hud .reset-button { display:none; }
+.resource-hud .combo-stat { display:none; }
+.resource-hud .combo-stat.active { display:flex; }
+
+@media (min-width:681px) {
+  .resource-hud { gap:6px; }
+  .resource-hud .mini-stat { min-width:72px; height:46px; padding:5px 10px; gap:5px; border-radius:14px; }
+  .resource-hud .mini-stat span { font-size:15px; }
+  .resource-hud .mini-stat strong { font-size:18px; }
+  .resource-hud .coin-stat span { font-size:19px; }
+  .resource-hud .combo-stat { min-width:76px; }
+  .resource-hud .combo-stat span { font-size:9px; }
+  .resource-hud .icon-button { width:44px; height:44px; font-size:18px; }
+}
+
+@media (max-width:680px) {
+  .resource-hud { gap:4px; }
+  .resource-hud .mini-stat { min-width:52px; height:36px; padding:3px 7px; border-radius:12px; }
+  .resource-hud .mini-stat strong { font-size:14px; }
+  .resource-hud .coin-stat span { font-size:16px; }
+  .resource-hud .combo-stat { min-width:60px; }
+  .resource-hud .icon-button { width:36px; height:36px; font-size:16px; }
+}
+
+/* The removed altitude/XP cards leave a clean top-center lane on desktop. */
+@media (min-width:1101px) {
   .run-meter {
-    top:18px; left:43%; width:440px; height:64px; padding:8px 14px;
-    grid-template-columns:minmax(0,1fr) 176px; gap:11px;
+    top:16px; left:50%; width:500px; height:64px; padding:8px 14px;
+    grid-template-columns:minmax(0,1fr) 190px; gap:12px;
   }
-  .focus-hud-strip { top:94px; }
+  .focus-hud-strip { top:92px; }
 }
