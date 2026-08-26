@@ -4537,7 +4537,9 @@ export class CloudHarvestGame {
     const starterRigActive = rigTier > 0;
     const rigColor = this.getHarvestRigColor(rigTier);
     const totalParts = powerLevel + radiusLevel + valueLevel + this.state.levels.drone + insulationLevel;
-    const shipScale = 1 + Math.min(.25, totalParts * .018);
+    // Keep the craft readable without letting it dominate the playfield.
+    // Collection radius and movement remain world-space values, so this is visual-only.
+    const shipScale = .86 * (1 + Math.min(.25, totalParts * .018));
     ctx.save();
     ctx.translate(this.player.x, this.player.y + Math.sin(time * 4) * (this.atFactory ? .6 : 3));
     if (!this.atFactory && !this.returning && !this.launching && this.pointer.visible && !this.touchDirect) ctx.rotate(this.getAimAngle());
@@ -4790,13 +4792,13 @@ export class CloudHarvestGame {
     const ratio = Math.max(0, Math.min(1, this.run.fuel / Math.max(1, this.getFuelCapacity())));
     const critical = ratio <= .15;
     const low = ratio <= .35;
-    const barWidth = this.getFuelRecoveryLimit() > 0 ? 172 : Math.min(124, Math.max(96, this.width * .1));
-    const barHeight = 11;
+    const barWidth = this.getFuelRecoveryLimit() > 0 ? 146 : Math.min(106, Math.max(82, this.width * .085));
+    const barHeight = 10;
     const playerX = this.player.x * zoom;
     const bob = Math.sin(time * 4) * 3 * zoom;
     const playerY = this.player.y * zoom + bob;
     const barX = playerX - barWidth * .5;
-    const barY = playerY + Math.max(29, 39 * zoom);
+    const barY = playerY + Math.max(27, 36 * zoom);
     const color = this.fuelPickupFlash > 0 ? "#fff36f" : critical ? "#ff6258" : low ? "#ffd15e" : "#63e3bd";
     const pulse = this.fuelPickupFlash > 0 ? .88 + Math.sin(time * 18) * .12 : low ? .72 + (Math.sin(time * (critical ? 15 : 9)) + 1) * .14 : 1;
 
@@ -4804,12 +4806,12 @@ export class CloudHarvestGame {
     ctx.globalAlpha = pulse;
     if (low) { ctx.shadowColor = color; ctx.shadowBlur = critical ? 22 : 14; }
     ctx.fillStyle = "rgba(9,35,48,.9)";
-    ctx.beginPath(); ctx.roundRect(barX - 6, barY - 19, barWidth + 12, 38, 12); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(barX - 5, barY - 17, barWidth + 10, 34, 11); ctx.fill();
     ctx.shadowBlur = 0;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = low ? color : "#dffaff";
-    ctx.font = "900 11px Outfit, sans-serif";
+    ctx.font = "900 10px Outfit, sans-serif";
     const recovery = this.getFuelRecoveryLimit() > 0 ? `  CELL ${this.run.fuelRecovered.toFixed(0)}/${this.getFuelRecoveryLimit()}` : "";
     ctx.fillText(`${critical ? "! " : ""}FUEL  ${Math.ceil(this.run.fuel)} / ${Math.round(this.getFuelCapacity())}${recovery}`, playerX, barY - 10);
     ctx.fillStyle = "rgba(198,225,229,.26)";
