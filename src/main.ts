@@ -1095,12 +1095,6 @@ catch { setGrowthGuideCompact(false, false); }
 document.body.classList.add("title-open");
 titleBlockedElements.forEach((element) => { element.inert = true; });
 const game = new CloudHarvestGame(canvas, renderState, renderRunState, showLevelUp, showFactory, showToast, enqueueRadioCall);
-window.addEventListener("message", (event) => {
-  if (event.source !== window.parent || event.origin !== window.location.origin) return;
-  if ((event.data as { type?: string } | null)?.type === "cloud-company:host-resize") {
-    window.dispatchEvent(new Event("resize"));
-  }
-});
 game.setTitlePaused(true);
 document.addEventListener("pointerdown", () => game.unlockAudio(), { once: true, capture: true });
 document.addEventListener("click", (event) => {

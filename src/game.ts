@@ -1751,9 +1751,7 @@ export class CloudHarvestGame {
 
   private resize(): void {
     const rect = this.canvas.getBoundingClientRect();
-    const frameRect = window.frameElement instanceof HTMLElement ? window.frameElement.getBoundingClientRect() : null;
-    const displayScale = frameRect && rect.width > 0 ? frameRect.width / rect.width : 1;
-    this.dpr = Math.min((window.devicePixelRatio || 1) * Math.max(1, displayScale), 2);
+    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.canvas.width = Math.max(1, Math.round(rect.width * this.dpr));
     this.canvas.height = Math.max(1, Math.round(rect.height * this.dpr));
     this.width = rect.width;
