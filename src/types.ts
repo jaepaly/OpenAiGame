@@ -1,4 +1,13 @@
-export type CloudKind = "cumulus" | "rain" | "electric";
+export type CloudKind = "cumulus" | "rain" | "electric" | "ice" | "solar" | "aurora";
+export type CloudFormationKind = "ring" | "stream" | "cluster";
+export type ContractId = "water" | "climate" | "priority" | "energy" | "cryogenic" | "stellar" | "spectrum";
+export type ProcessingOutputKind = "quick" | "bulk" | "material" | "special";
+export type FlightRouteId = "tailwind" | "pressureMine" | "frontline";
+export type ResearchId = "logistics" | "refining" | "forecasting";
+export type InfiniteResearchId = "speed" | "power" | "fuel" | "drone" | "yield";
+export type StorySceneId =
+  | "prologue" | "firstReturn" | "rainFrontier" | "rivalAftermath"
+  | "electricFrontier" | "iceFrontier" | "solarFrontier" | "auroraFrontier" | "epilogue";
 
 export interface CloudDefinition {
   kind: CloudKind;
@@ -27,7 +36,17 @@ export interface Cloud {
   health: number;
   maxHealth: number;
   hurtFlash: number;
+  healthBarTime?: number;
   dense: boolean;
+  front: boolean;
+  edgeEntry?: boolean;
+  formationId?: number;
+  formationCore?: boolean;
+  formationKind?: CloudFormationKind;
+  signalTarget?: boolean;
+  archiveShard?: boolean;
+  solarCore?: boolean;
+  auroraNode?: boolean;
 }
 
 export interface Particle {
@@ -39,6 +58,8 @@ export interface Particle {
   maxLife: number;
   size: number;
   color: string;
+  shape?: "spark" | "drop" | "shard" | "ribbon";
+  gravity?: number;
 }
 
 export interface FloatingText {
@@ -58,19 +79,226 @@ export interface UpgradeDefinition {
   maxLevel: number;
 }
 
-export type UpgradeId = "power" | "radius" | "value" | "drone" | "insulation";
+export type UpgradeId = "power" | "radius" | "value" | "drone" | "insulation" | "conveyor" | "processingLine" | "hopper" | "fuelTank" | "fuelSaver";
+
+export interface ProcessingJob {
+  id: number;
+  contractId: ContractId;
+  units: Record<CloudKind, number>;
+  payout: number;
+  workRequired: number;
+  progress: number;
+  materialRewards?: Partial<Record<CloudKind, number>>;
+}
+
+export interface ProcessingState {
+  jobs: ProcessingJob[];
+  completedCoins: number;
+  completedMaterials: Record<CloudKind, number>;
+  totalProcessed: number;
+  nextJobId: number;
+  lastUpdatedAt: number;
+}
+
+export interface ProcessingEstimate {
+  payout: number;
+  batches: number;
+  seconds: number;
+  units: number;
+  materialRewards: Record<CloudKind, number>;
+  quotaRemaining: number | null;
+}
+
+export interface ProcessingEnqueueResult extends ProcessingEstimate {
+  materialsStored: number;
+  cargoRemaining: number;
+  flightCompleted: boolean;
+}
+
+export interface ProcessingClaimResult {
+  coins: number;
+  materials: Record<CloudKind, number>;
+  materialUnits: number;
+}
+
+export type GrowthMissionId = "collect" | "return" | "contract" | "ship" | "skill" | "upgrade" | "promote" | "rain";
+
+export interface GrowthMissionDefinition {
+  id: GrowthMissionId;
+  code: string;
+  title: string;
+  description: string;
+  target: number;
+  reward: { money?: number; materials?: Partial<Record<CloudKind, number>> };
+  rewardLabel: string;
+}
+
+export interface GrowthMissionProgress {
+  step: number;
+  safeReturns: number;
+  contractsSigned: number;
+  shipmentsClaimed: number;
+  rainHarvested: number;
+}
 
 export interface GameState {
   money: number;
   totalEarned: number;
   harvested: number;
   rank: number;
+  selectedMap: number;
+  rankHarvested: number;
+  rankFlights: number;
   levels: Record<UpgradeId, number>;
+  research: Record<ResearchId, number>;
   bestCombo: number;
+  flightRecords: FlightRecords;
   sound: boolean;
+  musicVolume: number;
+  sfxVolume: number;
+  focusHud: boolean;
+  materials: Record<CloudKind, number>;
+  processing: ProcessingState;
+  career: CareerProgress;
+  infiniteResearch: Record<InfiniteResearchId, number>;
+  story: StoryProgress;
+  growthMission: GrowthMissionProgress;
 }
 
-export type RunSkillId = "overclock" | "wideIntake" | "chainBurst" | "profitRain" | "feverDrive" | "twinDrone";
+export interface FlightRecords {
+  harvest: number;
+  value: number;
+  combo: number;
+  rare: number;
+}
+
+export type FlightRecordKind = keyof FlightRecords;
+
+export interface FlightReport {
+  day: number;
+  flight: number;
+  mapRank: number;
+  routeId: FlightRouteId;
+  cargo: Record<CloudKind, number>;
+  totalCollected: number;
+  grossValue: number;
+  maxCombo: number;
+  rareClouds: number;
+  denseClouds: number;
+  droneHarvested: number;
+  feverActivations: number;
+  fuelCapacity: number;
+  fuelRemaining: number;
+  fuelEfficiency: number;
+  emergencyReturn: boolean;
+  lastHarvestTriggered: boolean;
+  lastHarvestClouds: number;
+  lastHarvestValue: number;
+  lastHarvestBonus: number;
+  newRecords: FlightRecordKind[];
+  records: FlightRecords;
+}
+
+export interface StoryProgress {
+  seen: StorySceneId[];
+  rivalBeaten: boolean;
+  electricSignalCleared: boolean;
+  iceArchiveRecovered: boolean;
+  solarEngineDisabled: boolean;
+  skyRestored: boolean;
+}
+
+export type RivalRaceStatus = "inactive" | "active" | "won" | "lost";
+
+export interface RivalRaceState {
+  status: RivalRaceStatus;
+  playerScore: number;
+  rivalScore: number;
+  target: number;
+  reward: number;
+}
+
+export type SignalTraceStatus = "inactive" | "active" | "won" | "lost";
+
+export interface SignalTraceState {
+  status: SignalTraceStatus;
+  progress: number;
+  target: number;
+  timeLeft: number;
+  timeLimit: number;
+  reward: number;
+}
+
+export type ArchiveRelayStatus = "inactive" | "active" | "won" | "lost";
+
+export interface ArchiveRelayState {
+  status: ArchiveRelayStatus;
+  fragments: number;
+  fragmentTarget: number;
+  streak: number;
+  chainTarget: number;
+  chainTimeLeft: number;
+  chainWindow: number;
+  timeLeft: number;
+  timeLimit: number;
+  waveDelay: number;
+  reward: number;
+}
+
+export type SolarEngineStatus = "inactive" | "active" | "won" | "lost";
+
+export interface SolarEngineState {
+  status: SolarEngineStatus;
+  charge: number;
+  chargeTarget: number;
+  heat: number;
+  heatLimit: number;
+  lockTime: number;
+  ventReady: boolean;
+  timeLeft: number;
+  timeLimit: number;
+  waveDelay: number;
+  reward: number;
+}
+
+export type OpenSkyStatus = "inactive" | "active" | "won" | "lost";
+
+export interface OpenSkyState {
+  status: OpenSkyStatus;
+  circuits: number;
+  circuitTarget: number;
+  chain: number;
+  chainTarget: number;
+  chainTimeLeft: number;
+  chainWindow: number;
+  instability: number;
+  instabilityLimit: number;
+  lockTime: number;
+  coolingRequired: boolean;
+  timeLeft: number;
+  timeLimit: number;
+  waveDelay: number;
+  reward: number;
+}
+
+export type CoreRunSkillId =
+  | "overclock" | "intakeServo" | "wideIntake" | "pressureChamber" | "massInduction" | "vacuumMomentum"
+  | "profitRain" | "comboCapacitor" | "feverDrive" | "feverInjector" | "stormCatalyst" | "jackpotPulse"
+  | "twinDrone" | "droneAI" | "chainBurst" | "relayBurst" | "salvageProtocol" | "swarmMatrix";
+export type EvolutionSkillId = "blackHole" | "eventHorizon" | "goldenStorm" | "sunStorm" | "droneFleet" | "nanoSwarm";
+export type OverdriveSkillId = "cargoBay" | "yieldBoost" | "denseRadar" | "feverReserve";
+export type SynergySkillId = "cycloneCore" | "cascadeGrid" | "stormDrones" | "goldenVacuum" | "chainReactor" | "cargoCyclone";
+export type NavigationSkillId = "auxTank" | "aeroDrive" | "ecoThrusters" | "vacuumRecycler" | "fuelCondenser" | "comboGenerator" | "recoveryReservoir" | "stormFuel";
+export type RunSkillId = CoreRunSkillId | EvolutionSkillId | OverdriveSkillId | SynergySkillId | NavigationSkillId;
+
+export interface CareerProgress {
+  day: number;
+  level: number;
+  xp: number;
+  xpNext: number;
+  pendingPicks: number;
+  skills: Record<RunSkillId, number>;
+}
 
 export interface RunSkillDefinition {
   id: RunSkillId;
@@ -79,25 +307,132 @@ export interface RunSkillDefinition {
   icon: string;
   color: string;
   maxStacks: number;
+  category: "core" | "evolution" | "overdrive" | "synergy";
+  requirements?: RunSkillId[];
+}
+
+export type RunSkillCost = Partial<Record<CloudKind, number>>;
+
+export interface SkillTreeBranch {
+  id: "vacuum" | "fever" | "automation" | "navigation";
+  code: string;
+  name: string;
+  description: string;
+  color: string;
+  nodes: RunSkillId[];
 }
 
 export interface RunState {
+  day: number;
+  flight: number;
   level: number;
   xp: number;
   xpNext: number;
   fever: number;
   feverActive: boolean;
   feverSeconds: number;
+  focusHudActive: boolean;
+  refillSurgeActive: boolean;
+  lastHarvestActive: boolean;
+  lastHarvestTriggered: boolean;
+  lastHarvestClouds: number;
+  lastHarvestValue: number;
+  lastHarvestBonus: number;
   combo: number;
   comboTime: number;
+  pendingPicks: number;
+  cargo: Record<CloudKind, number>;
+  cargoValue: Record<CloudKind, number>;
+  cargoBonus: number;
+  fuel: number;
+  fuelCapacity: number;
+  fuelRecovered: number;
+  fuelRecoveryLimit: number;
+  emergencyReturn: boolean;
+  materials: Record<CloudKind, number>;
+  routeId: FlightRouteId;
+  mapRank: number;
   skills: Record<RunSkillId, number>;
+  infiniteResearch: Record<InfiniteResearchId, number>;
+  processing: ProcessingState;
+  processingLines: number;
+  processingSpeed: number;
+  processingBatchCapacity: number;
+  processingUsage: Partial<Record<ContractId, number>>;
+  rivalRace: RivalRaceState;
+  signalTrace: SignalTraceState;
+  archiveRelay: ArchiveRelayState;
+  solarEngine: SolarEngineState;
+  openSky: OpenSkyState;
+}
+
+export interface InfiniteResearchDefinition {
+  id: InfiniteResearchId;
+  code: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+  baseCost: number;
+  costScale: number;
+  effectPerLevel: string;
+}
+
+export interface ResearchDefinition {
+  id: ResearchId;
+  code: string;
+  name: string;
+  description: string;
+  effect: string;
+  color: string;
+}
+
+export interface FlightRouteDefinition {
+  id: FlightRouteId;
+  code: string;
+  name: string;
+  description: string;
+  effect: string;
+  color: string;
+  fuelBonus: number;
+  denseBonus: number;
+  spawnInterval: number;
+  valueMultiplier: number;
+  frontDelay: number;
+  frontBonus: number;
+  comboWindowBonus: number;
+  dronePower: number;
+  startingFever: number;
+  lowTierBias: number;
+}
+
+export interface ProcessingContract {
+  id: ContractId;
+  code: string;
+  name: string;
+  description: string;
+  multipliers: Record<CloudKind, number>;
+  outputKind: ProcessingOutputKind;
+  outputLabel: string;
+  acceptedKinds: CloudKind[];
+  durationMultiplier: number;
+  batchSize: number;
+  materialYield?: number;
+  flightLimit?: number;
 }
 
 export interface RankDefinition {
+  code: string;
+  icon: string;
+  color: string;
   name: string;
   altitude: string;
   promotionCost: number;
   requiredHarvest: number;
+  fuelDrain: number;
+  valueMultiplier: number;
+  routeId: FlightRouteId;
+  identity: string;
   weights: Record<CloudKind, number>;
   description: string;
 }
