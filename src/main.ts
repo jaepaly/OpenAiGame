@@ -55,7 +55,7 @@ app.innerHTML = `
       <aside class="rival-race" id="rivalRace" aria-live="polite" aria-hidden="true">
         <header><span>LIVE ROUTE CONTEST</span><strong id="rivalRaceTitle">RAIN CLOUD RUSH</strong><em id="rivalRaceTarget">FIRST TO 5</em></header>
         <div class="rival-race-board">
-          <section class="rival-race-lane player"><span>YOU // 구름 수확 회사</span><div id="playerRacePips"></div><strong id="playerRaceScore">0</strong></section>
+          <section class="rival-race-lane player"><span>YOU // 클라우드 컴퍼니</span><div id="playerRacePips"></div><strong id="playerRaceScore">0</strong></section>
           <b class="rival-race-versus">VS</b>
           <section class="rival-race-lane rival"><span>쾌청산업 // PRIORITY-1</span><div id="rivalRacePips"></div><strong id="rivalRaceScore">0</strong></section>
         </div>
@@ -347,7 +347,7 @@ app.innerHTML = `
       </section>
       <aside class="skill-hover-card" id="skillHoverCard" aria-hidden="true"></aside>
 
-      <section class="story-overlay" id="storyOverlay" aria-label="구름 수확 회사 이야기" aria-live="polite" aria-hidden="true">
+      <section class="story-overlay" id="storyOverlay" aria-label="클라우드 컴퍼니 이야기" aria-live="polite" aria-hidden="true">
         <div class="story-vignette"></div>
         <div class="story-frame" id="storyFrame">
           <header class="story-header">
@@ -360,7 +360,7 @@ app.innerHTML = `
                 <img id="storyPortraitImage" src="" alt="" hidden>
                 <i></i><i></i><i></i><span id="storyPortraitMark">☁</span>
               </div>
-              <strong id="storyPortraitName">구름 수확 회사</strong>
+              <strong id="storyPortraitName">클라우드 컴퍼니</strong>
               <small id="storyPortraitRole">LAST SMALL WEATHER COMPANY</small>
             </aside>
             <article class="story-dialogue">
@@ -375,7 +375,7 @@ app.innerHTML = `
         </div>
       </section>
 
-      <section class="ending-overlay" id="endingOverlay" role="dialog" aria-modal="true" aria-label="구름 수확 회사 엔딩" aria-hidden="true">
+      <section class="ending-overlay" id="endingOverlay" role="dialog" aria-modal="true" aria-label="클라우드 컴퍼니 엔딩" aria-hidden="true">
         <div class="ending-weather" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><b></b><b></b><b></b></div>
         <div class="ending-panel">
           <header class="ending-heading">
@@ -394,7 +394,7 @@ app.innerHTML = `
             <article class="sona"><img src="${sonaNeutralPortrait}" alt="관측 연구원 소나"><div><span>관측 연구원 소나</span><p>“순환망은 정상이에요. 이제 우리가 모은 구름이 필요한 곳으로 흐를 거예요.”</p></div></article>
           </section>
           <section class="ending-credits">
-            <header><span>SKY HARVEST COMPANY</span><strong>구름 수확 회사</strong><small>A GAME BUILT WITH OPENAI CODEX</small></header>
+            <header><span>CLOUD COMPANY</span><strong>클라우드 컴퍼니</strong><small>A GAME BUILT WITH OPENAI CODEX</small></header>
             <div><p><small>GAME DIRECTION</small><b>PLAYER</b></p><p><small>DESIGN & DEVELOPMENT PARTNER</small><b>OPENAI CODEX</b></p><p><small>CHARACTER ART DIRECTION</small><b>PLAYER</b></p><p><small>PROCEDURAL AUDIO</small><b>WEB AUDIO SYSTEM</b></p></div>
           </section>
           <footer class="ending-actions">
@@ -465,7 +465,7 @@ app.innerHTML = `
         <footer><span>URL에 <b>?balance=1</b>을 붙였을 때만 표시됩니다.</span><button id="balanceExportButton" type="button">JSON 저장</button></footer>
       </aside>
 
-      <section class="title-screen show" id="titleScreen" role="dialog" aria-modal="true" aria-label="구름 수확 회사 타이틀" aria-hidden="false">
+      <section class="title-screen show" id="titleScreen" role="dialog" aria-modal="true" aria-label="클라우드 컴퍼니 타이틀" aria-hidden="false">
         <div class="title-sky" aria-hidden="true">
           <i class="title-aurora aurora-one"></i><i class="title-aurora aurora-two"></i>
           <span class="title-cloud cloud-one"></span><span class="title-cloud cloud-two"></span><span class="title-cloud cloud-three"></span>
@@ -477,10 +477,10 @@ app.innerHTML = `
         <div class="title-grid"></div>
         <div class="title-layout">
           <section class="title-copy">
-            <div class="title-kicker"><span>TRACK 1 PROTOTYPE</span><b>SKY HARVEST COMPANY</b></div>
+            <div class="title-kicker"><span>TRACK 1 PROTOTYPE</span><b>CLOUD COMPANY</b></div>
             <div class="title-logo-lockup">
               <span class="title-logo-mark">☁</span>
-              <h1><em>구름</em><br>수확 회사</h1>
+              <h1><em>클라우드</em><br>컴퍼니</h1>
             </div>
             <p>구름이 사라진 하늘에서 시작하는<br><strong>수확 · 가공 · 성장</strong> 항로 개척기</p>
             <div class="title-actions">
@@ -992,7 +992,7 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
       { speaker: "모카", name: "정비사 모카", role: "SHIP MECHANIC // CO-FOUNDER", mark: "MK", tone: "moka", portrait: "moka-neutral", text: "신임 사장님 맞죠? 물려받은 건 빚 독촉장 열두 장, 낡은 격납고 하나… 그리고 아직 뜨는 비행선 한 대예요." },
       { speaker: "모카", name: "정비사 모카", role: "SHIP MECHANIC // CO-FOUNDER", mark: "MK", tone: "moka", portrait: "moka-serious", text: "구름만 가져오면 회사는 돌아가요. 좌클릭으로 흡입하고, 연료가 바닥나기 전에 SPACE로 귀환하세요. 화물보다 목숨이 먼저니까." },
       { speaker: "소나 // 무전", name: "관측 연구원 소나", role: "WEATHER ANALYST // REMOTE", mark: "SN", tone: "sona", portrait: "sona-neutral", text: "관측팀 소나입니다. 첫 목표는 뭉게구름 여섯 개. 원재료를 확보하면 첫 가공 계약을 열 수 있어요." },
-      { speaker: "NARRATION", name: "구름 수확 회사", role: "DAY 1 // FIRST SORTIE", mark: "01", tone: "narrator", text: "낡은 프로펠러가 다시 돌기 시작했다. 골목 기상소의 마지막 수확선이, 회사의 첫 구름을 향해 떠올랐다." },
+      { speaker: "NARRATION", name: "클라우드 컴퍼니", role: "DAY 1 // FIRST SORTIE", mark: "01", tone: "narrator", text: "낡은 프로펠러가 다시 돌기 시작했다. 골목 기상소의 마지막 수확선이, 회사의 첫 구름을 향해 떠올랐다." },
     ],
   },
   firstReturn: {
@@ -1002,7 +1002,7 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
       { speaker: "모카", name: "정비사 모카", role: "DOCK CONTROL", mark: "MK", tone: "moka", portrait: "moka-surprised", text: "착륙 확인! 솔직히 첫 비행부터 견인차를 부를 줄 알았는데… 사장님, 생각보다 제법인데요?" },
       { speaker: "소나", name: "관측 연구원 소나", role: "PROCESSING LAB", mark: "SN", tone: "sona", portrait: "sona-neutral", text: "가져온 구름은 아직 돈이 아닙니다. 가공 계약에 투입하면 비행 중에도 정제되고, 완제품이 되어야 코인으로 출하할 수 있어요." },
       { speaker: "모카", name: "정비사 모카", role: "FUEL & SAFETY", mark: "MK", tone: "moka", portrait: "moka-worried", text: "다음에는 조금 더 욕심내도 좋아요. 하지만 연료가 0이 되면 화물은 전량 폐기. 빨간 경고가 뜨면 SPACE, 잊지 마세요." },
-      { speaker: "NARRATION", name: "구름 수확 회사", role: "THE FIRST CONTRACT", mark: "◈", tone: "narrator", text: "작은 회사의 첫 화물이 가공동으로 향했다. 멈춰 있던 기계와 사람들의 하루가 다시 움직이기 시작했다." },
+      { speaker: "NARRATION", name: "클라우드 컴퍼니", role: "THE FIRST CONTRACT", mark: "◈", tone: "narrator", text: "작은 회사의 첫 화물이 가공동으로 향했다. 멈춰 있던 기계와 사람들의 하루가 다시 움직이기 시작했다." },
     ],
   },
   rainFrontier: {
@@ -1056,10 +1056,10 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
     chapter: "CHAPTER 7 // OPEN SKY",
     title: "마지막 순환 회로",
     beats: [
-      { speaker: "NARRATION", name: "오로라 핵심 항로", role: "IONOSPHERE INDUSTRIAL ZONE", mark: "AUR", tone: "narrator", text: "여섯 종류의 구름이 한 항로에서 빛났다. 작은 수확 회사의 비행선은 마침내 인공 기압장의 중심과 같은 고도에 도달했다." },
+      { speaker: "NARRATION", name: "오로라 핵심 항로", role: "IONOSPHERE INDUSTRIAL ZONE", mark: "AUR", tone: "narrator", text: "여섯 종류의 구름이 한 항로에서 빛났다. 클라우드 컴퍼니의 비행선은 마침내 인공 기압장의 중심과 같은 고도에 도달했다." },
       { speaker: "소나", name: "관측 연구원 소나", role: "OPEN SKY PROTOCOL", mark: "SN", tone: "sona", portrait: "sona-serious", text: "태양 엔진은 멈췄지만 기압장이 아직 관성으로 돌고 있어요. 중심 순환핵에 세 개의 오로라 회로를 연결하면 구름의 흐름을 도시 쪽으로 되돌릴 수 있습니다." },
       { speaker: "모카", name: "정비사 모카", role: "FINAL CIRCUIT CHECK", mark: "MK", tone: "moka", portrait: "moka-serious", text: "이동 노드 세 개를 빠르게 연결하고, 회로 하나가 닫힐 때마다 흡입을 놓아 안정화해요. 과부하되면 완성 회로까지 끊어지니까 마지막까지 박자를 지켜야 합니다." },
-      { speaker: "NARRATION", name: "구름 수확 회사", role: "FINAL SORTIE // READY", mark: "∞", tone: "narrator", text: "생존을 위해 시작한 첫 비행은 하늘을 되돌리기 위한 마지막 작전이 되었다. 수확선이 오로라 순환핵을 향해 기수를 돌렸다." },
+      { speaker: "NARRATION", name: "클라우드 컴퍼니", role: "FINAL SORTIE // READY", mark: "∞", tone: "narrator", text: "생존을 위해 시작한 첫 비행은 하늘을 되돌리기 위한 마지막 작전이 되었다. 수확선이 오로라 순환핵을 향해 기수를 돌렸다." },
     ],
   },
   epilogue: {
@@ -1069,8 +1069,8 @@ const STORY_SCENES: Record<StorySceneId, StoryScene> = {
       { speaker: "NARRATION", name: "서부 7구역", role: "WEATHER CYCLE // RESTORED", mark: "☂", tone: "narrator", text: "인공 기압장이 멈춘 뒤 열세 시간. 메말랐던 도시의 창문에 첫 빗방울이 부딪혔다." },
       { speaker: "소나", name: "관측 연구원 소나", role: "CITY WEATHER LINK", mark: "SN", tone: "sona", portrait: "sona-neutral", text: "강수량 정상, 지하 저수조 유입 확인. 우리가 되돌린 구름이 도시 전역에 비를 내리고 있어요. 정말로 해냈네요." },
       { speaker: "모카", name: "정비사 모카", role: "SHIP MECHANIC // CO-FOUNDER", mark: "MK", tone: "moka", portrait: "moka-neutral", text: "빚 독촉장은 아직 열한 장 남았고 비행선은 또 삐걱거리지만… 이제 이 회사를 닫을 이유는 하나도 없겠어요." },
-      { speaker: "쾌청산업 관제", name: "쾌청산업", role: "ROUTE AUTHORITY // WITHDRAWN", mark: "QS", tone: "rival", text: "독점 항로 지정은 철회됐다. 구름 수확 회사의 순환 복구 기여를 공식 기록한다. 다음 하늘에서는 정식으로 경쟁하지." },
-      { speaker: "NARRATION", name: "구름 수확 회사", role: "TOMORROW'S FLIGHT PLAN", mark: "☁", tone: "narrator", text: "회사는 하늘을 구했고, 하늘은 회사를 살렸다. 그러나 격납고의 출격등은 꺼지지 않았다. 필요한 곳에 구름이 있는 한 수확은 계속될 것이다." },
+      { speaker: "쾌청산업 관제", name: "쾌청산업", role: "ROUTE AUTHORITY // WITHDRAWN", mark: "QS", tone: "rival", text: "독점 항로 지정은 철회됐다. 클라우드 컴퍼니의 순환 복구 기여를 공식 기록한다. 다음 하늘에서는 정식으로 경쟁하지." },
+      { speaker: "NARRATION", name: "클라우드 컴퍼니", role: "TOMORROW'S FLIGHT PLAN", mark: "☁", tone: "narrator", text: "회사는 하늘을 구했고, 하늘은 회사를 살렸다. 그러나 격납고의 출격등은 꺼지지 않았다. 필요한 곳에 구름이 있는 한 수확은 계속될 것이다." },
     ],
   },
 };

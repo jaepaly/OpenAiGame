@@ -1,4 +1,4 @@
-# 구름 수확 (Sky Harvest)
+# 클라우드 컴퍼니 (Cloud Company)
 
 브라우저에서 바로 실행되는 TypeScript 기반 액티브 인크리멘탈 게임 프로토타입입니다.
 
