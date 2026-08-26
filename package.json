@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build && node scripts/prepare-sites-dist.mjs",
+    "build:pages": "tsc && vite build --mode pages",
     "preview": "vite preview --host 127.0.0.1"
   },
   "devDependencies": {
