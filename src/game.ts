@@ -1905,17 +1905,25 @@ export class CloudHarvestGame {
 
       if (cloud.front && this.frontActive > 0) cloud.vx += this.frontDirection * 45 * dt;
       if (cloud.front && cloud.x > this.getWorldWidth() - 410 / worldZoom && cloud.y < 350 / worldZoom) cloud.vy += 90 * dt;
-      const drag = cloud.front && this.frontActive > 0 ? .993 : .955;
+      const drag = cloud.edgeEntry ? .992 : cloud.front && this.frontActive > 0 ? .993 : .955;
       cloud.vx *= Math.pow(drag, dt * 60);
       cloud.vy *= Math.pow(drag, dt * 60);
       const flightSpeed = 1 + flightPressure * .14;
       cloud.x += cloud.vx * dt * flightSpeed;
       cloud.y += cloud.vy * dt * flightSpeed;
       const margin = cloud.radius + 4;
-      if (cloud.x < margin) { cloud.x = margin; cloud.vx = Math.abs(cloud.vx) * 0.6; }
-      if (cloud.x > this.getWorldWidth() - margin) { cloud.x = this.getWorldWidth() - margin; cloud.vx = -Math.abs(cloud.vx) * 0.6; }
-      if (cloud.y < 88 / worldZoom + margin) { cloud.y = 88 / worldZoom + margin; cloud.vy = Math.abs(cloud.vy) * 0.6; }
-      if (cloud.y > this.getWorldHeight() - 125 / worldZoom - margin) { cloud.y = this.getWorldHeight() - 125 / worldZoom - margin; cloud.vy = -Math.abs(cloud.vy) * 0.6; }
+      const topMargin = 88 / worldZoom + margin;
+      const rightMargin = this.getWorldWidth() - margin;
+      const bottomMargin = this.getWorldHeight() - 125 / worldZoom - margin;
+      if (cloud.edgeEntry && cloud.x >= margin && cloud.x <= rightMargin && cloud.y >= topMargin && cloud.y <= bottomMargin) {
+        cloud.edgeEntry = false;
+      }
+      if (!cloud.edgeEntry) {
+        if (cloud.x < margin) { cloud.x = margin; cloud.vx = Math.abs(cloud.vx) * 0.6; }
+        if (cloud.x > rightMargin) { cloud.x = rightMargin; cloud.vx = -Math.abs(cloud.vx) * 0.6; }
+        if (cloud.y < topMargin) { cloud.y = topMargin; cloud.vy = Math.abs(cloud.vy) * 0.6; }
+        if (cloud.y > bottomMargin) { cloud.y = bottomMargin; cloud.vy = -Math.abs(cloud.vy) * 0.6; }
+      }
     }
 
     let harvestedThisFrame = this.updateDrones(dt);
@@ -3428,7 +3436,7 @@ export class CloudHarvestGame {
     const scale = radius / ((definition.radius[0] + definition.radius[1]) * .5);
     let x = 90 / zoom + Math.random() * Math.max(100 / zoom, worldWidth - 180 / zoom);
     let y = 205 / zoom + Math.random() * Math.max(90 / zoom, worldHeight - 390 / zoom);
-    const interiorSpawn = placement === "interior" || (placement === "auto" && (initial || Math.random() < .78));
+    const interiorSpawn = placement === "interior" || (placement === "auto" && (initial || Math.random() < .9));
     let entryVx = (Math.random() - .5) * 8;
     let entryVy = (Math.random() - .5) * 6;
     if (interiorSpawn) {
@@ -3460,14 +3468,15 @@ export class CloudHarvestGame {
     } else {
       const forceEdge = placement === "edge";
       const side = forceEdge && Math.random() < .78 ? (this.refillSurgeDirection === 1 ? 0 : 1) : Math.floor(Math.random() * 3);
-      const entrySpeed = forceEdge ? 58 + Math.random() * 34 : 20 + Math.random() * 18;
-      if (side === 0) { x = radius + 4 / zoom; y = 220 / zoom + Math.random() * Math.max(80 / zoom, worldHeight - 410 / zoom); entryVx = entrySpeed; }
-      if (side === 1) { x = worldWidth - radius - 4 / zoom; y = 350 / zoom + Math.random() * Math.max(55 / zoom, worldHeight - 520 / zoom); entryVx = -entrySpeed; }
-      if (side === 2) { y = 180 / zoom + radius; x = 85 / zoom + Math.random() * Math.max(100 / zoom, worldWidth - 540 / zoom); entryVy = entrySpeed * .72; }
+      const entrySpeed = forceEdge ? 220 + Math.random() * 100 : 20 + Math.random() * 18;
+      const edgeDepth = (20 + Math.random() * 90) / zoom;
+      if (side === 0) { x = forceEdge ? -radius - edgeDepth : radius + edgeDepth; y = 220 / zoom + Math.random() * Math.max(80 / zoom, worldHeight - 410 / zoom); entryVx = entrySpeed; }
+      if (side === 1) { x = forceEdge ? worldWidth + radius + edgeDepth : worldWidth - radius - edgeDepth; y = 350 / zoom + Math.random() * Math.max(55 / zoom, worldHeight - 520 / zoom); entryVx = -entrySpeed; }
+      if (side === 2) { y = forceEdge ? 88 / zoom - radius - edgeDepth : 180 / zoom + radius + edgeDepth * .45; x = 85 / zoom + Math.random() * Math.max(100 / zoom, worldWidth - 540 / zoom); entryVy = entrySpeed * .72; }
     }
     const altitudeResistance = 1 + this.run.mapRank * .2;
     const health = definition.health * scale * (dense ? 1.65 : 1) * altitudeResistance;
-    this.clouds.push({ id: ++this.cloudId, kind, x, y, vx: entryVx, vy: entryVy, radius, phase: Math.random() * Math.PI * 2, charged: false, age: initial ? .6 + Math.random() * 4.4 : 0, health, maxHealth: health, hurtFlash: 0, dense, front: false });
+    this.clouds.push({ id: ++this.cloudId, kind, x, y, vx: entryVx, vy: entryVy, radius, phase: Math.random() * Math.PI * 2, charged: false, age: initial ? .6 + Math.random() * 4.4 : 0, health, maxHealth: health, hurtFlash: 0, dense, front: false, edgeEntry: placement === "edge" });
     this.announceCloudDiscovery(kind);
   }
 
@@ -3550,13 +3559,16 @@ export class CloudHarvestGame {
         cloud.maxHealth *= 1.35;
         cloud.health = cloud.maxHealth;
       }
-      cloud.x = this.frontDirection === 1 ? -cloud.radius : worldWidth + cloud.radius;
       const rows = Math.min(5, count);
+      const column = Math.floor(index / rows);
+      const entryDepth = (24 + column * 54 + Math.random() * 34) / zoom;
+      cloud.x = this.frontDirection === 1 ? -cloud.radius - entryDepth : worldWidth + cloud.radius + entryDepth;
       const routeTop = (this.frontDirection === -1 ? 350 : 215) / zoom;
       const routeBottom = Math.max(routeTop + 80 / zoom, worldHeight - 165 / zoom);
       cloud.y = routeTop + (index % rows) * ((routeBottom - routeTop) / Math.max(1, rows - 1)) + Math.floor(index / rows) * 18;
       cloud.vx = this.frontDirection * (62 + Math.random() * 32);
       cloud.vy = (Math.random() - .5) * 9;
+      cloud.edgeEntry = true;
     }
     this.shake = 10;
     this.onToast(this.goldenFront ? "GOLDEN HARVEST FRONT — 하루 최대 수익 구간!" : "구름 전선 접근 — 전부 수확하세요!", "success");
@@ -5101,8 +5113,11 @@ export class CloudHarvestGame {
       const rushKind = this.run.lastHarvestActive && Math.random() < .45
         ? CLOUD_ORDER[Math.min(this.run.mapRank, CLOUD_ORDER.length - 1)]
         : undefined;
-      const edgeEventActive = this.refillSurge > 0 || this.run.lastHarvestActive;
-      const placement = edgeEventActive || Math.random() < .3 ? "edge" : "interior";
+      const placement = this.run.lastHarvestActive
+        ? "edge"
+        : this.refillSurge > 0
+          ? Math.random() < .5 ? "edge" : "interior"
+          : Math.random() < .05 ? "edge" : "interior";
       this.spawnCloud(false, rushKind, placement);
     }
     this.cloudFloorBudget -= spawnCount;

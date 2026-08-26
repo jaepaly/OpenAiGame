@@ -39,6 +39,7 @@ export interface Cloud {
   healthBarTime?: number;
   dense: boolean;
   front: boolean;
+  edgeEntry?: boolean;
   formationId?: number;
   formationCore?: boolean;
   formationKind?: CloudFormationKind;
